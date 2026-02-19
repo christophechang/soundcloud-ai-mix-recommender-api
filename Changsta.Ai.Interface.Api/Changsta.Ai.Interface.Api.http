@@ -1,0 +1,6 @@
+@Changsta.Ai.Interface.Api_HostAddress = http://localhost:5237
+
+GET {{Changsta.Ai.Interface.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

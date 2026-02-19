@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/Core/">
+    <Project Path="Changsta.Ai.Core.BusinessProcesses/Changsta.Ai.Core.BusinessProcesses.csproj" />
+    <Project Path="Changsta.Ai.Core.Contracts/Changsta.Ai.Core.Contracts.csproj" />
+    <Project Path="Changsta.Ai.Core/Changsta.Ai.Core.csproj" />
+  </Folder>
+  <Folder Name="/Infrastructure/">
+    <Project Path="Changsta.Ai.Infrastructure.Services.Ai/Changsta.Ai.Infrastructure.Services.Ai.csproj" />
+    <Project Path="Changsta.Ai.Infrastructure.Services.SoundCloud/Changsta.Ai.Infrastructure.Services.SoundCloud.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="Changsta.Ai.Tests.Unit/Changsta.Ai.Tests.Unit.csproj" />
+  </Folder>
+  <Folder Name="/Web/">
+    <Project Path="Changsta.Ai.Interface.Api/Changsta.Ai.Interface.Api.csproj" />
+  </Folder>
+</Solution>
