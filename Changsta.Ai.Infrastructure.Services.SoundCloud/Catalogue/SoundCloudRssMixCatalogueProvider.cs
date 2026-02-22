@@ -46,9 +46,7 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
         {
             string description = item.Summary?.Text ?? string.Empty;
 
-            IReadOnlyList<string> tracklist = TracklistExtractor.Extract(description);
-
-            return new Mix
+            var mix = new Mix
             {
                 Id = item.Id ?? item.Links.FirstOrDefault()?.Uri.ToString() ?? Guid.NewGuid().ToString(),
                 Title = item.Title?.Text ?? "Untitled",
@@ -59,6 +57,8 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
                 Tags = TagExtractor.Extract(description),
                 PublishedAt = item.PublishDate != DateTimeOffset.MinValue ? item.PublishDate : null,
             };
+
+            return mix;
         }
     }
 }
