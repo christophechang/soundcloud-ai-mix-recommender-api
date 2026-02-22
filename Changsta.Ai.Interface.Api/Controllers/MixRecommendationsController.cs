@@ -8,6 +8,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
 {
     [ApiController]
     [Route("api/mixes")]
+    [Produces("application/json")]
     public sealed class MixRecommendationsController : ControllerBase
     {
         private readonly IMixRecommendationUseCase _mixRecommendationUseCase;

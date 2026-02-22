@@ -122,9 +122,11 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             AppendLine("4) Evidence may come from intro, tags, or tracklist.");
             AppendLine("5) Every why string MUST be a quoted ANCHOR copied verbatim from that same mix block, and nothing else.");
             AppendLine("6) Allowed why formats are exactly: \"ANCHOR\" or \"ANCHOR\".");
-            AppendLine("6b) Example valid why values: \"\\\"broken-beat\\\"\", \"\\\"deep, soulful rollers\\\".\", \"\\\"Lake People - Night Drive\\\"\".");
-            AppendLine("6c) Example invalid why values: \"broken-beat\", \"\\\"broken-beat\\\" and more\", \"tags: broken-beat\", \"\\\"broken-beat\\\"!\".");
+            AppendLine("6b) Example valid why values: \"\\\"broken-beat\\\"\", \"\\\"deep, soulful rollers\\\".\", \"\\\"Lake People - Night Drive\\\"\", \"\\\"driving\\\"\".");
+            AppendLine("6c) Example invalid why values: \"broken-beat\", \"\\\"broken-beat\\\" and more\", \"tags: broken-beat\", \"\\\"broken-beat\\\"!\", \"\\\"driving percussive-heavy warm-low-end\\\"\".");
             AppendLine("7) The ANCHOR must appear verbatim in that mix block intro OR be a single tag token from that mix OR be a substring of a tracklist line from that mix.");
+            AppendLine("7a) If the ANCHOR comes from tags, it MUST be exactly ONE tag token (no spaces). Examples: \"\\\"driving\\\"\", \"\\\"warehouse-pressure\\\"\".");
+            AppendLine("7b) Never combine multiple tags into one ANCHOR. This is invalid: \"\\\"driving percussive-heavy warm-low-end\\\"\".");
             AppendLine("8) Never output the full tags line as a why string, and never include the literal prefix \"tags:\" in any why string.");
             AppendLine("9) If you cannot produce 2 to 4 valid why strings for a mix, do not include that mix.");
             AppendLine("10) If insufficient evidence exists overall, return zero results.");
@@ -219,7 +221,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
         private static void ValidateWhyAnchors(List<string> why, Mix mix)
         {
-            string intro = mix.Description?.Trim() ?? string.Empty;
+            string intro = TakePrefix(mix.Description, 220);
 
             var tagTokens = new HashSet<string>(StringComparer.Ordinal);
             if (mix.Tags != null)
@@ -239,7 +241,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
                 if (TryExtractQuotedAnchor(original, out var anchor))
                 {
-                    EnsureAnchorIsValid(anchor, intro, tagTokens, trackLines);
+                    EnsureAnchorIsValid(anchor, intro, tagTokens, trackLines, mix.Id);
                     continue;
                 }
 
@@ -250,27 +252,31 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 if (tagTokens.Contains(candidate))
                 {
                     why[i] = "\"" + candidate + "\"";
-                    EnsureAnchorIsValid(candidate, intro, tagTokens, trackLines);
+                    EnsureAnchorIsValid(anchor, intro, tagTokens, trackLines, mix.Id);
                     continue;
                 }
 
                 throw new InvalidOperationException("AI returned a why string that is not a quoted anchor.");
             }
         }
-
-        private static void EnsureAnchorIsValid(string anchor, string intro, HashSet<string> tagTokens, string[] trackLines)
+        private static void EnsureAnchorIsValid(
+            string anchor,
+            string intro,
+            HashSet<string> tagTokens,
+            string[] trackLines,
+            string mixId)
         {
-            if (anchor.StartsWith("tags:", StringComparison.OrdinalIgnoreCase))
+            bool foundInIntro = intro.Length > 0 && intro.Contains(anchor, StringComparison.Ordinal);
+            bool foundInTags = tagTokens.Contains(anchor);
+            bool foundInTracklist = trackLines.Any(line => line.Contains(anchor, StringComparison.Ordinal));
+
+            if (!(foundInIntro || foundInTags || foundInTracklist))
             {
-                throw new InvalidOperationException("AI returned a why anchor containing the literal prefix \"tags:\".");
+                throw new InvalidOperationException(
+                    "Why anchor not found in MIX block. " +
+                    $"mixId='{mixId}', anchor='{anchor}', " +
+                    $"foundInIntro={foundInIntro}, foundInTags={foundInTags}, foundInTracklist={foundInTracklist}.");
             }
-
-            bool found =
-                (!string.IsNullOrEmpty(intro) && intro.Contains(anchor, StringComparison.Ordinal)) ||
-                tagTokens.Contains(anchor) ||
-                trackLines.Any(line => line.Contains(anchor, StringComparison.Ordinal));
-
-            if (!found) throw new InvalidOperationException("AI returned a why anchor that does not appear in the same MIX block.");
         }
 
         private static bool TryExtractQuotedAnchor(string value, out string anchor)
