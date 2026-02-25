@@ -26,7 +26,11 @@
   <ItemGroup>
     <Using Include="NUnit.Framework" />
   </ItemGroup>
-
+  <ItemGroup>
+    <None Update="soundcloud_rss_sample.xml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Changsta.Ai.Core\Changsta.Ai.Core.csproj" />
     <ProjectReference Include="..\Changsta.Ai.Infrastructure.Services.SoundCloud\Changsta.Ai.Infrastructure.Services.SoundCloud.csproj" />

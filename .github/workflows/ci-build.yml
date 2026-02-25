@@ -44,12 +44,22 @@ jobs:
         run: dotnet build --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test ${{ env.TEST_PROJECT }} --configuration Release --no-build --verbosity normal
+        run: dotnet test ${{ env.TEST_PROJECT }} --configuration Release --no-build --verbosity normal --logger "trx" --results-directory "${{ github.workspace }}/TestResults"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.sha }}
+          path: ${{ github.workspace }}/TestResults
+          if-no-files-found: warn
 
       - name: Publish
+        if: success()
         run: dotnet publish ${{ env.API_PROJECT }} --configuration Release --no-build --output "${{ env.PUBLISH_DIR }}"
 
       - name: Upload artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: mixrec-api-${{ github.sha }}
