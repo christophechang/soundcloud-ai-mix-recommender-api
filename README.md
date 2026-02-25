@@ -48,7 +48,7 @@ This API uses a **two-stage AI pipeline**:
     -   No markdown fences
     -   No external knowledge
     -   Verbatim anchor usage
--   Output is validated server-side before being returned.
+-   Output is validated server-side before being returned.  
 
 ------------------------------------------------------------------------
 
