@@ -9,6 +9,7 @@ on:
 permissions:
   id-token: write
   contents: read
+  actions: read
 
 jobs:
   deploy:
@@ -20,11 +21,13 @@ jobs:
     environment: dev
 
     steps:
-      - name: Download artifact
+      - name: Download artifact from CI run
         uses: actions/download-artifact@v4
         with:
           name: mixrec-api-${{ github.event.workflow_run.head_sha }}
           run-id: ${{ github.event.workflow_run.id }}
+          path: ./package
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Azure login (OIDC)
         uses: azure/login@v2
@@ -37,4 +40,4 @@ jobs:
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
-          package: .
+          package: ./package
