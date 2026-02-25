@@ -14,7 +14,7 @@ to clients.
 
 -   Accept free-text user questions such as:
 
-    > "Something to listen to while cooking"
+    > "Something to listen to while cooking" 
 
 -   Return structured mix recommendations.
 
