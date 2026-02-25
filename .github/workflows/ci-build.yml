@@ -1,0 +1,57 @@
+name: CI Build (publish artifact)
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+  push:
+    branches:
+      - develop
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_VERSION: "10.0.x"
+  API_PROJECT: "Changsta.Ai.Interface.Api/Changsta.Ai.Interface.Api.csproj"
+  TEST_PROJECT: "Changsta.Ai.Tests.Unit/Changsta.Ai.Tests.Unit.csproj"
+  PUBLISH_DIR: "${{ github.workspace }}/publish"
+
+jobs:
+  build_test_publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test ${{ env.TEST_PROJECT }} --configuration Release --no-build --verbosity normal
+
+      - name: Publish
+        run: dotnet publish ${{ env.API_PROJECT }} --configuration Release --no-build --output "${{ env.PUBLISH_DIR }}"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mixrec-api-${{ github.sha }}
+          path: ${{ env.PUBLISH_DIR }}
+          if-no-files-found: error

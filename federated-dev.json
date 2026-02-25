@@ -1,0 +1,8 @@
+﻿{
+    "subject":  "repo:christophechang/soundcloud-ai-mix-recommender-api:environment:dev",
+    "audiences":  [
+                      "api://AzureADTokenExchange"
+                  ],
+    "issuer":  "https://token.actions.githubusercontent.com",
+    "name":  "github-dev-environment"
+}
