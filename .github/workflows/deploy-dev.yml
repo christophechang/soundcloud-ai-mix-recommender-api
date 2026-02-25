@@ -36,6 +36,16 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
+      - name: Set App Service settings (dev)
+        uses: azure/appservice-settings@v1
+        with:
+          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+          app-settings-json: |
+            [
+              { "name": "OpenAI__ApiKey", "value": "${{ secrets.OPENAI_API_KEY }}", "slotSetting": false },
+              { "name": "OpenAI__Model",  "value": "gpt-4o-mini", "slotSetting": false }
+            ]
+
       - name: Deploy to Azure Web App (dev)
         uses: azure/webapps-deploy@v3
         with:
