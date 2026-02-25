@@ -4,6 +4,23 @@
     <Project Path="Changsta.Ai.Core.Contracts/Changsta.Ai.Core.Contracts.csproj" />
     <Project Path="Changsta.Ai.Core/Changsta.Ai.Core.csproj" />
   </Folder>
+  <Folder Name="/Github/" />
+  <Folder Name="/Github/workflows/">
+    <File Path=".github/workflows/ci-build.yml" />
+  </Folder>
+  <Folder Name="/Infra/">
+    <File Path="infra/main.bicep" />
+    <File Path="infra/prod.bicepparam" />
+    <File Path="infra/qa.bicepparam" />
+  </Folder>
+  <Folder Name="/Infra/modules/">
+    <File Path="infra/modules/webapp.bicep" />
+  </Folder>
+  <Folder Name="/Infra/params/">
+    <File Path="infra/params/dev.json" />
+    <File Path="infra/params/prod.json" />
+    <File Path="infra/params/qa.json" />
+  </Folder>
   <Folder Name="/Infrastructure/">
     <Project Path="Changsta.Ai.Infrastructure.Services.Ai/Changsta.Ai.Infrastructure.Services.Ai.csproj" />
     <Project Path="Changsta.Ai.Infrastructure.Services.SoundCloud/Changsta.Ai.Infrastructure.Services.SoundCloud.csproj" />
