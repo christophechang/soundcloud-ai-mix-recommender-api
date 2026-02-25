@@ -79,7 +79,7 @@ Something to listen to while cooking
 }
 ```
 
-Each `why` item must exist verbatim inside the mix's own metadata.
+Each `why` item must exist verbatim inside the mix's own metadata. 
 
 ------------------------------------------------------------------------
 
