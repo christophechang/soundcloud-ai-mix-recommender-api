@@ -7,6 +7,7 @@
   <Folder Name="/Github/" />
   <Folder Name="/Github/workflows/">
     <File Path=".github/workflows/ci-build.yml" />
+    <File Path=".github/workflows/deploy-dev.yml" />
   </Folder>
   <Folder Name="/Infra/">
     <File Path="infra/main.bicep" />
