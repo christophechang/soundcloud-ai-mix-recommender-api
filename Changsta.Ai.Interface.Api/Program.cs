@@ -17,6 +17,24 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     });
 
+var allowedOrigins = new[]
+{
+    "https://changsta.com",
+    "https://www.changsta.com",
+};
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("ChangstaSite", policy =>
+    {
+        policy
+            .WithOrigins(allowedOrigins)
+            .WithMethods("POST", "OPTIONS")
+            .WithHeaders("Content-Type")
+            .SetPreflightMaxAge(TimeSpan.FromHours(12));
+    });
+});
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -24,8 +42,6 @@ builder.Services.AddHttpClient();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
-
-builder.Services.AddHttpClient();
 
 builder.Services.Configure<OpenAiOptions>(
     builder.Configuration.GetSection("OpenAI"));
@@ -54,15 +70,13 @@ if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
-}
-
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
     app.MapOpenApi();
 }
 
 app.UseHttpsRedirection();
+
+// ✅ Apply CORS here, before auth and before endpoints
+app.UseCors("ChangstaSite");
 
 app.UseAuthorization();
 
