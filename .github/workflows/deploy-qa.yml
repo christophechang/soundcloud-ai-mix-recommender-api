@@ -76,6 +76,7 @@ jobs:
         uses: azure/appservice-settings@v1
         with:
           app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+          resource-group: ${{ secrets.AZURE_RESOURCE_GROUP }}
           app-settings-json: |
             [
               { "name": "OpenAI__ApiKey", "value": "${{ secrets.OPENAI_API_KEY }}", "slotSetting": false },
