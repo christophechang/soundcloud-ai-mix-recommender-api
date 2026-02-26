@@ -73,15 +73,13 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Set App Service settings (qa)
-        uses: azure/appservice-settings@v1
-        with:
-          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
-          resource-group: ${{ secrets.AZURE_RESOURCE_GROUP }}
-          app-settings-json: |
-            [
-              { "name": "OpenAI__ApiKey", "value": "${{ secrets.OPENAI_API_KEY }}", "slotSetting": false },
-              { "name": "OpenAI__Model",  "value": "gpt-4o-mini", "slotSetting": false }
-            ]
+        run: |
+          az webapp config appsettings set \
+            --name ${{ secrets.AZURE_WEBAPP_NAME }} \
+            --resource-group qa \
+            --settings \
+              OpenAI__ApiKey="${{ secrets.OPENAI_API_KEY }}" \
+              OpenAI__Model="gpt-4o-mini"
 
       - name: Deploy to Azure Web App (qa)
         uses: azure/webapps-deploy@v3
