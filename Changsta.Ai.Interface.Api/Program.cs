@@ -21,6 +21,7 @@ var allowedOrigins = new[]
 {
     "https://changsta.com",
     "https://www.changsta.com",
+    "http://localhost:8080",
 };
 
 builder.Services.AddCors(options =>
