@@ -4,8 +4,8 @@
     {
         private sealed class AiResponse
         {
-            public required List<AiResult> Results { get; init; }
-            public string? ClarifyingQuestion { get; init; }
+            public List<AiResult> Results { get; set; } = new();
+            public string? ClarifyingQuestion { get; set; }
         }
     }
 }

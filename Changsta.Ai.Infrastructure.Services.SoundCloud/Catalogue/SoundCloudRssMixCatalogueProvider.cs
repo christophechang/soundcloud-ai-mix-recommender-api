@@ -49,7 +49,7 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
 
             string id = item.Id ?? item.Links.FirstOrDefault()?.Uri.ToString() ?? Guid.NewGuid().ToString();
 
-            var mixSchema = MixSchemaExtractor.ExtractOrThrow(description, id);
+            var schema = MixSchemaExtractor.ExtractOrThrow(description, id);
 
             var mix = new Mix
             {
@@ -61,11 +61,11 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
                 Tracklist = TracklistExtractor.Extract(description),
                 PublishedAt = item.PublishDate != DateTimeOffset.MinValue ? item.PublishDate : null,
 
-                Genre = mixSchema.Genre,
-                Energy = mixSchema.Energy,
-                BpmMin = mixSchema.BpmMin,
-                BpmMax = mixSchema.BpmMax,
-                Moods = mixSchema.Moods,
+                Genre = schema.Genre,
+                Energy = schema.Energy,
+                BpmMin = schema.BpmMin,
+                BpmMax = schema.BpmMax,
+                Moods = schema.Moods,
             };
 
             return mix;
