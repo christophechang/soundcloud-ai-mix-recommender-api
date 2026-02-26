@@ -16,7 +16,7 @@ permissions:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: Prod
+    environment: prod
 
     steps:
       - name: Resolve full SHA
@@ -25,7 +25,10 @@ jobs:
         run: |
           in="${{ inputs.ref }}"
           api_url="https://api.github.com/repos/${{ github.repository }}/commits/${in}"
-          full_sha=$(curl -sS -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github+json" "$api_url" | jq -r .sha)
+          full_sha=$(curl -sS \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "$api_url" | jq -r .sha)
 
           if [[ -z "$full_sha" || "$full_sha" == "null" ]]; then
             echo "Failed to resolve commit '$in' to a full SHA."
@@ -40,7 +43,6 @@ jobs:
         run: |
           sha="${{ steps.sha.outputs.value }}"
 
-          # Find the CI workflow run on develop for this exact commit SHA
           runs_url="https://api.github.com/repos/${{ github.repository }}/actions/workflows/ci-build.yml/runs?branch=develop&status=success&per_page=50"
           run_id=$(curl -sS \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
@@ -72,16 +74,17 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Set App Service settings (Prod)
+      - name: Set App Service settings (prod)
+        shell: bash
         run: |
           az webapp config appsettings set \
-            --name ${{ secrets.AZURE_WEBAPP_NAME }} \
-            --resource-group Prod \
+            --name "${{ secrets.AZURE_WEBAPP_NAME }}" \
+            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
             --settings \
               OpenAI__ApiKey="${{ secrets.OPENAI_API_KEY }}" \
               OpenAI__Model="gpt-4o-mini"
 
-      - name: Deploy to Azure Web App (Prod)
+      - name: Deploy to Azure Web App (prod)
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
