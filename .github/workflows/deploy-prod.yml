@@ -1,0 +1,88 @@
+name: Deploy Prod (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit reference: short SHA or full SHA"
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+  actions: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: Prod
+
+    steps:
+      - name: Resolve full SHA
+        id: sha
+        shell: bash
+        run: |
+          in="${{ inputs.ref }}"
+          api_url="https://api.github.com/repos/${{ github.repository }}/commits/${in}"
+          full_sha=$(curl -sS -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github+json" "$api_url" | jq -r .sha)
+
+          if [[ -z "$full_sha" || "$full_sha" == "null" ]]; then
+            echo "Failed to resolve commit '$in' to a full SHA."
+            exit 1
+          fi
+
+          echo "value=$full_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Find CI run id for this SHA
+        id: cirun
+        shell: bash
+        run: |
+          sha="${{ steps.sha.outputs.value }}"
+
+          # Find the CI workflow run on develop for this exact commit SHA
+          runs_url="https://api.github.com/repos/${{ github.repository }}/actions/workflows/ci-build.yml/runs?branch=develop&status=success&per_page=50"
+          run_id=$(curl -sS \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "$runs_url" \
+            | jq -r --arg sha "$sha" '.workflow_runs[] | select(.head_sha==$sha) | .id' \
+            | head -n 1)
+
+          if [[ -z "$run_id" || "$run_id" == "null" ]]; then
+            echo "No successful CI run found on develop for SHA: $sha"
+            echo "Make sure CI succeeded for that commit on develop."
+            exit 1
+          fi
+
+          echo "id=$run_id" >> "$GITHUB_OUTPUT"
+
+      - name: Download artifact from CI run
+        uses: actions/download-artifact@v4
+        with:
+          name: mixrec-api-${{ steps.sha.outputs.value }}
+          run-id: ${{ steps.cirun.outputs.id }}
+          path: ./package
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set App Service settings (Prod)
+        run: |
+          az webapp config appsettings set \
+            --name ${{ secrets.AZURE_WEBAPP_NAME }} \
+            --resource-group Prod \
+            --settings \
+              OpenAI__ApiKey="${{ secrets.OPENAI_API_KEY }}" \
+              OpenAI__Model="gpt-4o-mini"
+
+      - name: Deploy to Azure Web App (Prod)
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+          package: ./package
