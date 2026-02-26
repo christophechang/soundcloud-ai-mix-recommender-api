@@ -19,7 +19,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
         private const int MixesUpperBound = 50;
         private const int TracklistUpperBound = 30;
         private const int IntroTextUpperBound = 220;
-        private const int TagUpperBound = 40;
+        private const int MoodsUpperBound = 20;
 
         private static readonly HashSet<string> TopLevelAllowed = new(StringComparer.Ordinal)
         {
@@ -119,15 +119,15 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             AppendLine("1) You must only use mix ids provided in the MIX blocks.");
             AppendLine("2) Output strict JSON only, matching the JSON schema exactly, no extra properties, and do not include ``` anywhere.");
             AppendLine("3) Do not use outside knowledge. Only use evidence from the same mix block you are recommending.");
-            AppendLine("4) Evidence may come from intro, tags, or tracklist.");
+            AppendLine("4) Evidence may come from intro, genre, energy, bpm, moods, or tracklist.");
             AppendLine("5) Every why string MUST be a quoted ANCHOR copied verbatim from that same mix block, and nothing else.");
             AppendLine("6) Allowed why formats are exactly: \"ANCHOR\" or \"ANCHOR\".");
-            AppendLine("6b) Example valid why values: \"\\\"broken-beat\\\"\", \"\\\"deep, soulful rollers\\\".\", \"\\\"Lake People - Night Drive\\\"\", \"\\\"driving\\\"\".");
-            AppendLine("6c) Example invalid why values: \"broken-beat\", \"\\\"broken-beat\\\" and more\", \"tags: broken-beat\", \"\\\"broken-beat\\\"!\", \"\\\"driving percussive-heavy warm-low-end\\\"\".");
-            AppendLine("7) The ANCHOR must appear verbatim in that mix block intro OR be a single tag token from that mix OR be a substring of a tracklist line from that mix.");
-            AppendLine("7a) If the ANCHOR comes from tags, it MUST be exactly ONE tag token (no spaces). Examples: \"\\\"driving\\\"\", \"\\\"warehouse-pressure\\\"\".");
-            AppendLine("7b) Never combine multiple tags into one ANCHOR. This is invalid: \"\\\"driving percussive-heavy warm-low-end\\\"\".");
-            AppendLine("8) Never output the full tags line as a why string, and never include the literal prefix \"tags:\" in any why string.");
+            AppendLine("6b) Example valid why values: \"\\\"dnb\\\"\", \"\\\"peak\\\".\", \"\\\"bpm: 172-174\\\"\", \"\\\"driving\\\"\", \"\\\"Lake People - Night Drive\\\"\".");
+            AppendLine("6c) Example invalid why values: \"dnb\", \"\\\"dnb\\\" and more\", \"genre: dnb\", \"\\\"driving rolling\\\"\", \"\\\"bpm 172-174\\\"\".");
+            AppendLine("7) The ANCHOR must appear verbatim in that mix block intro OR be exactly one of: genre, energy, one mood token, \"bpm: X\" or \"bpm: X-Y\", OR be a substring of a tracklist line from that mix.");
+            AppendLine("7a) If the ANCHOR comes from moods, it MUST be exactly ONE mood token (no spaces). Examples: \"\\\"driving\\\"\", \"\\\"aggressive\\\"\".");
+            AppendLine("7b) Never combine multiple moods into one ANCHOR. This is invalid: \"\\\"driving rolling dark\\\"\".");
+            AppendLine("8) Never output the full moods list as a why string, and never include the literal prefixes \"moods:\", \"genre:\", \"energy:\" in any why string.");
             AppendLine("9) If you cannot produce 2 to 4 valid why strings for a mix, do not include that mix.");
             AppendLine("10) If insufficient evidence exists overall, return zero results.");
             AppendLine("11) results length must be between 0 and " + maxResults + ".");
@@ -146,16 +146,24 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             for (int i = 0; i < mixes.Count; i++)
             {
                 var m = mixes[i];
+
                 string intro = TakePrefix(m.Description, IntroTextUpperBound);
                 string tracks = string.Join("\n", m.Tracklist.Take(TracklistUpperBound));
-                string tags = (m.Tags == null || m.Tags.Count == 0) ? string.Empty : string.Join(" ", m.Tags.Take(TagUpperBound));
+
+                string bpm = FormatBpmAnchor(m.BpmMin, m.BpmMax);
+                string moods = (m.Moods == null || m.Moods.Count == 0)
+                    ? string.Empty
+                    : string.Join(" ", m.Moods.Take(MoodsUpperBound));
 
                 AppendLine("MIX");
                 AppendLine("id: " + m.Id);
                 AppendLine("title: " + m.Title);
                 AppendLine("url: " + m.Url);
                 AppendLine("intro: " + intro);
-                AppendLine("tags: " + tags);
+                AppendLine("genre: " + (m.Genre ?? string.Empty));
+                AppendLine("energy: " + (m.Energy ?? string.Empty));
+                AppendLine("bpm: " + bpm);
+                AppendLine("moods: " + moods);
                 AppendLine("tracklist:");
                 AppendLine(tracks);
                 AppendLine("END_MIX");
@@ -164,6 +172,15 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             }
 
             return sb.ToString().Trim();
+        }
+
+        private static string FormatBpmAnchor(int? min, int? max)
+        {
+            if (min is null && max is null) return string.Empty;
+            if (min is not null && max is null) return min.Value.ToString();
+            if (min is null && max is not null) return max.Value.ToString();
+            if (min.Value == max.Value) return min.Value.ToString();
+            return $"{min.Value}-{max.Value}";
         }
 
         private static string TakePrefix(string? text, int maxChars)
@@ -210,7 +227,6 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 if (r.Why is null || r.Why.Count < 2 || r.Why.Count > 4) throw new InvalidOperationException("AI returned invalid why list.");
                 if (r.Why.Any(string.IsNullOrWhiteSpace)) throw new InvalidOperationException("AI returned an empty why string.");
 
-                // Normalize + validate in-place so downstream always sees strict quoted anchors.
                 ValidateWhyAnchors(r.Why, mix);
 
                 if (r.Confidence < 0 || r.Confidence > 1) throw new InvalidOperationException("AI returned invalid confidence.");
@@ -221,15 +237,20 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
         private static void ValidateWhyAnchors(List<string> why, Mix mix)
         {
-            string intro = TakePrefix(mix.Description, 220);
+            string intro = TakePrefix(mix.Description, IntroTextUpperBound);
 
-            var tagTokens = new HashSet<string>(StringComparer.Ordinal);
-            if (mix.Tags != null)
+            string genre = (mix.Genre ?? string.Empty).Trim();
+            string energy = (mix.Energy ?? string.Empty).Trim();
+
+            string bpmAnchor = BuildBpmAnchor(mix.BpmMin, mix.BpmMax);
+
+            var moodTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (mix.Moods != null)
             {
-                foreach (var t in mix.Tags)
+                foreach (var m in mix.Moods)
                 {
-                    var tok = (t ?? string.Empty).Trim();
-                    if (tok.Length > 0) tagTokens.Add(tok);
+                    var tok = (m ?? string.Empty).Trim();
+                    if (tok.Length > 0) moodTokens.Add(tok);
                 }
             }
 
@@ -241,41 +262,86 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
                 if (TryExtractQuotedAnchor(original, out var anchor))
                 {
-                    EnsureAnchorIsValid(anchor, intro, tagTokens, trackLines, mix.Id);
+                    EnsureAnchorIsValid(anchor, intro, genre, energy, bpmAnchor, moodTokens, trackLines, mix.Id);
                     continue;
                 }
 
-                // Allow unquoted single-token tag (optionally ending with a period) and normalize into quoted form
+                // Allow unquoted single-token mood/genre/energy and normalize into quoted form
                 string candidate = original.Trim();
                 if (candidate.EndsWith(".", StringComparison.Ordinal)) candidate = candidate[..^1].TrimEnd();
 
-                if (tagTokens.Contains(candidate))
+                if (IsAllowedUnquotedAnchor(candidate, genre, energy, bpmAnchor, moodTokens))
                 {
                     why[i] = "\"" + candidate + "\"";
-                    EnsureAnchorIsValid(anchor, intro, tagTokens, trackLines, mix.Id);
+                    EnsureAnchorIsValid(candidate, intro, genre, energy, bpmAnchor, moodTokens, trackLines, mix.Id);
                     continue;
                 }
 
                 throw new InvalidOperationException("AI returned a why string that is not a quoted anchor.");
             }
         }
+
+        private static bool IsAllowedUnquotedAnchor(
+            string candidate,
+            string genre,
+            string energy,
+            string bpmAnchor,
+            HashSet<string> moodTokens)
+        {
+            if (candidate.Length == 0) return false;
+
+            if (moodTokens.Contains(candidate)) return true;
+
+            if (genre.Length > 0 && string.Equals(candidate, genre, StringComparison.OrdinalIgnoreCase)) return true;
+            if (energy.Length > 0 && string.Equals(candidate, energy, StringComparison.OrdinalIgnoreCase)) return true;
+
+            if (bpmAnchor.Length > 0 && string.Equals(candidate, bpmAnchor, StringComparison.OrdinalIgnoreCase)) return true;
+
+            // also allow "bpm: X" / "bpm: X-Y" as a candidate
+            if (bpmAnchor.Length > 0 && string.Equals(candidate, "bpm: " + bpmAnchor, StringComparison.OrdinalIgnoreCase)) return true;
+
+            return false;
+        }
+
+        private static string BuildBpmAnchor(int? min, int? max)
+        {
+            if (min is null && max is null) return string.Empty;
+            if (min is not null && max is null) return min.Value.ToString();
+            if (min is null && max is not null) return max.Value.ToString();
+            if (min.Value == max.Value) return min.Value.ToString();
+            return $"{min.Value}-{max.Value}";
+        }
+
         private static void EnsureAnchorIsValid(
             string anchor,
             string intro,
-            HashSet<string> tagTokens,
+            string genre,
+            string energy,
+            string bpmAnchor,
+            HashSet<string> moodTokens,
             string[] trackLines,
             string mixId)
         {
             bool foundInIntro = intro.Length > 0 && intro.Contains(anchor, StringComparison.Ordinal);
-            bool foundInTags = tagTokens.Contains(anchor);
+
+            bool foundInGenre = genre.Length > 0 && string.Equals(anchor, genre, StringComparison.OrdinalIgnoreCase);
+            bool foundInEnergy = energy.Length > 0 && string.Equals(anchor, energy, StringComparison.OrdinalIgnoreCase);
+
+            bool foundInBpm =
+                bpmAnchor.Length > 0 &&
+                (string.Equals(anchor, bpmAnchor, StringComparison.OrdinalIgnoreCase) ||
+                 string.Equals(anchor, "bpm: " + bpmAnchor, StringComparison.OrdinalIgnoreCase));
+
+            bool foundInMoods = moodTokens.Contains(anchor);
+
             bool foundInTracklist = trackLines.Any(line => line.Contains(anchor, StringComparison.Ordinal));
 
-            if (!(foundInIntro || foundInTags || foundInTracklist))
+            if (!(foundInIntro || foundInGenre || foundInEnergy || foundInBpm || foundInMoods || foundInTracklist))
             {
                 throw new InvalidOperationException(
                     "Why anchor not found in MIX block. " +
                     $"mixId='{mixId}', anchor='{anchor}', " +
-                    $"foundInIntro={foundInIntro}, foundInTags={foundInTags}, foundInTracklist={foundInTracklist}.");
+                    $"foundInIntro={foundInIntro}, foundInGenre={foundInGenre}, foundInEnergy={foundInEnergy}, foundInBpm={foundInBpm}, foundInMoods={foundInMoods}, foundInTracklist={foundInTracklist}.");
             }
         }
 

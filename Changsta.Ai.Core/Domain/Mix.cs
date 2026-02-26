@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 
 namespace Changsta.Ai.Core.Domain
 {
@@ -18,8 +17,16 @@ namespace Changsta.Ai.Core.Domain
 
         public IReadOnlyList<string> Tracklist { get; init; } = Array.Empty<string>();
 
-        public IReadOnlyList<string> Tags { get; init; } = Array.Empty<string>();
+        public DateTimeOffset? PublishedAt { get; init; }
 
-        public DateTimeOffset? PublishedAt { get; set; }
+        required public string Genre { get; init; }
+
+        required public string Energy { get; init; }
+
+        public int? BpmMin { get; init; }
+
+        public int? BpmMax { get; init; }
+
+        public IReadOnlyList<string> Moods { get; init; } = Array.Empty<string>();
     }
 }
