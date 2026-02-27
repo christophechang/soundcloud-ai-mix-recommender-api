@@ -254,6 +254,15 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             if (response.ClarifyingQuestion is not null) throw new InvalidOperationException("AI response clarifyingQuestion must be null.");
             if (response.Results.Count > maxResults) throw new InvalidOperationException("AI returned too many results.");
 
+            var seenIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var r in response.Results)
+            {
+                if (!string.IsNullOrWhiteSpace(r.MixId) && !seenIds.Add(r.MixId))
+                {
+                    throw new InvalidOperationException($"AI returned duplicate mixId '{r.MixId}'.");
+                }
+            }
+
             var allowedById = mixes.ToDictionary(m => m.Id, StringComparer.Ordinal);
 
             foreach (var r in response.Results)

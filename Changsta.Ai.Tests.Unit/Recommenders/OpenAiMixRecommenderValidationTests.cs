@@ -653,5 +653,37 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
             Assert.DoesNotThrow(() =>
                 OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
         }
+
+        [Test]
+        public void ParseAndValidate_DuplicateMixId_Throws()
+        {
+            // Two results with the same mixId must be rejected
+            const string json = """
+                {
+                  "results": [
+                    {
+                      "mixId": "mix-1",
+                      "title": "Test Mix",
+                      "url": "https://soundcloud.com/test/mix",
+                      "reason": "Great dnb mix.",
+                      "why": ["\"dnb\""],
+                      "confidence": 0.9
+                    },
+                    {
+                      "mixId": "mix-1",
+                      "title": "Test Mix",
+                      "url": "https://soundcloud.com/test/mix",
+                      "reason": "Great dnb mix again.",
+                      "why": ["\"peak\""],
+                      "confidence": 0.8
+                    }
+                  ],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.Throws<InvalidOperationException>(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 5));
+        }
     }
 }
