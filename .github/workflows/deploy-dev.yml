@@ -1,32 +1,19 @@
-# .github/workflows/deploy-dev.yml
 name: Deploy Dev
 
 on:
   workflow_run:
     workflows: ["CI Build (publish artifact)"]
-    types:
-      - completed
+    types: [completed]
+    branches: [develop]
 
 permissions:
   id-token: write
   contents: read
   actions: read
 
-concurrency:
-  group: deploy-dev
-  cancel-in-progress: true
-
-env:
-  ARTIFACT_NAME: mixrec-api
-
 jobs:
   deploy:
-    # Only deploy when CI succeeded AND the CI run was a push to develop (prevents PR-triggered deployments)
-    if: >
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.head_branch == 'develop' &&
-      github.event.workflow_run.event == 'push'
-
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     environment: dev
 
@@ -34,7 +21,7 @@ jobs:
       - name: Download artifact from CI run
         uses: actions/download-artifact@v4
         with:
-          name: ${{ env.ARTIFACT_NAME }}
+          name: mixrec-api-${{ github.event.workflow_run.head_sha }}
           run-id: ${{ github.event.workflow_run.id }}
           path: ./package
           github-token: ${{ secrets.GITHUB_TOKEN }}
