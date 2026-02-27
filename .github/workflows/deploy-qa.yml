@@ -1,3 +1,4 @@
+# .github/workflows/deploy-qa.yml
 name: Deploy QA (manual)
 
 on:
@@ -13,6 +14,15 @@ permissions:
   contents: read
   actions: read
 
+concurrency:
+  group: deploy-qa
+  cancel-in-progress: true
+
+env:
+  # Must match the artifact name produced by CI (constant, no SHA)
+  ARTIFACT_NAME: mixrec-api
+  CI_WORKFLOW_FILE: ci-build.yml
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -25,7 +35,10 @@ jobs:
         run: |
           in="${{ inputs.ref }}"
           api_url="https://api.github.com/repos/${{ github.repository }}/commits/${in}"
-          full_sha=$(curl -sS -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github+json" "$api_url" | jq -r .sha)
+          full_sha=$(curl -sS \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "$api_url" | jq -r .sha)
 
           if [[ -z "$full_sha" || "$full_sha" == "null" ]]; then
             echo "Failed to resolve commit '$in' to a full SHA."
@@ -34,14 +47,13 @@ jobs:
 
           echo "value=$full_sha" >> "$GITHUB_OUTPUT"
 
-      - name: Find CI run id for this SHA
+      - name: Find CI run id for this SHA (develop branch)
         id: cirun
         shell: bash
         run: |
           sha="${{ steps.sha.outputs.value }}"
 
-          # Find the CI workflow run on develop for this exact commit SHA
-          runs_url="https://api.github.com/repos/${{ github.repository }}/actions/workflows/ci-build.yml/runs?branch=develop&status=success&per_page=50"
+          runs_url="https://api.github.com/repos/${{ github.repository }}/actions/workflows/${{ env.CI_WORKFLOW_FILE }}/runs?branch=develop&status=success&per_page=50"
           run_id=$(curl -sS \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
@@ -60,7 +72,7 @@ jobs:
       - name: Download artifact from CI run
         uses: actions/download-artifact@v4
         with:
-          name: mixrec-api-${{ steps.sha.outputs.value }}
+          name: ${{ env.ARTIFACT_NAME }}
           run-id: ${{ steps.cirun.outputs.id }}
           path: ./package
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -73,13 +85,14 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Set App Service settings (qa)
-        run: |
-          az webapp config appsettings set \
-            --name ${{ secrets.AZURE_WEBAPP_NAME }} \
-            --resource-group qa \
-            --settings \
-              OpenAI__ApiKey="${{ secrets.OPENAI_API_KEY }}" \
-              OpenAI__Model="gpt-4o-mini"
+        uses: azure/appservice-settings@v1
+        with:
+          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+          app-settings-json: |
+            [
+              { "name": "OpenAI__ApiKey", "value": "${{ secrets.OPENAI_API_KEY }}", "slotSetting": false },
+              { "name": "OpenAI__Model",  "value": "gpt-4o-mini", "slotSetting": false }
+            ]
 
       - name: Deploy to Azure Web App (qa)
         uses: azure/webapps-deploy@v3
