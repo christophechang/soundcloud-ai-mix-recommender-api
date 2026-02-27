@@ -1,8 +1,8 @@
-﻿namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
+namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 {
-    public sealed partial class SemanticKernelMixAiRecommender
+    public sealed partial class OpenAiMixRecommender
     {
-        private sealed class AiResult
+        internal sealed class AiResult
         {
             public required string MixId { get; init; }
             public required string Title { get; init; }

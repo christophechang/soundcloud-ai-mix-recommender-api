@@ -1,8 +1,9 @@
-﻿using System.Threading;
+using System.Threading;
 using System.Threading.Tasks;
 using Changsta.Ai.Core.Contracts.Recommendations;
 using Changsta.Ai.Core.Dtos;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Changsta.Ai.Interface.Api.Controllers
 {
@@ -19,6 +20,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
         }
 
         [HttpPost("recommend")]
+        [EnableRateLimiting("recommend")]
         public async Task<ActionResult<MixRecommendationResponseDto>> Recommend(
             [FromBody] MixRecommendationRequestDto request,
             CancellationToken cancellationToken)

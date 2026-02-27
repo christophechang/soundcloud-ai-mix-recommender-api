@@ -1,0 +1,509 @@
+using System;
+using System.Collections.Generic;
+using Changsta.Ai.Core.Domain;
+using Changsta.Ai.Infrastructure.Services.Ai.Recommenders;
+using NUnit.Framework;
+
+namespace Changsta.Ai.Tests.Unit.Recommenders
+{
+    [TestFixture]
+    public sealed class OpenAiMixRecommenderValidationTests
+    {
+        private static readonly Mix DefaultMix = new()
+        {
+            Id = "mix-1",
+            Title = "Test Mix",
+            Url = "https://soundcloud.com/test/mix",
+            Description = "A soulful and rolling dnb journey through deep sub-bass territory",
+            Genre = "dnb",
+            Energy = "peak",
+            BpmMin = 172,
+            BpmMax = 174,
+            Moods = new[] { "driving", "dark", "rolling" },
+            Tracklist = new[] { "Calibre - Pillow Dub", "Noisia - Shellcase" },
+        };
+
+        private static readonly IReadOnlyList<Mix> DefaultCatalogue = new[] { DefaultMix };
+
+        [Test]
+        public void NormalizeAiJson_PlainJson_ReturnsUnchanged()
+        {
+            const string json = """{ "results": [], "clarifyingQuestion": null }""";
+
+            var result = OpenAiMixRecommender.NormalizeAiJson(json);
+
+            Assert.That(result, Is.EqualTo(json));
+        }
+
+        [Test]
+        public void NormalizeAiJson_MarkdownFences_StripsThemOut()
+        {
+            const string fenced = "```json\n{ \"results\": [], \"clarifyingQuestion\": null }\n```";
+
+            var result = OpenAiMixRecommender.NormalizeAiJson(fenced);
+
+            Assert.That(result, Is.EqualTo("""{ "results": [], "clarifyingQuestion": null }"""));
+        }
+
+        [Test]
+        public void NormalizeAiJson_BomPrefix_StripsIt()
+        {
+            var withBom = "\uFEFF{ \"results\": [], \"clarifyingQuestion\": null }";
+
+            var result = OpenAiMixRecommender.NormalizeAiJson(withBom);
+
+            Assert.That(result, Is.EqualTo("""{ "results": [], "clarifyingQuestion": null }"""));
+        }
+
+        [Test]
+        public void NormalizeAiJson_EmptyString_ReturnsEmpty()
+        {
+            var result = OpenAiMixRecommender.NormalizeAiJson(string.Empty);
+
+            Assert.That(result, Is.Empty);
+        }
+
+        [Test]
+        public void ParseAndValidate_ZeroResults_Succeeds()
+        {
+            const string json = """{ "results": [], "clarifyingQuestion": null }""";
+
+            Assert.DoesNotThrow(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_QuotedGenreAnchor_Succeeds()
+        {
+            // why contains "dnb" (genre) and "peak" (energy) — both valid
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
+                    "title": "Test Mix",
+                    "url": "https://soundcloud.com/test/mix",
+                    "why": ["\"dnb\"", "\"peak\""],
+                    "confidence": 0.9
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.DoesNotThrow(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_QuotedMoodAnchor_Succeeds()
+        {
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
+                    "title": "Test Mix",
+                    "url": "https://soundcloud.com/test/mix",
+                    "why": ["\"driving\"", "\"dark\""],
+                    "confidence": 0.8
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.DoesNotThrow(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_QuotedBpmRangeAnchor_Succeeds()
+        {
+            // BpmMin=172, BpmMax=174 → anchor "172-174" should be valid
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
+                    "title": "Test Mix",
+                    "url": "https://soundcloud.com/test/mix",
+                    "why": ["\"dnb\"", "\"172-174\""],
+                    "confidence": 0.85
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.DoesNotThrow(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_QuotedBpmPrefixAnchor_Succeeds()
+        {
+            // "bpm: 172-174" form should also be valid
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
+                    "title": "Test Mix",
+                    "url": "https://soundcloud.com/test/mix",
+                    "why": ["\"dnb\"", "\"bpm: 172-174\""],
+                    "confidence": 0.85
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.DoesNotThrow(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_QuotedIntroSubstringAnchor_Succeeds()
+        {
+            // "soulful and rolling" appears verbatim in DefaultMix.Description
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
+                    "title": "Test Mix",
+                    "url": "https://soundcloud.com/test/mix",
+                    "why": ["\"dnb\"", "\"soulful and rolling\""],
+                    "confidence": 0.8
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.DoesNotThrow(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_QuotedTracklistAnchor_Succeeds()
+        {
+            // "Calibre - Pillow Dub" is a full tracklist line
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
+                    "title": "Test Mix",
+                    "url": "https://soundcloud.com/test/mix",
+                    "why": ["\"dnb\"", "\"Calibre - Pillow Dub\""],
+                    "confidence": 0.75
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.DoesNotThrow(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_AnchorWithTrailingPeriod_Succeeds()
+        {
+            // "\"dnb\"." — trailing period should be stripped before validation
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
+                    "title": "Test Mix",
+                    "url": "https://soundcloud.com/test/mix",
+                    "why": ["\"dnb\".", "\"peak\""],
+                    "confidence": 0.8
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.DoesNotThrow(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_UnquotedMoodToken_IsNormalisedAndSucceeds()
+        {
+            // "driving" without quotes — allowed as unquoted single-token fallback
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
+                    "title": "Test Mix",
+                    "url": "https://soundcloud.com/test/mix",
+                    "why": ["driving", "\"peak\""],
+                    "confidence": 0.7
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.DoesNotThrow(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_FourWhyItems_Succeeds()
+        {
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
+                    "title": "Test Mix",
+                    "url": "https://soundcloud.com/test/mix",
+                    "why": ["\"dnb\"", "\"peak\"", "\"driving\"", "\"dark\""],
+                    "confidence": 0.9
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.DoesNotThrow(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_UnknownMixId_Throws()
+        {
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "does-not-exist",
+                    "title": "Test Mix",
+                    "url": "https://soundcloud.com/test/mix",
+                    "why": ["\"dnb\"", "\"peak\""],
+                    "confidence": 0.9
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.Throws<InvalidOperationException>(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_WrongTitle_Throws()
+        {
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
+                    "title": "Wrong Title",
+                    "url": "https://soundcloud.com/test/mix",
+                    "why": ["\"dnb\"", "\"peak\""],
+                    "confidence": 0.9
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.Throws<InvalidOperationException>(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_WrongUrl_Throws()
+        {
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
+                    "title": "Test Mix",
+                    "url": "https://soundcloud.com/wrong/url",
+                    "why": ["\"dnb\"", "\"peak\""],
+                    "confidence": 0.9
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.Throws<InvalidOperationException>(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_TooFewWhyItems_Throws()
+        {
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
+                    "title": "Test Mix",
+                    "url": "https://soundcloud.com/test/mix",
+                    "why": ["\"dnb\""],
+                    "confidence": 0.9
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.Throws<InvalidOperationException>(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_TooManyWhyItems_Throws()
+        {
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
+                    "title": "Test Mix",
+                    "url": "https://soundcloud.com/test/mix",
+                    "why": ["\"dnb\"", "\"peak\"", "\"driving\"", "\"dark\"", "\"rolling\""],
+                    "confidence": 0.9
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.Throws<InvalidOperationException>(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_ConfidenceAboveOne_Throws()
+        {
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
+                    "title": "Test Mix",
+                    "url": "https://soundcloud.com/test/mix",
+                    "why": ["\"dnb\"", "\"peak\""],
+                    "confidence": 1.5
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.Throws<InvalidOperationException>(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_ConfidenceBelowZero_Throws()
+        {
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
+                    "title": "Test Mix",
+                    "url": "https://soundcloud.com/test/mix",
+                    "why": ["\"dnb\"", "\"peak\""],
+                    "confidence": -0.1
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.Throws<InvalidOperationException>(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_AnchorNotFoundInAnyField_Throws()
+        {
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
+                    "title": "Test Mix",
+                    "url": "https://soundcloud.com/test/mix",
+                    "why": ["\"dnb\"", "\"invented-phrase-xyz\""],
+                    "confidence": 0.9
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.Throws<InvalidOperationException>(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_ExtraTopLevelProperty_Throws()
+        {
+            const string json = """
+                {
+                  "results": [],
+                  "clarifyingQuestion": null,
+                  "extra": "bad"
+                }
+                """;
+
+            Assert.Throws<InvalidOperationException>(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_ExtraResultProperty_Throws()
+        {
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
+                    "title": "Test Mix",
+                    "url": "https://soundcloud.com/test/mix",
+                    "why": ["\"dnb\"", "\"peak\""],
+                    "confidence": 0.9,
+                    "extra": "bad"
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.Throws<InvalidOperationException>(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_ClarifyingQuestionNotNull_Throws()
+        {
+            const string json = """
+                {
+                  "results": [],
+                  "clarifyingQuestion": "What mood are you looking for?"
+                }
+                """;
+
+            Assert.Throws<InvalidOperationException>(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_ResultsExceedMaxResults_Throws()
+        {
+            // Two results returned but maxResults is 1
+            const string json = """
+                {
+                  "results": [
+                    {
+                      "mixId": "mix-1",
+                      "title": "Test Mix",
+                      "url": "https://soundcloud.com/test/mix",
+                      "why": ["\"dnb\"", "\"peak\""],
+                      "confidence": 0.9
+                    },
+                    {
+                      "mixId": "mix-1",
+                      "title": "Test Mix",
+                      "url": "https://soundcloud.com/test/mix",
+                      "why": ["\"dnb\"", "\"peak\""],
+                      "confidence": 0.8
+                    }
+                  ],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.Throws<InvalidOperationException>(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 1));
+        }
+
+        [Test]
+        public void ParseAndValidate_EmptyJson_Throws()
+        {
+            Assert.Throws<InvalidOperationException>(() =>
+                OpenAiMixRecommender.ParseAndValidate(string.Empty, DefaultCatalogue, maxResults: 3));
+        }
+    }
+}
