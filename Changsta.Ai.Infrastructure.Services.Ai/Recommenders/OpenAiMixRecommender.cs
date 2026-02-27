@@ -149,6 +149,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             AppendLine("- Tempo query (e.g. \"fast mixes\", \"around 170 bpm\"): prioritize bpm field.");
             AppendLine("- Mixed query (e.g. \"dark dnb with Noisia around 174bpm\"): weight across all dimensions, favour mixes matching the most dimensions.");
             AppendLine("- Decompose the user question into its component signals before searching.");
+            AppendLine("- Resolve genre aliases using your music knowledge before searching: map abbreviations, shorthands, and regional variants to their full catalogue equivalents (e.g. 'dnb' / 'd&b' → 'drum & bass'; 'UKG' → 'UK Garage'; 'techno' may also match 'tech house'). The why anchors must still be copied verbatim from the MIX block.");
             AppendLine();
             AppendLine("Rules:");
             AppendLine("1) You must only use mix ids provided in the MIX blocks.");
