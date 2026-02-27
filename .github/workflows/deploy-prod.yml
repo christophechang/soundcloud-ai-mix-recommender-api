@@ -1,3 +1,4 @@
+# .github/workflows/deploy-prod.yml
 name: Deploy Prod (manual)
 
 on:
@@ -12,6 +13,14 @@ permissions:
   id-token: write
   contents: read
   actions: read
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: true
+
+env:
+  ARTIFACT_NAME: mixrec-api
+  CI_WORKFLOW_FILE: ci-build.yml
 
 jobs:
   deploy:
@@ -37,13 +46,13 @@ jobs:
 
           echo "value=$full_sha" >> "$GITHUB_OUTPUT"
 
-      - name: Find CI run id for this SHA
+      - name: Find CI run id for this SHA (develop branch)
         id: cirun
         shell: bash
         run: |
           sha="${{ steps.sha.outputs.value }}"
 
-          runs_url="https://api.github.com/repos/${{ github.repository }}/actions/workflows/ci-build.yml/runs?branch=develop&status=success&per_page=50"
+          runs_url="https://api.github.com/repos/${{ github.repository }}/actions/workflows/${{ env.CI_WORKFLOW_FILE }}/runs?branch=develop&status=success&per_page=50"
           run_id=$(curl -sS \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
@@ -62,7 +71,7 @@ jobs:
       - name: Download artifact from CI run
         uses: actions/download-artifact@v4
         with:
-          name: mixrec-api-${{ steps.sha.outputs.value }}
+          name: ${{ env.ARTIFACT_NAME }}
           run-id: ${{ steps.cirun.outputs.id }}
           path: ./package
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -75,14 +84,14 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Set App Service settings (prod)
-        shell: bash
-        run: |
-          az webapp config appsettings set \
-            --name "${{ secrets.AZURE_WEBAPP_NAME }}" \
-            --resource-group "${{ secrets.AZURE_RESOURCE_GROUP }}" \
-            --settings \
-              OpenAI__ApiKey="${{ secrets.OPENAI_API_KEY }}" \
-              OpenAI__Model="gpt-4o-mini"
+        uses: azure/appservice-settings@v1
+        with:
+          app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
+          app-settings-json: |
+            [
+              { "name": "OpenAI__ApiKey", "value": "${{ secrets.OPENAI_API_KEY }}", "slotSetting": false },
+              { "name": "OpenAI__Model",  "value": "gpt-4o-mini", "slotSetting": false }
+            ]
 
       - name: Deploy to Azure Web App (prod)
         uses: azure/webapps-deploy@v3
