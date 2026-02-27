@@ -4,6 +4,8 @@
     {
         required public string MixId { get; init; }
 
+        required public string Reason { get; init; }
+
         required public IReadOnlyList<string> Why { get; init; }
 
         public double Confidence { get; init; }

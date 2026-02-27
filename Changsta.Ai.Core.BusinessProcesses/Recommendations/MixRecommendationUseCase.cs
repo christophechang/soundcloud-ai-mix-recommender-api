@@ -72,6 +72,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.Recommendations
                         MixId = mix.Id,
                         Title = mix.Title,
                         Url = mix.Url,
+                        Reason = r.Reason,
                         Why = r.Why,
                         Confidence = r.Confidence,
                     };
