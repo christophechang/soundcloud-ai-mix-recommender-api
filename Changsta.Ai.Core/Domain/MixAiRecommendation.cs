@@ -8,8 +8,8 @@
 
         public double Confidence { get; init; }
 
-        required public string Title { get; set; }
+        required public string Title { get; init; }
 
-        required public string Url { get; set; }
+        required public string Url { get; init; }
     }
 }

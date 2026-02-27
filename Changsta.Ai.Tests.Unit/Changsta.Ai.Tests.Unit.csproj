@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -34,11 +34,12 @@
   <ItemGroup>
     <ProjectReference Include="..\Changsta.Ai.Core\Changsta.Ai.Core.csproj" />
     <ProjectReference Include="..\Changsta.Ai.Infrastructure.Services.SoundCloud\Changsta.Ai.Infrastructure.Services.SoundCloud.csproj" />
+    <ProjectReference Include="..\Changsta.Ai.Infrastructure.Services.Ai\Changsta.Ai.Infrastructure.Services.Ai.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="TestData\**\*.*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-  </ItemGroup>  
+  </ItemGroup>
 
 </Project>
