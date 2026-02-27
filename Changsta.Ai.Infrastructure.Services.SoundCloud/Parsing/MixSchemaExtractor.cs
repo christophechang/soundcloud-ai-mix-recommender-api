@@ -32,7 +32,7 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Parsing
 
         public static bool TryExtract(string? description, out MixSchema schema)
         {
-            schema = default;
+            schema = new MixSchema();
 
             if (string.IsNullOrWhiteSpace(description))
             {

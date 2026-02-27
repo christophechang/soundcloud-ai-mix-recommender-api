@@ -218,8 +218,9 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             if (min is null && max is null) return string.Empty;
             if (min is not null && max is null) return min.Value.ToString();
             if (min is null && max is not null) return max.Value.ToString();
-            if (min.Value == max.Value) return min.Value.ToString();
-            return $"{min.Value}-{max.Value}";
+            int a = min!.Value;
+            int b = max!.Value;
+            return a == b ? a.ToString() : $"{a}-{b}";
         }
 
         private static string TakePrefix(string? text, int maxChars)
@@ -349,8 +350,9 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             if (min is null && max is null) return string.Empty;
             if (min is not null && max is null) return min.Value.ToString();
             if (min is null && max is not null) return max.Value.ToString();
-            if (min.Value == max.Value) return min.Value.ToString();
-            return $"{min.Value}-{max.Value}";
+            int a = min!.Value;
+            int b = max!.Value;
+            return a == b ? a.ToString() : $"{a}-{b}";
         }
 
         private static void EnsureAnchorIsValid(

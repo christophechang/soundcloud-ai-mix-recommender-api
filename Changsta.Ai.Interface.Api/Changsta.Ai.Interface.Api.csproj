@@ -8,6 +8,8 @@
   </PropertyGroup>
   <PropertyGroup>
     <CodeAnalysisRuleSet>..\Soltech.ruleset</CodeAnalysisRuleSet>
+    <!-- SA1516 fires as a project-level diagnostic on top-level statement programs (StyleCop 1.1.x limitation) -->
+    <NoWarn>$(NoWarn);SA1516</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.2" />
