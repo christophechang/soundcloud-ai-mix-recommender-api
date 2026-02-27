@@ -1,176 +1,190 @@
 # SoundCloud Mix Recommender API
 
-A production-ready **.NET 10 Web API** that recommends SoundCloud DJ
-mixes using AI while enforcing strict, deterministic JSON output and
-server-side validation to minimise hallucination.
+A production-ready **.NET 10 Web API** that recommends SoundCloud DJ mixes using AI, balancing creative relevance with strict server-side validation to prevent hallucination.
 
-This project demonstrates controlled AI fuzziness: let the model rank
-creatively, but enforce hard validation rules before returning anything
-to clients.
+The guiding principle: **`reason` is creative; `why` is evidence. Both are required. Only `why` is verified against catalogue data.**
 
-------------------------------------------------------------------------
+---
 
-# Project Goals
+## Project Goals
 
--   Accept free-text user questions such as:
+- Accept free-text queries — genre, artist, track name, mood, tempo, or any combination
+- Return structured mix recommendations with a human-readable explanation and verifiable evidence
+- Guarantee strict JSON contract compliance
+- Prevent hallucinated data by validating every evidence anchor against real metadata
+- Support CI/CD with environment-based deployments (dev, qa, prod)
+- Be cloud deployable via Infrastructure as Code
 
-    > "Something to listen to while cooking" 
+---
 
--   Return structured mix recommendations.
+## How It Works
 
--   Guarantee strict JSON contract compliance.
+The API feeds up to 50 mixes from the SoundCloud RSS catalogue into a single OpenAI ChatCompletion call, with a structured prompt that:
 
--   Prevent hallucinated data.
+1. **Decomposes the query** into signals — genre, artist/track, mood, or tempo — and prioritises the right metadata fields accordingly
+2. **Generates a `reason`** per result: a free-text 1-2 sentence explanation written by the AI (creative, not validated)
+3. **Generates `why` anchors** per result: 1-4 quoted strings copied verbatim from the mix's own metadata (deterministic, server-validated)
 
--   Ensure every explanation is traceable to real metadata.
+If validation fails the AI response is retried up to 3 times before returning an empty result set.
 
--   Support CI/CD with environment-based deployments (dev, qa, prod).
+---
 
--   Be cloud deployable via Infrastructure as Code.
+## Example
 
-------------------------------------------------------------------------
+**Request:**
 
-# High-Level Design
-
-This API uses a **two-stage AI pipeline**:
-
-## Stage A -- Creative Ranking
-
--   Semantic matching via embeddings.
--   Optional heuristic boosting.
--   Returns top candidate mix IDs.
-
-## Stage B -- Strict Formatter
-
--   LLM generates final JSON.
--   Strict prompt rules enforce:
-    -   JSON only
-    -   No markdown fences
-    -   No external knowledge
-    -   Verbatim anchor usage
--   Output is validated server-side before being returned.  
-
-------------------------------------------------------------------------
-
-# Example Request
-
-**Query:**
-
-Something to listen to while cooking
+```json
+POST /api/mixes/recommend
+{
+  "question": "dark rolling dnb with Calibre",
+  "maxResults": 3
+}
+```
 
 **Response:**
 
-``` json
+```json
 {
   "results": [
     {
-      "mixId": "tag:soundcloud,2010:tracks/2267079023",
-      "title": "The Sunflower Mix 2",
-      "url": "https://soundcloud.com/changsta/sunflower-mix-2",
+      "mixId": "tag:soundcloud,2010:tracks/2047124840",
+      "title": "Mycelium Epiphany",
+      "url": "https://soundcloud.com/changsta/mycelium-epiphany",
+      "reason": "This dark, rolling dnb set features Calibre and sits in the 172-174 BPM range, matching both the mood and artist you asked for.",
       "why": [
-        "warm, rolling grooves",
-        "soulful bounce",
-        "sunny"
+        "\"dnb\"",
+        "\"dark\"",
+        "\"Calibre - Pillow Dub\""
       ],
-      "confidence": 0.9
+      "confidence": 0.92
     }
   ],
   "clarifyingQuestion": null
 }
 ```
 
-Each `why` item must exist verbatim inside the mix's own metadata. 
+Every `why` anchor exists verbatim in that mix's own genre, energy, mood, BPM, intro text, or tracklist — server-validated before returning.
 
-------------------------------------------------------------------------
+---
 
-# Strict Validation Rules
+## Query Types
 
-Before returning results:
+| Query type | Example | Signal prioritised |
+|---|---|---|
+| Genre | `"dnb mixes"` | `genre` field |
+| Artist / track | `"anything with Calibre"` | `tracklist` |
+| Mood | `"something dark and heavy"` | `moods`, then `energy`, then `intro` |
+| Tempo | `"fast, around 170 bpm"` | `bpm` |
+| Mixed | `"dark dnb with Noisia around 174bpm"` | All dimensions |
 
--   Only allowed JSON properties are accepted.
--   `mixId` must exist in server dataset.
--   `title` and `url` must match canonical values.
--   2--4 `why` anchors per result.
--   Each `why` must:
-    -   Be quoted.
-    -   Exist verbatim in intro, tags, or tracklist.
-    -   Belong to the same mix block.
--   Confidence must be between 0 and 1.
--   `clarifyingQuestion` must be null.
+---
 
-If validation fails, the request is rejected.
+## Validation Rules
 
-------------------------------------------------------------------------
+Before any result is returned:
 
-# Tech Stack
+- Only allowed JSON properties are accepted (strict allowlist)
+- `mixId` must exist in the server-side catalogue
+- `title` and `url` must match canonical catalogue values exactly
+- `reason` must be present and ≤ 300 characters
+- `why` must contain 1–4 strings, each a quoted anchor verified against the mix's own metadata
+- Each anchor must appear verbatim in: intro text, genre, energy, a mood token, BPM range, or a tracklist line
+- `confidence` must be 0–1
+- `clarifyingQuestion` must be null
 
--   .NET 10
--   ASP.NET Core Web API
--   OpenAI ChatCompletion API
--   Embeddings API
--   System.Text.Json
--   NUnit
--   GitHub Actions
--   Azure App Service
--   Bicep
+---
 
-------------------------------------------------------------------------
+## API Reference
 
-# CI/CD Pipeline
+### `POST /api/mixes/recommend`
 
-## CI
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `question` | string | yes | Natural language query |
+| `maxResults` | integer | no | Default `3`, min `1`, max `5` |
 
-Triggered on: - Push to `develop` - Push to `main` - Pull requests
+**Response fields:**
 
-Steps: - Restore - Build - Run tests - Publish API - Upload artifact -
-Upload test results
+| Field | Type | Notes |
+|---|---|---|
+| `results[].mixId` | string | Stable SoundCloud track ID |
+| `results[].title` | string | Mix title, verbatim from catalogue |
+| `results[].url` | string | SoundCloud URL, verbatim from catalogue |
+| `results[].reason` | string | AI-written explanation of the match |
+| `results[].why` | string[] | 1–4 evidence anchors, each verified against mix metadata |
+| `results[].confidence` | float | 0.0–1.0 |
+| `clarifyingQuestion` | string\|null | Non-null only when `question` is blank |
 
-Artifacts are immutable and used for deployments.
+`results` may be an empty array on `200` — this means the AI found no catalogue mixes with sufficient evidence to match the query.
 
-## CD
+---
 
--   Dev: auto-deploy on successful CI for `develop`
--   QA: manual deployment
--   Prod: manual deployment
+## Tech Stack
 
-Uses OIDC authentication with Azure Service Principal and
-environment-scoped secrets.
+- .NET 10 / ASP.NET Core Web API
+- OpenAI SDK v2.1.0 (ChatCompletion)
+- System.ServiceModel.Syndication (RSS parsing)
+- IMemoryCache (1-hour RSS TTL)
+- ASP.NET Core rate limiting (10 req/min per IP)
+- System.Text.Json
+- NUnit 4 + FluentAssertions
+- GitHub Actions
+- Azure App Service (F1 free tier)
+- Bicep (IaC)
 
-------------------------------------------------------------------------
+---
 
-# Running Locally
+## CI/CD Pipeline
 
-## Configure OpenAI
+### CI
 
-``` json
+Triggered on push to `develop` or `main`, and on pull requests.
+
+Steps: restore → build → test → publish → upload artifact
+
+### CD
+
+| Environment | Trigger |
+|---|---|
+| Dev | Auto-deploy on CI success for `develop` |
+| QA | Manual |
+| Prod | Manual |
+
+Uses OIDC authentication with Azure Service Principal and environment-scoped secrets.
+
+---
+
+## Running Locally
+
+Add to `appsettings.Development.json` or user secrets:
+
+```json
 {
   "OpenAI": {
     "ApiKey": "your-key-here",
     "Model": "gpt-4.1-mini"
+  },
+  "SoundCloud": {
+    "RssUrl": "https://feeds.soundcloud.com/users/soundcloud:users:YOUR_ID/sounds.rss"
   }
 }
 ```
 
 Or via environment variables:
 
-    OpenAI__ApiKey=...
-    OpenAI__Model=gpt-4.1-mini
+```
+OpenAI__ApiKey=...
+OpenAI__Model=gpt-4.1-mini
+```
 
-## Run
+```
+dotnet run --project Changsta.Ai.Interface.Api
+```
 
-    dotnet run --project Changsta.Ai.Interface.Api
+---
 
-------------------------------------------------------------------------
+## Author
 
-# Project Status
-
-Active development focused on strict-mode explainable recommendations
-and CI/CD hardening.
-
-------------------------------------------------------------------------
-
-# Author
-
-Christophe Chang\
-Senior .NET Architect\
+Christophe Chang
+Senior .NET Architect
 London, UK

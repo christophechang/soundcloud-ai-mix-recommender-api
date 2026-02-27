@@ -81,8 +81,8 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
                 Tracklist = TracklistExtractor.Extract(description),
                 PublishedAt = item.PublishDate != DateTimeOffset.MinValue ? item.PublishDate : null,
 
-                Genre = mixSchema.Genre,
-                Energy = mixSchema.Energy,
+                Genre = mixSchema.Genre ?? string.Empty,
+                Energy = mixSchema.Energy ?? string.Empty,
                 BpmMin = mixSchema.BpmMin,
                 BpmMax = mixSchema.BpmMax,
                 Moods = mixSchema.Moods,
