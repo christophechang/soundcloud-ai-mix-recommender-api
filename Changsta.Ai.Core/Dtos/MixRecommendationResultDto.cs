@@ -13,6 +13,8 @@ namespace Changsta.Ai.Core.Dtos
 
         required public string Url { get; init; }
 
+        required public string Reason { get; init; }
+
         required public IReadOnlyList<string> Why { get; init; }
 
         // 0..1
