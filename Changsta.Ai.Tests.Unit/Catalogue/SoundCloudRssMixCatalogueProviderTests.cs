@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Parsing;
 using Changsta.Ai.Infrastructure.Tests.Helpers;
+using Microsoft.Extensions.Caching.Memory;
 using NUnit.Framework;
 using NUnit.Framework.Legacy;
 
@@ -32,7 +33,7 @@ namespace Changsta.Ai.Infrastructure.Tests.Services.SoundCloud.Catalogue
                 body: rss,
                 expectedRequestUri: RssUrl);
 
-            var sut = new SoundCloudRssMixCatalogueProvider(httpClient, RssUrl);
+            var sut = new SoundCloudRssMixCatalogueProvider(httpClient, RssUrl, new MemoryCache(new MemoryCacheOptions()));
 
             // Act
             var result = await sut.GetLatestAsync(
@@ -70,7 +71,7 @@ namespace Changsta.Ai.Infrastructure.Tests.Services.SoundCloud.Catalogue
                 body: rss,
                 expectedRequestUri: RssUrl);
 
-            var sut = new SoundCloudRssMixCatalogueProvider(httpClient, RssUrl);
+            var sut = new SoundCloudRssMixCatalogueProvider(httpClient, RssUrl, new MemoryCache(new MemoryCacheOptions()));
 
             // Act
             var result = await sut.GetLatestAsync(
@@ -91,7 +92,7 @@ namespace Changsta.Ai.Infrastructure.Tests.Services.SoundCloud.Catalogue
                 body: "oops",
                 expectedRequestUri: RssUrl);
 
-            var sut = new SoundCloudRssMixCatalogueProvider(httpClient, RssUrl);
+            var sut = new SoundCloudRssMixCatalogueProvider(httpClient, RssUrl, new MemoryCache(new MemoryCacheOptions()));
 
             // Act + Assert
             Assert.ThrowsAsync<HttpRequestException>(async () =>
