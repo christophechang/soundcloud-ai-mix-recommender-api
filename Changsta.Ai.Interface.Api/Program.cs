@@ -6,10 +6,13 @@ using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Contracts.Recommendations;
 using Changsta.Ai.Infrastructure.Services.Ai.Configuration;
 using Changsta.Ai.Infrastructure.Services.Ai.Recommenders;
+using Changsta.Ai.Infrastructure.Services.Azure;
+using Changsta.Ai.Infrastructure.Services.Azure.Catalogue;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue;
 using Changsta.Ai.Interface.Api.Middleware;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,7 +36,7 @@ builder.Services.AddCors(options =>
     {
         policy
             .WithOrigins(allowedOrigins)
-            .WithMethods("POST", "OPTIONS")
+            .WithMethods("GET", "POST", "OPTIONS")
             .WithHeaders("Content-Type")
             .SetPreflightMaxAge(TimeSpan.FromHours(12));
     });
@@ -78,7 +81,9 @@ builder.Services.AddOpenApi();
 builder.Services.Configure<OpenAiOptions>(
     builder.Configuration.GetSection("OpenAI"));
 
-builder.Services.AddScoped<IMixCatalogueProvider>(sp =>
+builder.Services.AddAzureBlobMixCatalog(builder.Configuration);
+
+builder.Services.AddScoped<SoundCloudRssMixCatalogueProvider>(sp =>
 {
     var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
     var configuration = sp.GetRequiredService<IConfiguration>();
@@ -91,6 +96,16 @@ builder.Services.AddScoped<IMixCatalogueProvider>(sp =>
         httpClientFactory.CreateClient(),
         rssUrl,
         cache);
+});
+
+builder.Services.AddScoped<IMixCatalogueProvider>(sp =>
+{
+    var inner = sp.GetRequiredService<SoundCloudRssMixCatalogueProvider>();
+    var repo = sp.GetRequiredService<IBlobMixCatalogueRepository>();
+    var cache = sp.GetRequiredService<IMemoryCache>();
+    var logger = sp.GetRequiredService<ILogger<BlobBackedMixCatalogueProvider>>();
+
+    return new BlobBackedMixCatalogueProvider(inner, repo, cache, logger);
 });
 
 builder.Services.AddScoped<IMixRecommendationUseCase, MixRecommendationUseCase>();
