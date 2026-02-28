@@ -3,11 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Changsta.Ai.Core.Contracts.Ai;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Infrastructure.Services.Ai.Configuration;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpenAI.Chat;
@@ -24,6 +26,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
         private const int BpmQueryMin = 100;
         private const int BpmQueryMax = 200;
         private const int BpmTolerance = 10;
+        private const int RecommendationCacheTtlMinutes = 15;
 
         private static readonly HashSet<string> TopLevelAllowed = new(StringComparer.Ordinal)
         {
@@ -38,15 +41,25 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             "url",
             "reason",
             "why",
-            "confidence"
+            "confidence",
         };
 
+        // Matches a BPM signal embedded in a longer question.
+        // Alt 1: context word + number 100-200  e.g. "around 130", "at 174", "~130"
+        // Alt 2: number 100-200 + "bpm" suffix  e.g. "130bpm", "174 bpm"
+        private static readonly Regex BpmInMixedQueryPattern = new(
+            @"(?:around|at|about|@|~)\s*(1\d{2}|200)(?!\d)|(?<!\w)(1\d{2}|200)\s*bpm",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled,
+            matchTimeout: TimeSpan.FromMilliseconds(100));
+
         private readonly ChatClient chat;
+        private readonly IMemoryCache cache;
         private readonly ILogger<OpenAiMixRecommender> logger;
 
-        public OpenAiMixRecommender(IOptions<OpenAiOptions> options, ILogger<OpenAiMixRecommender> logger)
+        public OpenAiMixRecommender(IOptions<OpenAiOptions> options, IMemoryCache cache, ILogger<OpenAiMixRecommender> logger)
         {
             var resolvedOptions = options?.Value ?? throw new ArgumentNullException(nameof(options));
+            this.cache = cache ?? throw new ArgumentNullException(nameof(cache));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
             if (string.IsNullOrWhiteSpace(resolvedOptions.ApiKey))
@@ -72,10 +85,21 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             mixes = mixes ?? throw new ArgumentNullException(nameof(mixes));
             if (maxResults <= 0) throw new ArgumentOutOfRangeException(nameof(maxResults));
 
+            string cacheKey = BuildCacheKey(question, maxResults);
+            if (this.cache.TryGetValue(cacheKey, out IReadOnlyList<MixAiRecommendation>? cached) && cached != null)
+            {
+                return cached;
+            }
+
             var boundedMixes = mixes.Take(MixesUpperBound).ToArray();
             bool isBpmQuery = TryParseBpmQuery(question, out int detectedBpm);
-            var filteredMixes = isBpmQuery ? FilterByBpm(boundedMixes, detectedBpm) : boundedMixes;
+            bool hasBpmComponent = !isBpmQuery && TryExtractBpmFromMixedQuery(question, out detectedBpm);
+            var filteredMixes = (isBpmQuery || hasBpmComponent)
+                ? FilterByBpm(boundedMixes, detectedBpm)
+                : boundedMixes;
 
+            // Only emit the BPM-specific prompt note for pure BPM queries.
+            // Mixed queries need the AI to handle genre/mood dimensions too.
             string prompt = BuildPrompt(question, filteredMixes, maxResults, isBpmQuery ? detectedBpm : null);
 
             var messages = new List<ChatMessage>
@@ -87,6 +111,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             var byId = filteredMixes.ToDictionary(m => m.Id, StringComparer.Ordinal);
 
             Exception? lastException = null;
+            string rawContent = string.Empty;
 
             for (int attempt = 1; attempt <= MaxRetryAttempts; attempt++)
             {
@@ -96,14 +121,14 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                         .CompleteChatAsync(messages, cancellationToken: cancellationToken)
                         .ConfigureAwait(false);
 
-                    string rawContent = completion.Content.Count > 0
+                    rawContent = completion.Content.Count > 0
                         ? completion.Content[0].Text ?? string.Empty
                         : string.Empty;
 
                     string content = NormalizeAiJson(rawContent);
                     AiResponse parsed = ParseAndValidate(content, filteredMixes, maxResults);
 
-                    return parsed.Results
+                    MixAiRecommendation[] results = parsed.Results
                         .Select(r =>
                         {
                             var mix = byId[r.MixId];
@@ -118,6 +143,13 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                             };
                         })
                         .ToArray();
+
+                    if (results.Length > 0)
+                    {
+                        this.cache.Set(cacheKey, (IReadOnlyList<MixAiRecommendation>)results, TimeSpan.FromMinutes(RecommendationCacheTtlMinutes));
+                    }
+
+                    return results;
                 }
                 catch (Exception ex) when (ex is InvalidOperationException or JsonException)
                 {
@@ -127,6 +159,14 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                         "AI recommendation attempt {Attempt}/{MaxAttempts} failed validation.",
                         attempt,
                         MaxRetryAttempts);
+
+                    if (attempt < MaxRetryAttempts && rawContent.Length > 0)
+                    {
+                        messages.Add(new AssistantChatMessage(rawContent));
+                        messages.Add(new UserChatMessage(
+                            "Your response failed validation: " + ex.Message +
+                            " Fix only the specific problem and respond with strict JSON only."));
+                    }
                 }
             }
 
@@ -137,6 +177,9 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
             return Array.Empty<MixAiRecommendation>();
         }
+
+        private static string BuildCacheKey(string question, int maxResults) =>
+            "recommend:" + question.Trim().ToLowerInvariant() + ":" + maxResults.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
         private static string BuildPrompt(string question, IReadOnlyList<Mix> mixes, int maxResults, int? detectedBpm = null)
         {
@@ -258,6 +301,17 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             return true;
         }
 
+        internal static bool TryExtractBpmFromMixedQuery(string question, out int bpm)
+        {
+            bpm = 0;
+            var match = BpmInMixedQueryPattern.Match(question);
+            if (!match.Success) return false;
+
+            string raw = match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value;
+            bpm = int.Parse(raw, System.Globalization.CultureInfo.InvariantCulture);
+            return true;
+        }
+
         internal static Mix[] FilterByBpm(IReadOnlyList<Mix> mixes, int targetBpm)
         {
             return mixes
@@ -271,13 +325,6 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                     return targetBpm >= lo - BpmTolerance && targetBpm <= hi + BpmTolerance;
                 })
                 .ToArray();
-        }
-
-        private static Mix[] FilterByBpmIfApplicable(string question, IReadOnlyList<Mix> mixes)
-        {
-            return TryParseBpmQuery(question, out int targetBpm)
-                ? FilterByBpm(mixes, targetBpm)
-                : mixes.ToArray();
         }
 
         private static string TakePrefix(string? text, int maxChars)

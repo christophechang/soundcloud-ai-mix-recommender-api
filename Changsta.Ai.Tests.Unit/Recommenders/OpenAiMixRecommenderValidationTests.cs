@@ -792,5 +792,24 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
 
             Assert.That(result, Is.Empty);
         }
+
+        [TestCase("dark dnb around 130bpm", true, 130)]
+        [TestCase("dark dnb 130bpm", true, 130)]
+        [TestCase("something at 174 bpm", true, 174)]
+        [TestCase("ukg at 132", true, 132)]
+        [TestCase("about 170 journey", true, 170)]
+        [TestCase("~130 vibes", true, 130)]
+        [TestCase("@174", true, 174)]
+        [TestCase("dnb mixes 172bpm", true, 172)]
+        [TestCase("dark dnb mixes", false, 0)]
+        [TestCase("dnb", false, 0)]
+        [TestCase("top 130 tracks", false, 0)]
+        public void TryExtractBpmFromMixedQuery_VariousInputs_ReturnsExpected(string question, bool expectMatch, int expectedBpm)
+        {
+            bool result = OpenAiMixRecommender.TryExtractBpmFromMixedQuery(question, out int bpm);
+
+            Assert.That(result, Is.EqualTo(expectMatch));
+            Assert.That(bpm, Is.EqualTo(expectedBpm));
+        }
     }
 }

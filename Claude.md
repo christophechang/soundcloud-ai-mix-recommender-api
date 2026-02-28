@@ -84,6 +84,9 @@ dotnet test soundcloud-ai-mix-recommender-api.sln --no-build
 3. **Changes to existing features require updated unit tests.** Modify tests to reflect changed behaviour; do not leave stale tests in place.
 4. **Tests live in** `Changsta.Ai.Tests.Unit/` — specifically `Recommenders/OpenAiMixRecommenderValidationTests.cs` for AI validation logic.
 5. **Test framework:** NUnit 4.3.2 + FluentAssertions.
+6. **Build must produce zero warnings.** Fix all warnings before considering a task complete. Never leave warnings unresolved.
+   - Use `Assert.That(...)` constraint model in NUnit tests — never `CollectionAssert` or other classic-model assertions (NUnit2049).
+   - `AD0001` in the test project is suppressed via `<NoWarn>` in the csproj — this is a known StyleCop 1.1.118 bug with C# `record` declarations and is not a code issue.
 
 ---
 
