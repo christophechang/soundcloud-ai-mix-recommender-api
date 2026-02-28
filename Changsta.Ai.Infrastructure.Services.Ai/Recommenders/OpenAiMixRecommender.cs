@@ -18,7 +18,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 {
     public sealed partial class OpenAiMixRecommender : IMixAiRecommender
     {
-        private const int MixesUpperBound = 50;
+        private const int MixesUpperBound = 100;
         private const int TracklistUpperBound = 30;
         private const int IntroTextUpperBound = 220;
         private const int MoodsUpperBound = 20;

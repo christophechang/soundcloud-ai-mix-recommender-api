@@ -151,6 +151,7 @@ workbox-*.js
 *.ntvs*
 *.njsproj
 *.sln
+!soundcloud-ai-mix-recommender-api.sln
 *.sw?
 
 *.css.d.ts

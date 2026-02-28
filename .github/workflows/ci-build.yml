@@ -20,6 +20,7 @@ concurrency:
 
 env:
   DOTNET_VERSION: "10.0.x"
+  SOLUTION: "soundcloud-ai-mix-recommender-api.sln"
   API_PROJECT: "Changsta.Ai.Interface.Api/Changsta.Ai.Interface.Api.csproj"
   TEST_PROJECT: "Changsta.Ai.Tests.Unit/Changsta.Ai.Tests.Unit.csproj"
   PUBLISH_DIR: "${{ github.workspace }}/publish"
@@ -38,10 +39,10 @@ jobs:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore ${{ env.SOLUTION }}
 
       - name: Build
-        run: dotnet build --configuration Release --no-restore
+        run: dotnet build ${{ env.SOLUTION }} --configuration Release --no-restore
 
       - name: Test
         run: dotnet test ${{ env.TEST_PROJECT }} --configuration Release --no-build --verbosity normal --logger "trx" --results-directory "${{ github.workspace }}/TestResults"
