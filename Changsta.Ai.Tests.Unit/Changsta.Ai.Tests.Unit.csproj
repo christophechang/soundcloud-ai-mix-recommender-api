@@ -9,6 +9,8 @@
   </PropertyGroup>
   <PropertyGroup>
     <CodeAnalysisRuleSet>..\Soltech.ruleset</CodeAnalysisRuleSet>
+    <!-- AD0001: StyleCop.Analyzers 1.1.118 crashes on C# record declarations (SA1201). Suppressed until StyleCop supports records. -->
+    <NoWarn>$(NoWarn);AD0001</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />

@@ -52,9 +52,7 @@ namespace Changsta.Ai.Infrastructure.Tests.Services.SoundCloud.Catalogue
             Assert.That(first.PublishedAt, Is.Not.Null);
 
             Assert.That(first.IntroText, Is.EqualTo(TracklistExtractor.ExtractIntroText(first.Description)));
-            CollectionAssert.AreEqual(
-                TracklistExtractor.Extract(first.Description),
-                first.Tracklist);
+            Assert.That(first.Tracklist, Is.EqualTo(TracklistExtractor.Extract(first.Description)));
 
             AssertMixSchemaMapped(first);
         }
@@ -130,7 +128,7 @@ namespace Changsta.Ai.Infrastructure.Tests.Services.SoundCloud.Catalogue
                 Assert.That(mix.BpmMax, Is.EqualTo(schema.bpmMax));
             }
 
-            CollectionAssert.AreEqual(schema.moods, mix.Moods);
+            Assert.That(mix.Moods, Is.EqualTo(schema.moods));
         }
 
         private static ParsedSchema? TryParseSchemaFromDescription(string? description)

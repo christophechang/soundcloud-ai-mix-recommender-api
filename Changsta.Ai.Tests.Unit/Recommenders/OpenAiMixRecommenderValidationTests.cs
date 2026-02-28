@@ -685,5 +685,131 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
             Assert.Throws<InvalidOperationException>(() =>
                 OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 5));
         }
+
+        [TestCase("130", true, 130)]
+        [TestCase("174", true, 174)]
+        [TestCase("100", true, 100)]
+        [TestCase("200", true, 200)]
+        [TestCase("130bpm", true, 130)]
+        [TestCase("130BPM", true, 130)]
+        [TestCase("130 bpm", true, 130)]
+        [TestCase("99", false, 0)]
+        [TestCase("201", false, 0)]
+        [TestCase("dnb", false, 0)]
+        [TestCase("ukg", false, 0)]
+        [TestCase("", false, 0)]
+        public void TryParseBpmQuery_VariousInputs_ReturnsExpected(string question, bool expectMatch, int expectedBpm)
+        {
+            bool result = OpenAiMixRecommender.TryParseBpmQuery(question, out int bpm);
+
+            Assert.That(result, Is.EqualTo(expectMatch));
+            Assert.That(bpm, Is.EqualTo(expectedBpm));
+        }
+
+        [Test]
+        public void FilterByBpm_TargetWithinRange_ReturnsMix()
+        {
+            var mixes = new[]
+            {
+                new Mix
+                {
+                    Id = "m1",
+                    Title = "House Mix",
+                    Url = "https://soundcloud.com/test/house",
+                    Genre = "house",
+                    Energy = "journey",
+                    BpmMin = 120,
+                    BpmMax = 126,
+                },
+            };
+
+            var result = OpenAiMixRecommender.FilterByBpm(mixes, 125);
+
+            Assert.That(result, Has.Length.EqualTo(1));
+        }
+
+        [Test]
+        public void FilterByBpm_TargetOutsideToleranceRange_ExcludesMix()
+        {
+            var mixes = new[]
+            {
+                new Mix
+                {
+                    Id = "m1",
+                    Title = "DnB Mix",
+                    Url = "https://soundcloud.com/test/dnb",
+                    Genre = "dnb",
+                    Energy = "peak",
+                    BpmMin = 172,
+                    BpmMax = 174,
+                },
+            };
+
+            var result = OpenAiMixRecommender.FilterByBpm(mixes, 130);
+
+            Assert.That(result, Is.Empty);
+        }
+
+        [Test]
+        public void FilterByBpm_TargetAtToleranceBoundary_IncludesMix()
+        {
+            var mixes = new[]
+            {
+                new Mix
+                {
+                    Id = "m1",
+                    Title = "Bass Mix",
+                    Url = "https://soundcloud.com/test/bass",
+                    Genre = "ukbass",
+                    Energy = "mid",
+                    BpmMin = 140,
+                    BpmMax = 145,
+                },
+            };
+
+            // target 130 is exactly 10 below lo=140, so within tolerance
+            var result = OpenAiMixRecommender.FilterByBpm(mixes, 130);
+
+            Assert.That(result, Has.Length.EqualTo(1));
+        }
+
+        [Test]
+        public void FilterByBpm_MixWithNoBpm_IsExcluded()
+        {
+            var mixes = new[]
+            {
+                new Mix
+                {
+                    Id = "m1",
+                    Title = "Unknown BPM Mix",
+                    Url = "https://soundcloud.com/test/unknown",
+                    Genre = "house",
+                    Energy = "journey",
+                },
+            };
+
+            var result = OpenAiMixRecommender.FilterByBpm(mixes, 130);
+
+            Assert.That(result, Is.Empty);
+        }
+
+        [TestCase("dark dnb around 130bpm", true, 130)]
+        [TestCase("dark dnb 130bpm", true, 130)]
+        [TestCase("something at 174 bpm", true, 174)]
+        [TestCase("ukg at 132", true, 132)]
+        [TestCase("about 170 journey", true, 170)]
+        [TestCase("~130 vibes", true, 130)]
+        [TestCase("@174", true, 174)]
+        [TestCase("dnb mixes 172bpm", true, 172)]
+        [TestCase("dark dnb mixes", false, 0)]
+        [TestCase("dnb", false, 0)]
+        [TestCase("top 130 tracks", false, 0)]
+        public void TryExtractBpmFromMixedQuery_VariousInputs_ReturnsExpected(string question, bool expectMatch, int expectedBpm)
+        {
+            bool result = OpenAiMixRecommender.TryExtractBpmFromMixedQuery(question, out int bpm);
+
+            Assert.That(result, Is.EqualTo(expectMatch));
+            Assert.That(bpm, Is.EqualTo(expectedBpm));
+        }
     }
 }

@@ -3,11 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Changsta.Ai.Core.Contracts.Ai;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Infrastructure.Services.Ai.Configuration;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OpenAI.Chat;
@@ -21,6 +23,10 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
         private const int IntroTextUpperBound = 220;
         private const int MoodsUpperBound = 20;
         private const int MaxRetryAttempts = 3;
+        private const int BpmQueryMin = 100;
+        private const int BpmQueryMax = 200;
+        private const int BpmTolerance = 10;
+        private const int RecommendationCacheTtlMinutes = 15;
 
         private static readonly HashSet<string> TopLevelAllowed = new(StringComparer.Ordinal)
         {
@@ -35,15 +41,25 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             "url",
             "reason",
             "why",
-            "confidence"
+            "confidence",
         };
 
+        // Matches a BPM signal embedded in a longer question.
+        // Alt 1: context word + number 100-200  e.g. "around 130", "at 174", "~130"
+        // Alt 2: number 100-200 + "bpm" suffix  e.g. "130bpm", "174 bpm"
+        private static readonly Regex BpmInMixedQueryPattern = new(
+            @"(?:around|at|about|@|~)\s*(1\d{2}|200)(?!\d)|(?<!\w)(1\d{2}|200)\s*bpm",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled,
+            matchTimeout: TimeSpan.FromMilliseconds(100));
+
         private readonly ChatClient chat;
+        private readonly IMemoryCache cache;
         private readonly ILogger<OpenAiMixRecommender> logger;
 
-        public OpenAiMixRecommender(IOptions<OpenAiOptions> options, ILogger<OpenAiMixRecommender> logger)
+        public OpenAiMixRecommender(IOptions<OpenAiOptions> options, IMemoryCache cache, ILogger<OpenAiMixRecommender> logger)
         {
             var resolvedOptions = options?.Value ?? throw new ArgumentNullException(nameof(options));
+            this.cache = cache ?? throw new ArgumentNullException(nameof(cache));
             this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
             if (string.IsNullOrWhiteSpace(resolvedOptions.ApiKey))
@@ -69,9 +85,22 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             mixes = mixes ?? throw new ArgumentNullException(nameof(mixes));
             if (maxResults <= 0) throw new ArgumentOutOfRangeException(nameof(maxResults));
 
-            var boundedMixes = mixes.Take(MixesUpperBound).ToArray();
+            string cacheKey = BuildCacheKey(question, maxResults);
+            if (this.cache.TryGetValue(cacheKey, out IReadOnlyList<MixAiRecommendation>? cached) && cached != null)
+            {
+                return cached;
+            }
 
-            string prompt = BuildPrompt(question, boundedMixes, maxResults);
+            var boundedMixes = mixes.Take(MixesUpperBound).ToArray();
+            bool isBpmQuery = TryParseBpmQuery(question, out int detectedBpm);
+            bool hasBpmComponent = !isBpmQuery && TryExtractBpmFromMixedQuery(question, out detectedBpm);
+            var filteredMixes = (isBpmQuery || hasBpmComponent)
+                ? FilterByBpm(boundedMixes, detectedBpm)
+                : boundedMixes;
+
+            // Only emit the BPM-specific prompt note for pure BPM queries.
+            // Mixed queries need the AI to handle genre/mood dimensions too.
+            string prompt = BuildPrompt(question, filteredMixes, maxResults, isBpmQuery ? detectedBpm : null);
 
             var messages = new List<ChatMessage>
             {
@@ -79,9 +108,10 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 new UserChatMessage(prompt),
             };
 
-            var byId = boundedMixes.ToDictionary(m => m.Id, StringComparer.Ordinal);
+            var byId = filteredMixes.ToDictionary(m => m.Id, StringComparer.Ordinal);
 
             Exception? lastException = null;
+            string rawContent = string.Empty;
 
             for (int attempt = 1; attempt <= MaxRetryAttempts; attempt++)
             {
@@ -91,14 +121,14 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                         .CompleteChatAsync(messages, cancellationToken: cancellationToken)
                         .ConfigureAwait(false);
 
-                    string rawContent = completion.Content.Count > 0
+                    rawContent = completion.Content.Count > 0
                         ? completion.Content[0].Text ?? string.Empty
                         : string.Empty;
 
                     string content = NormalizeAiJson(rawContent);
-                    AiResponse parsed = ParseAndValidate(content, boundedMixes, maxResults);
+                    AiResponse parsed = ParseAndValidate(content, filteredMixes, maxResults);
 
-                    return parsed.Results
+                    MixAiRecommendation[] results = parsed.Results
                         .Select(r =>
                         {
                             var mix = byId[r.MixId];
@@ -113,6 +143,13 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                             };
                         })
                         .ToArray();
+
+                    if (results.Length > 0)
+                    {
+                        this.cache.Set(cacheKey, (IReadOnlyList<MixAiRecommendation>)results, TimeSpan.FromMinutes(RecommendationCacheTtlMinutes));
+                    }
+
+                    return results;
                 }
                 catch (Exception ex) when (ex is InvalidOperationException or JsonException)
                 {
@@ -122,6 +159,14 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                         "AI recommendation attempt {Attempt}/{MaxAttempts} failed validation.",
                         attempt,
                         MaxRetryAttempts);
+
+                    if (attempt < MaxRetryAttempts && rawContent.Length > 0)
+                    {
+                        messages.Add(new AssistantChatMessage(rawContent));
+                        messages.Add(new UserChatMessage(
+                            "Your response failed validation: " + ex.Message +
+                            " Fix only the specific problem and respond with strict JSON only."));
+                    }
                 }
             }
 
@@ -133,7 +178,10 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             return Array.Empty<MixAiRecommendation>();
         }
 
-        private static string BuildPrompt(string question, IReadOnlyList<Mix> mixes, int maxResults)
+        private static string BuildCacheKey(string question, int maxResults) =>
+            "recommend:" + question.Trim().ToLowerInvariant() + ":" + maxResults.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        private static string BuildPrompt(string question, IReadOnlyList<Mix> mixes, int maxResults, int? detectedBpm = null)
         {
             var sb = new StringBuilder();
 
@@ -142,14 +190,24 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             AppendLine("Task: Recommend mixes that answer the user question using only the mixes provided.");
             AppendLine("Mode: STRICT");
             AppendLine();
+
+            if (detectedBpm.HasValue)
+            {
+                AppendLine("BPM query detected: the user is requesting mixes at approximately " + detectedBpm.Value + " BPM.");
+                AppendLine("The mixes below have already been pre-filtered to those within BPM range. Recommend all of them.");
+                AppendLine("Use the bpm anchor from each MIX block as the primary why evidence (e.g. \"bpm: 132-140\"). Do NOT use the user's query text as an anchor.");
+                AppendLine();
+            }
+
             AppendLine("Search strategy:");
-            AppendLine("- Genre query (e.g. \"dnb mixes\", \"house music\"): prioritize genre field, then related moods and intro text.");
-            AppendLine("- Artist/track query (e.g. \"mixes with Calibre\", \"anything with Noisia\"): prioritize tracklist matching, then intro text.");
+            AppendLine("- Genre query (e.g. \"dnb mixes\", \"house music\", \"ukg\"): prioritize genre field, then related moods and intro text. Return ALL mixes whose genre matches, not just the first or most recent.");
+            AppendLine("- Artist/track query (e.g. \"mixes with Calibre\", \"anything with Noisia\"): search each mix's tracklist for the artist or track name (substring match). Also check intro text. Return ALL mixes that contain the artist/track.");
             AppendLine("- Mood query (e.g. \"something dark and heavy\", \"uplifting vibes\"): prioritize moods field, then energy, then intro text.");
-            AppendLine("- Tempo query (e.g. \"fast mixes\", \"around 170 bpm\"): prioritize bpm field.");
+            AppendLine("- Tempo/BPM query: if the user question is a bare number between 100 and 200 (e.g. \"130\", \"174\") or a number with 'bpm' suffix (e.g. \"130bpm\", \"170 bpm\"), treat it as a BPM query. Match mixes whose bpm value or bpm range includes or is close to that number. Do NOT interpret bare numbers as genre or mood signals.");
             AppendLine("- Mixed query (e.g. \"dark dnb with Noisia around 174bpm\"): weight across all dimensions, favour mixes matching the most dimensions.");
             AppendLine("- Decompose the user question into its component signals before searching.");
-            AppendLine("- Resolve genre aliases using your music knowledge before searching: map abbreviations, shorthands, and regional variants to their full catalogue equivalents (e.g. 'dnb' / 'd&b' → 'drum & bass'; 'UKG' → 'UK Garage'; 'techno' may also match 'tech house'). The why anchors must still be copied verbatim from the MIX block.");
+            AppendLine("- Genre matching: use your music knowledge to match the user query to genre values in the MIX blocks in BOTH directions. The genre field may contain abbreviations (e.g. 'dnb', 'ukg') or full names (e.g. 'drum & bass', 'uk garage'). Common aliases: dnb/d&b = drum & bass, ukg = uk garage, techno ≈ tech house. Match regardless of casing or format. The why anchors must still be copied verbatim from the MIX block genre field.");
+            AppendLine("- IMPORTANT: Always return as many matching mixes as possible, up to the maximum of " + maxResults + ". Scan every mix in the catalogue for matches. Do not stop after finding one match.");
             AppendLine();
             AppendLine("Rules:");
             AppendLine("1) You must only use mix ids provided in the MIX blocks.");
@@ -222,6 +280,51 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             int a = min!.Value;
             int b = max!.Value;
             return a == b ? a.ToString() : $"{a}-{b}";
+        }
+
+        internal static bool TryParseBpmQuery(string question, out int bpm)
+        {
+            bpm = 0;
+            var s = question.Trim();
+
+            if (s.EndsWith("bpm", StringComparison.OrdinalIgnoreCase))
+            {
+                s = s[..^3].Trim();
+            }
+
+            if (!int.TryParse(s, out int parsed) || parsed < BpmQueryMin || parsed > BpmQueryMax)
+            {
+                return false;
+            }
+
+            bpm = parsed;
+            return true;
+        }
+
+        internal static bool TryExtractBpmFromMixedQuery(string question, out int bpm)
+        {
+            bpm = 0;
+            var match = BpmInMixedQueryPattern.Match(question);
+            if (!match.Success) return false;
+
+            string raw = match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value;
+            bpm = int.Parse(raw, System.Globalization.CultureInfo.InvariantCulture);
+            return true;
+        }
+
+        internal static Mix[] FilterByBpm(IReadOnlyList<Mix> mixes, int targetBpm)
+        {
+            return mixes
+                .Where(m =>
+                {
+                    if (m.BpmMin is null && m.BpmMax is null) return false;
+
+                    int lo = m.BpmMin ?? m.BpmMax!.Value;
+                    int hi = m.BpmMax ?? m.BpmMin!.Value;
+
+                    return targetBpm >= lo - BpmTolerance && targetBpm <= hi + BpmTolerance;
+                })
+                .ToArray();
         }
 
         private static string TakePrefix(string? text, int maxChars)
