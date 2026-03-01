@@ -15,6 +15,12 @@ namespace Changsta.Ai.Interface.Api.Controllers
     {
         private const int CatalogMaxItems = 200;
 
+        private static readonly Dictionary<string, string> GenreNormalisations = new(StringComparer.OrdinalIgnoreCase)
+        {
+            { "deephouse", "deep-house" },
+            { "ukbass", "uk-bass" },
+        };
+
         private readonly IMixCatalogueProvider _catalogueProvider;
 
         public MixCatalogController(IMixCatalogueProvider catalogueProvider)
@@ -33,10 +39,12 @@ namespace Changsta.Ai.Interface.Api.Controllers
 
             foreach (Mix mix in mixes)
             {
-                if (!byGenre.TryGetValue(mix.Genre, out Dictionary<string, SortedSet<string>>? byArtist))
+                string genre = NormalizeGenre(mix.Genre);
+
+                if (!byGenre.TryGetValue(genre, out Dictionary<string, SortedSet<string>>? byArtist))
                 {
                     byArtist = new Dictionary<string, SortedSet<string>>(StringComparer.OrdinalIgnoreCase);
-                    byGenre[mix.Genre] = byArtist;
+                    byGenre[genre] = byArtist;
                 }
 
                 foreach (Track track in mix.Tracklist)
@@ -69,5 +77,10 @@ namespace Changsta.Ai.Interface.Api.Controllers
 
             return Ok(result);
         }
+
+        private static string NormalizeGenre(string genre) =>
+            GenreNormalisations.TryGetValue(genre.Replace("-", string.Empty, StringComparison.Ordinal), out string? canonical)
+                ? canonical
+                : genre;
     }
 }
