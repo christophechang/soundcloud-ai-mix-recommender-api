@@ -234,6 +234,8 @@ dotnet run --project Changsta.Ai.Interface.Api
 
 On first request the app fetches the RSS feed and writes the initial `catalog.json` blob to Azurite. Subsequent requests within the 1-hour cache window are served from memory.
 
+Once running, the Swagger UI is available at `http://localhost:5059/swagger` (port may vary — check terminal output).
+
 To inspect or edit the blob directly, use [Azure Storage Explorer](https://azure.microsoft.com/en-us/products/storage/storage-explorer/) and connect to `http://127.0.0.1:10000` with the Azurite account key (`devstoreaccount1` / `Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==`).
 
 ---
