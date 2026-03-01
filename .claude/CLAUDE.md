@@ -94,3 +94,4 @@ dotnet test soundcloud-ai-mix-recommender-api.sln --no-build
 - StyleCop errors block the build — fix them, never suppress without explicit justification.
 - `InternalsVisibleTo("Changsta.Ai.Tests.Unit")` is configured in the AI project — use `internal static` for methods that only need test access.
 - Do not add XML doc comments to methods you did not author unless SA1600 or related rules require it.
+- Do not add `Co-Authored-By: Claude` or any Claude/Anthropic attribution to commit messages.

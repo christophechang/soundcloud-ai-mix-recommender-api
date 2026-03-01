@@ -295,6 +295,63 @@ namespace Changsta.Ai.Tests.Unit.Controllers
             Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
         }
 
+        // ── GET /api/catalog/artists/{name}/mixes ────────────────────────────
+        [Test]
+        public async Task GetMixesByArtistAsync_returns_mixes_containing_artist()
+        {
+            var mixes = new[]
+            {
+                MakeMix("1", "breaks", ("Shy One", "Track 1")),
+                MakeMix("2", "dnb", ("Calibre", "Track 2")),
+                MakeMix("3", "breaks", ("Shy One", "Track 3"), ("Calibre", "Track 4")),
+            };
+
+            Mix[] results = await InvokeMixesByArtistAsync(BuildSut(mixes), "Shy One");
+
+            Assert.That(results.Select(m => m.Id), Is.EquivalentTo(new[] { "1", "3" }));
+        }
+
+        [Test]
+        public async Task GetMixesByArtistAsync_is_case_insensitive()
+        {
+            var mixes = new[]
+            {
+                MakeMix("1", "breaks", ("Shy One", "Track 1")),
+                MakeMix("2", "dnb", ("Calibre", "Track 2")),
+            };
+
+            Mix[] results = await InvokeMixesByArtistAsync(BuildSut(mixes), "shy one");
+
+            Assert.That(results, Has.Length.EqualTo(1));
+            Assert.That(results[0].Id, Is.EqualTo("1"));
+        }
+
+        [Test]
+        public async Task GetMixesByArtistAsync_returns_empty_when_artist_not_found()
+        {
+            var mixes = new[]
+            {
+                MakeMix("1", "breaks", ("Shy One", "Track 1")),
+            };
+
+            Mix[] results = await InvokeMixesByArtistAsync(BuildSut(mixes), "Unknown Artist");
+
+            Assert.That(results, Is.Empty);
+        }
+
+        [Test]
+        public async Task GetMixesByArtistAsync_returns_mix_once_even_with_multiple_tracks_by_artist()
+        {
+            var mixes = new[]
+            {
+                MakeMix("1", "breaks", ("Shy One", "Track 1"), ("Shy One", "Track 2")),
+            };
+
+            Mix[] results = await InvokeMixesByArtistAsync(BuildSut(mixes), "Shy One");
+
+            Assert.That(results, Has.Length.EqualTo(1));
+        }
+
         // ── Helpers ───────────────────────────────────────────────────────────
         private static async Task<MixCatalogController.CatalogPage<MixCatalogController.GenreEntry>> InvokeCatalogAsync(
             MixCatalogController sut,
@@ -313,6 +370,12 @@ namespace Changsta.Ai.Tests.Unit.Controllers
         {
             IActionResult result = await sut.GetArtistsAsync(page, pageSize, CancellationToken.None);
             return (MixCatalogController.CatalogPage<MixCatalogController.ArtistSummary>)((OkObjectResult)result).Value!;
+        }
+
+        private static async Task<Mix[]> InvokeMixesByArtistAsync(MixCatalogController sut, string name)
+        {
+            IActionResult result = await sut.GetMixesByArtistAsync(name, CancellationToken.None);
+            return (Mix[])((OkObjectResult)result).Value!;
         }
 
         private static MixCatalogController BuildSut(IReadOnlyList<Mix> mixes)

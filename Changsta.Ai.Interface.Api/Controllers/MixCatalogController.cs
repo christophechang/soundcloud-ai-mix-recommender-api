@@ -147,6 +147,23 @@ namespace Changsta.Ai.Interface.Api.Controllers
             return Ok(BuildPage(allEntries, page, pageSize));
         }
 
+        [HttpGet("artists/{name}/mixes")]
+        public async Task<IActionResult> GetMixesByArtistAsync(
+            [FromRoute] string name,
+            CancellationToken cancellationToken = default)
+        {
+            IReadOnlyList<Mix> mixes = await _catalogueProvider
+                .GetLatestAsync(CatalogMaxItems, cancellationToken)
+                .ConfigureAwait(false);
+
+            Mix[] results = mixes
+                .Where(m => m.Tracklist.Any(t =>
+                    string.Equals(t.Artist, name, StringComparison.OrdinalIgnoreCase)))
+                .ToArray();
+
+            return Ok(results);
+        }
+
         private static CatalogPage<T> BuildPage<T>(T[] allEntries, int page, int pageSize)
         {
             int total = allEntries.Length;
