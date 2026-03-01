@@ -11,7 +11,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.Recommendations
 {
     public sealed class MixRecommendationUseCase : IMixRecommendationUseCase
     {
-        private const int MaxResultsUpperBound = 5;
+        private const int MaxResultsUpperBound = 20;
         private const int CatalogueMaxItems = 100;
         private readonly IMixAiRecommender _mixAiRecommender;
 

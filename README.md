@@ -101,7 +101,7 @@ Before any result is returned:
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `question` | string | yes | Natural language query |
-| `maxResults` | integer | no | Default `3`, min `1`, max `5` |
+| `maxResults` | integer | no | Default `3`, min `1`, max `20` |
 
 **Response fields:**
 

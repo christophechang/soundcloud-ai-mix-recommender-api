@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Parsing;
 using NUnit.Framework;
 
@@ -30,8 +31,21 @@ namespace Changsta.Ai.Tests.Unit.Parsing
             var result = TracklistExtractor.Extract(description);
 
             Assert.That(result, Has.Count.EqualTo(5));
-            Assert.That(result[0], Is.EqualTo("Maverick Sabre, Hedex - I Knew That This Was Love"));
-            Assert.That(result[4], Is.EqualTo("Audiomission - Kick Da Flava (VIP)"));
+
+            Assert.That(result[0].Artist, Is.EqualTo("Maverick Sabre, Hedex"));
+            Assert.That(result[0].Title, Is.EqualTo("I Knew That This Was Love"));
+
+            Assert.That(result[1].Artist, Is.EqualTo("Calibre"));
+            Assert.That(result[1].Title, Is.EqualTo("Pillow Dub"));
+
+            Assert.That(result[2].Artist, Is.EqualTo("Calibre & Chelou"));
+            Assert.That(result[2].Title, Is.EqualTo("E SI O"));
+
+            Assert.That(result[3].Artist, Is.EqualTo("Break"));
+            Assert.That(result[3].Title, Is.EqualTo("Last Goodbye (ft. Celestine)"));
+
+            Assert.That(result[4].Artist, Is.EqualTo("Audiomission"));
+            Assert.That(result[4].Title, Is.EqualTo("Kick Da Flava (VIP)"));
         }
 
         [Test]
@@ -50,8 +64,12 @@ namespace Changsta.Ai.Tests.Unit.Parsing
             var result = TracklistExtractor.Extract(description);
 
             Assert.That(result, Has.Count.EqualTo(3));
-            Assert.That(result[0], Is.EqualTo("WZ - Organix"));
-            Assert.That(result[2], Is.EqualTo("Megra - I Stay"));
+
+            Assert.That(result[0].Artist, Is.EqualTo("WZ"));
+            Assert.That(result[0].Title, Is.EqualTo("Organix"));
+
+            Assert.That(result[2].Artist, Is.EqualTo("Megra"));
+            Assert.That(result[2].Title, Is.EqualTo("I Stay"));
         }
 
         [Test]
@@ -65,6 +83,20 @@ namespace Changsta.Ai.Tests.Unit.Parsing
 
             Assert.That(result, Is.Not.Null);
             Assert.That(result, Is.Empty);
+        }
+
+        [Test]
+        public void Extract_WhenTrackHasMultipleSeparators_SplitsOnFirstOnly()
+        {
+            const string description =
+                "Tracklist\n" +
+                "Artist - Part1 - Part2\n";
+
+            var result = TracklistExtractor.Extract(description);
+
+            Assert.That(result, Has.Count.EqualTo(1));
+            Assert.That(result[0].Artist, Is.EqualTo("Artist"));
+            Assert.That(result[0].Title, Is.EqualTo("Part1 - Part2"));
         }
     }
 }
