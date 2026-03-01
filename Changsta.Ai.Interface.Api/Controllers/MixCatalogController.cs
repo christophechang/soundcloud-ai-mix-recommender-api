@@ -58,11 +58,51 @@ namespace Changsta.Ai.Interface.Api.Controllers
                     string.Equals(NormalizeGenre(m.Genre), normalisedQuery, StringComparison.OrdinalIgnoreCase));
             }
 
-            Mix[] filteredArray = filtered.ToArray();
-            int total = filteredArray.Length;
+            var byGenre = new Dictionary<string, Dictionary<string, SortedSet<string>>>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (Mix mix in filtered)
+            {
+                string normalisedGenre = NormalizeGenre(mix.Genre);
+
+                if (!byGenre.TryGetValue(normalisedGenre, out Dictionary<string, SortedSet<string>>? byArtist))
+                {
+                    byArtist = new Dictionary<string, SortedSet<string>>(StringComparer.OrdinalIgnoreCase);
+                    byGenre[normalisedGenre] = byArtist;
+                }
+
+                foreach (Track track in mix.Tracklist)
+                {
+                    if (!byArtist.TryGetValue(track.Artist, out SortedSet<string>? titles))
+                    {
+                        titles = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+                        byArtist[track.Artist] = titles;
+                    }
+
+                    titles.Add(track.Title);
+                }
+            }
+
+            GenreEntry[] allEntries = byGenre
+                .Where(g => g.Value.Count > 0)
+                .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new GenreEntry
+                {
+                    Genre = g.Key,
+                    Artists = g.Value
+                        .OrderBy(a => a.Key, StringComparer.OrdinalIgnoreCase)
+                        .Select(a => new ArtistEntry
+                        {
+                            Name = a.Key,
+                            Tracks = a.Value.ToArray(),
+                        })
+                        .ToArray(),
+                })
+                .ToArray();
+
+            int total = allEntries.Length;
             int totalPages = (int)Math.Ceiling(total / (double)pageSize);
 
-            Mix[] items = filteredArray
+            GenreEntry[] items = allEntries
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToArray();
@@ -82,9 +122,16 @@ namespace Changsta.Ai.Interface.Api.Controllers
                 ? canonical
                 : genre;
 
+        public sealed class ArtistEntry
+        {
+            required public string Name { get; init; }
+
+            required public string[] Tracks { get; init; }
+        }
+
         public sealed class CatalogPage
         {
-            required public Mix[] Items { get; init; }
+            required public GenreEntry[] Items { get; init; }
 
             required public int Total { get; init; }
 
@@ -93,6 +140,13 @@ namespace Changsta.Ai.Interface.Api.Controllers
             required public int PageSize { get; init; }
 
             required public int TotalPages { get; init; }
+        }
+
+        public sealed class GenreEntry
+        {
+            required public string Genre { get; init; }
+
+            required public ArtistEntry[] Artists { get; init; }
         }
     }
 }
