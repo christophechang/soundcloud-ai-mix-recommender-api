@@ -13,6 +13,7 @@ namespace Changsta.Ai.Tests.Unit.Controllers
     [TestFixture]
     public sealed class MixCatalogControllerTests
     {
+        // ── GET /api/catalog ─────────────────────────────────────────────────
         [Test]
         public async Task GetCatalogAsync_groups_artists_under_genre()
         {
@@ -23,9 +24,7 @@ namespace Changsta.Ai.Tests.Unit.Controllers
                 MakeMix("3", "dnb", ("Zinc", "Track Z")),
             };
 
-            var sut = BuildSut(mixes);
-
-            var page = await InvokeAsync(sut, null, 1, 20);
+            var page = await InvokeCatalogAsync(BuildSut(mixes), null, 1, 20);
 
             Assert.That(page.Items, Has.Length.EqualTo(2));
             Assert.That(page.Items[0].Genre, Is.EqualTo("breaks"));
@@ -43,9 +42,7 @@ namespace Changsta.Ai.Tests.Unit.Controllers
                 MakeMix("3", "breaks", ("Artist C", "Track 3")),
             };
 
-            var sut = BuildSut(mixes);
-
-            var page = await InvokeAsync(sut, "Breaks", 1, 20);
+            var page = await InvokeCatalogAsync(BuildSut(mixes), "Breaks", 1, 20);
 
             Assert.That(page.Total, Is.EqualTo(1));
             Assert.That(page.Items[0].Genre, Is.EqualTo("breaks"));
@@ -61,9 +58,7 @@ namespace Changsta.Ai.Tests.Unit.Controllers
                 MakeMix("2", "dnb", ("Artist B", "Track 2")),
             };
 
-            var sut = BuildSut(mixes);
-
-            var page = await InvokeAsync(sut, "deephouse", 1, 20);
+            var page = await InvokeCatalogAsync(BuildSut(mixes), "deephouse", 1, 20);
 
             Assert.That(page.Total, Is.EqualTo(1));
             Assert.That(page.Items[0].Genre, Is.EqualTo("deep-house"));
@@ -78,9 +73,7 @@ namespace Changsta.Ai.Tests.Unit.Controllers
                 MakeMix("2", "breaks", ("Shy One", "Beta")),
             };
 
-            var sut = BuildSut(mixes);
-
-            var page = await InvokeAsync(sut, "breaks", 1, 20);
+            var page = await InvokeCatalogAsync(BuildSut(mixes), "breaks", 1, 20);
 
             Assert.That(page.Items[0].Artists, Has.Length.EqualTo(1));
             Assert.That(page.Items[0].Artists[0].Tracks, Is.EqualTo(new[] { "Alpha", "Beta" }));
@@ -95,9 +88,7 @@ namespace Changsta.Ai.Tests.Unit.Controllers
                 MakeMix("2", "breaks", ("Shy One", "Alpha")),
             };
 
-            var sut = BuildSut(mixes);
-
-            var page = await InvokeAsync(sut, "breaks", 1, 20);
+            var page = await InvokeCatalogAsync(BuildSut(mixes), "breaks", 1, 20);
 
             Assert.That(page.Items[0].Artists[0].Tracks, Has.Length.EqualTo(1));
         }
@@ -114,9 +105,7 @@ namespace Changsta.Ai.Tests.Unit.Controllers
                 MakeMix("5", "uk-bass", ("Artist E", "Track 5")),
             };
 
-            var sut = BuildSut(mixes);
-
-            var page = await InvokeAsync(sut, null, 2, 2);
+            var page = await InvokeCatalogAsync(BuildSut(mixes), null, 2, 2);
 
             Assert.That(page.Items.Select(g => g.Genre), Is.EqualTo(new[] { "house", "techno" }));
         }
@@ -130,9 +119,7 @@ namespace Changsta.Ai.Tests.Unit.Controllers
                 MakeMix("2", "dnb", ("Artist B", "Track 2")),
             };
 
-            var sut = BuildSut(mixes);
-
-            var page = await InvokeAsync(sut, null, 99, 20);
+            var page = await InvokeCatalogAsync(BuildSut(mixes), null, 99, 20);
 
             Assert.That(page.Total, Is.EqualTo(2));
             Assert.That(page.Items.Any(), Is.False);
@@ -141,19 +128,8 @@ namespace Changsta.Ai.Tests.Unit.Controllers
         [Test]
         public async Task GetCatalogAsync_returns_400_for_page_less_than_1()
         {
-            var sut = BuildSut(Array.Empty<Mix>());
-
-            IActionResult result = await sut.GetCatalogAsync(null, 0, 20, CancellationToken.None);
-
-            Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
-        }
-
-        [Test]
-        public async Task GetCatalogAsync_returns_400_for_page_size_less_than_1()
-        {
-            var sut = BuildSut(Array.Empty<Mix>());
-
-            IActionResult result = await sut.GetCatalogAsync(null, 1, 0, CancellationToken.None);
+            IActionResult result = await BuildSut(Array.Empty<Mix>())
+                .GetCatalogAsync(null, 0, 20, CancellationToken.None);
 
             Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
         }
@@ -161,9 +137,8 @@ namespace Changsta.Ai.Tests.Unit.Controllers
         [Test]
         public async Task GetCatalogAsync_returns_400_for_page_size_over_100()
         {
-            var sut = BuildSut(Array.Empty<Mix>());
-
-            IActionResult result = await sut.GetCatalogAsync(null, 1, 101, CancellationToken.None);
+            IActionResult result = await BuildSut(Array.Empty<Mix>())
+                .GetCatalogAsync(null, 1, 101, CancellationToken.None);
 
             Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
         }
@@ -177,9 +152,7 @@ namespace Changsta.Ai.Tests.Unit.Controllers
                 MakeMix("2", "dnb", ("Artist C", "Track 3")),
             };
 
-            var sut = BuildSut(mixes);
-
-            var page = await InvokeAsync(sut, null, 1, 20);
+            var page = await InvokeCatalogAsync(BuildSut(mixes), null, 1, 20);
 
             Assert.That(page.Total, Is.EqualTo(2));
             Assert.That(page.Items[0].Artists, Has.Length.EqualTo(2));
@@ -192,9 +165,7 @@ namespace Changsta.Ai.Tests.Unit.Controllers
                 .Select(i => MakeMix(i.ToString(), $"genre-{i:D3}", ($"Artist {i}", "Track 1")))
                 .ToArray();
 
-            var sut = BuildSut(mixes);
-
-            var page = await InvokeAsync(sut, null, 1, 20);
+            var page = await InvokeCatalogAsync(BuildSut(mixes), null, 1, 20);
 
             Assert.That(page.TotalPages, Is.EqualTo(3));
         }
@@ -208,22 +179,140 @@ namespace Changsta.Ai.Tests.Unit.Controllers
                 MakeMix("2", "dnb", ("Artist A", "Track 1")),
             };
 
-            var sut = BuildSut(mixes);
-
-            var page = await InvokeAsync(sut, null, 1, 20);
+            var page = await InvokeCatalogAsync(BuildSut(mixes), null, 1, 20);
 
             Assert.That(page.Total, Is.EqualTo(1));
             Assert.That(page.Items[0].Genre, Is.EqualTo("dnb"));
         }
 
-        private static async Task<MixCatalogController.CatalogPage> InvokeAsync(
+        // ── GET /api/catalog/artists ──────────────────────────────────────────
+        [Test]
+        public async Task GetArtistsAsync_orders_by_track_count_desc()
+        {
+            var mixes = new[]
+            {
+                MakeMix("1", "breaks", ("Shy One", "Track 1"), ("Shy One", "Track 2"), ("Shy One", "Track 3")),
+                MakeMix("2", "dnb", ("Calibre", "Track A")),
+            };
+
+            var page = await InvokeArtistsAsync(BuildSut(mixes), 1, 20);
+
+            Assert.That(page.Items[0].Name, Is.EqualTo("Shy One"));
+            Assert.That(page.Items[0].TrackCount, Is.EqualTo(3));
+            Assert.That(page.Items[1].Name, Is.EqualTo("Calibre"));
+        }
+
+        [Test]
+        public async Task GetArtistsAsync_uses_name_asc_as_tiebreaker()
+        {
+            var mixes = new[]
+            {
+                MakeMix("1", "breaks", ("Zinc", "Track 1")),
+                MakeMix("2", "dnb", ("Anu", "Track 2")),
+            };
+
+            var page = await InvokeArtistsAsync(BuildSut(mixes), 1, 20);
+
+            Assert.That(page.Items.Select(a => a.Name), Is.EqualTo(new[] { "Anu", "Zinc" }));
+        }
+
+        [Test]
+        public async Task GetArtistsAsync_merges_tracks_across_genres()
+        {
+            var mixes = new[]
+            {
+                MakeMix("1", "breaks", ("Shy One", "Alpha")),
+                MakeMix("2", "dnb", ("Shy One", "Beta")),
+            };
+
+            var page = await InvokeArtistsAsync(BuildSut(mixes), 1, 20);
+
+            Assert.That(page.Total, Is.EqualTo(1));
+            Assert.That(page.Items[0].TrackCount, Is.EqualTo(2));
+            Assert.That(page.Items[0].Tracks, Is.EqualTo(new[] { "Alpha", "Beta" }));
+        }
+
+        [Test]
+        public async Task GetArtistsAsync_deduplicates_tracks()
+        {
+            var mixes = new[]
+            {
+                MakeMix("1", "breaks", ("Shy One", "Alpha")),
+                MakeMix("2", "dnb", ("Shy One", "Alpha")),
+            };
+
+            var page = await InvokeArtistsAsync(BuildSut(mixes), 1, 20);
+
+            Assert.That(page.Items[0].TrackCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public async Task GetArtistsAsync_returns_correct_page()
+        {
+            var mixes = new[]
+            {
+                MakeMix("1", "breaks", ("Artist A", "Track 1"), ("Artist A", "Track 2"), ("Artist A", "Track 3")),
+                MakeMix("2", "breaks", ("Artist B", "Track 4"), ("Artist B", "Track 5")),
+                MakeMix("3", "breaks", ("Artist C", "Track 6")),
+                MakeMix("4", "breaks", ("Artist D", "Track 7")),
+            };
+
+            var page = await InvokeArtistsAsync(BuildSut(mixes), 2, 2);
+
+            Assert.That(page.Items.Select(a => a.Name), Is.EqualTo(new[] { "Artist C", "Artist D" }));
+        }
+
+        [Test]
+        public async Task GetArtistsAsync_returns_correct_total()
+        {
+            var mixes = new[]
+            {
+                MakeMix("1", "breaks", ("Artist A", "Track 1")),
+                MakeMix("2", "breaks", ("Artist B", "Track 2")),
+                MakeMix("3", "dnb", ("Artist C", "Track 3")),
+            };
+
+            var page = await InvokeArtistsAsync(BuildSut(mixes), 1, 20);
+
+            Assert.That(page.Total, Is.EqualTo(3));
+        }
+
+        [Test]
+        public async Task GetArtistsAsync_returns_400_for_invalid_page()
+        {
+            IActionResult result = await BuildSut(Array.Empty<Mix>())
+                .GetArtistsAsync(0, 20, CancellationToken.None);
+
+            Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        }
+
+        [Test]
+        public async Task GetArtistsAsync_returns_400_for_invalid_page_size()
+        {
+            IActionResult result = await BuildSut(Array.Empty<Mix>())
+                .GetArtistsAsync(1, 101, CancellationToken.None);
+
+            Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        }
+
+        // ── Helpers ───────────────────────────────────────────────────────────
+        private static async Task<MixCatalogController.CatalogPage<MixCatalogController.GenreEntry>> InvokeCatalogAsync(
             MixCatalogController sut,
             string? genre,
             int page,
             int pageSize)
         {
             IActionResult result = await sut.GetCatalogAsync(genre, page, pageSize, CancellationToken.None);
-            return (MixCatalogController.CatalogPage)((OkObjectResult)result).Value!;
+            return (MixCatalogController.CatalogPage<MixCatalogController.GenreEntry>)((OkObjectResult)result).Value!;
+        }
+
+        private static async Task<MixCatalogController.CatalogPage<MixCatalogController.ArtistSummary>> InvokeArtistsAsync(
+            MixCatalogController sut,
+            int page,
+            int pageSize)
+        {
+            IActionResult result = await sut.GetArtistsAsync(page, pageSize, CancellationToken.None);
+            return (MixCatalogController.CatalogPage<MixCatalogController.ArtistSummary>)((OkObjectResult)result).Value!;
         }
 
         private static MixCatalogController BuildSut(IReadOnlyList<Mix> mixes)
