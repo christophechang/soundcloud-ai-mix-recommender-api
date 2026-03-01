@@ -9,11 +9,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Parsing;
-using Changsta.Ai.Infrastructure.Tests.Helpers;
+using Changsta.Ai.Tests.Unit.Helpers;
 using Microsoft.Extensions.Caching.Memory;
 using NUnit.Framework;
 
-namespace Changsta.Ai.Infrastructure.Tests.Services.SoundCloud.Catalogue
+namespace Changsta.Ai.Tests.Unit.Catalogue
 {
     [TestFixture]
     public sealed class SoundCloudRssMixCatalogueProviderTests

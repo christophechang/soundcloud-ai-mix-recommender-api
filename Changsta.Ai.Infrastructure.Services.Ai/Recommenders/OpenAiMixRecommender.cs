@@ -521,16 +521,14 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             string genre = (mix.Genre ?? string.Empty).Trim();
             string energy = (mix.Energy ?? string.Empty).Trim();
 
-            string bpmAnchor = BuildBpmAnchor(mix.BpmMin, mix.BpmMax);
+            string bpmAnchor = FormatBpmAnchor(mix.BpmMin, mix.BpmMax);
 
             var moodTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (mix.Moods != null)
+
+            foreach (var m in mix.Moods)
             {
-                foreach (var m in mix.Moods)
-                {
-                    var tok = (m ?? string.Empty).Trim();
-                    if (tok.Length > 0) moodTokens.Add(tok);
-                }
+                var tok = (m ?? string.Empty).Trim();
+                if (tok.Length > 0) moodTokens.Add(tok);
             }
 
             var trackLines = mix.Tracklist
@@ -583,16 +581,6 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             if (bpmAnchor.Length > 0 && string.Equals(candidate, "bpm: " + bpmAnchor, StringComparison.OrdinalIgnoreCase)) return true;
 
             return false;
-        }
-
-        private static string BuildBpmAnchor(int? min, int? max)
-        {
-            if (min is null && max is null) return string.Empty;
-            if (min is not null && max is null) return min.Value.ToString();
-            if (min is null && max is not null) return max.Value.ToString();
-            int a = min!.Value;
-            int b = max!.Value;
-            return a == b ? a.ToString() : $"{a}-{b}";
         }
 
         private static void EnsureAnchorIsValid(

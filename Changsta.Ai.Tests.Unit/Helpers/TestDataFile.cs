@@ -2,7 +2,7 @@
 using System.Threading.Tasks;
 using NUnit.Framework;
 
-namespace Changsta.Ai.Infrastructure.Tests.Helpers
+namespace Changsta.Ai.Tests.Unit.Helpers
 {
     internal static class TestDataFile
     {

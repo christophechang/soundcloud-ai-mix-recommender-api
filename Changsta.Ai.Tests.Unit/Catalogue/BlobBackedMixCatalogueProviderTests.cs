@@ -10,7 +10,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 
-namespace Changsta.Ai.Infrastructure.Tests.Services.Azure.Catalogue
+namespace Changsta.Ai.Tests.Unit.Catalogue
 {
     [TestFixture]
     public sealed class BlobBackedMixCatalogueProviderTests
