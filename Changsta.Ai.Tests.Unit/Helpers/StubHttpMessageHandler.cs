@@ -3,7 +3,7 @@ using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Changsta.Ai.Infrastructure.Tests.Helpers
+namespace Changsta.Ai.Tests.Unit.Helpers
 {
     internal sealed class StubHttpMessageHandler : HttpMessageHandler
     {

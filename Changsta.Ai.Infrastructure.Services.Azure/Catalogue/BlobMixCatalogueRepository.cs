@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure;
@@ -20,6 +21,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             PropertyNameCaseInsensitive = true,
+            Converters = { new TrackListJsonConverter() },
         };
 
         private readonly BlobContainerClient _containerClient;
@@ -107,6 +109,86 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Failed to write blob catalog — merged result was still returned to caller.");
+            }
+        }
+
+        private sealed class TrackListJsonConverter : JsonConverter<IReadOnlyList<Track>>
+        {
+            public override IReadOnlyList<Track> Read(
+                ref Utf8JsonReader reader,
+                Type typeToConvert,
+                JsonSerializerOptions options)
+            {
+                if (reader.TokenType != JsonTokenType.StartArray)
+                {
+                    return Array.Empty<Track>();
+                }
+
+                var tracks = new List<Track>();
+
+                while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
+                {
+                    if (reader.TokenType == JsonTokenType.String)
+                    {
+                        // v1 format: array of "Artist - Title" strings
+                        string raw = reader.GetString() ?? string.Empty;
+                        int sep = raw.IndexOf(" - ", StringComparison.Ordinal);
+
+                        if (sep >= 0)
+                        {
+                            tracks.Add(new Track
+                            {
+                                Artist = raw.Substring(0, sep).Trim(),
+                                Title = raw.Substring(sep + 3).Trim(),
+                            });
+                        }
+                    }
+                    else if (reader.TokenType == JsonTokenType.StartObject)
+                    {
+                        // v2 format: array of { "artist": "...", "title": "..." }
+                        string artist = string.Empty;
+                        string title = string.Empty;
+
+                        while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
+                        {
+                            if (reader.TokenType != JsonTokenType.PropertyName)
+                            {
+                                continue;
+                            }
+
+                            string propName = reader.GetString() ?? string.Empty;
+                            reader.Read();
+
+                            if (string.Equals(propName, "artist", StringComparison.OrdinalIgnoreCase))
+                            {
+                                artist = reader.GetString() ?? string.Empty;
+                            }
+                            else if (string.Equals(propName, "title", StringComparison.OrdinalIgnoreCase))
+                            {
+                                title = reader.GetString() ?? string.Empty;
+                            }
+                        }
+
+                        tracks.Add(new Track { Artist = artist, Title = title });
+                    }
+                }
+
+                return tracks;
+            }
+
+            public override void Write(
+                Utf8JsonWriter writer,
+                IReadOnlyList<Track> value,
+                JsonSerializerOptions options)
+            {
+                writer.WriteStartArray();
+
+                for (int i = 0; i < value.Count; i++)
+                {
+                    writer.WriteStringValue($"{value[i].Artist} - {value[i].Title}");
+                }
+
+                writer.WriteEndArray();
             }
         }
     }

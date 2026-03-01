@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using Changsta.Ai.Core.Domain;
 
 namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Parsing
 {
@@ -14,24 +15,24 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Parsing
             "Track listing",
         };
 
-        public static IReadOnlyList<string> Extract(string? description)
+        public static IReadOnlyList<Track> Extract(string? description)
         {
             if (string.IsNullOrWhiteSpace(description))
             {
-                return Array.Empty<string>();
+                return Array.Empty<Track>();
             }
 
             (string introText, string trackSection) = SplitIntroAndTrackSection(description);
 
             if (string.IsNullOrWhiteSpace(trackSection))
             {
-                return Array.Empty<string>();
+                return Array.Empty<Track>();
             }
 
             string[] lines = trackSection
                 .Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
 
-            var tracks = new List<string>();
+            var tracks = new List<Track>();
 
             for (int i = 0; i < lines.Length; i++)
             {
@@ -42,32 +43,20 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Parsing
                     continue;
                 }
 
-                if (!line.Contains(" - ", StringComparison.Ordinal))
+                int separatorIndex = line.IndexOf(" - ", StringComparison.Ordinal);
+
+                if (separatorIndex < 0)
                 {
                     break;
                 }
 
-                tracks.Add(line);
+                string artist = line.Substring(0, separatorIndex).Trim();
+                string title = line.Substring(separatorIndex + 3).Trim();
+
+                tracks.Add(new Track { Artist = artist, Title = title });
             }
 
             return tracks;
-        }
-
-        public static string? ExtractIntroText(string? description)
-        {
-            if (string.IsNullOrWhiteSpace(description))
-            {
-                return null;
-            }
-
-            (string introText, string trackSection) = SplitIntroAndTrackSection(description);
-
-            if (string.IsNullOrWhiteSpace(introText))
-            {
-                return null;
-            }
-
-            return introText;
         }
 
         private static (string IntroText, string TrackSection) SplitIntroAndTrackSection(string description)

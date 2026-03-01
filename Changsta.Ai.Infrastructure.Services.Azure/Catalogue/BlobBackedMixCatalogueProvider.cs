@@ -49,11 +49,14 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             IReadOnlyList<Mix> merged = MergeCatalogs(blobMixes, rssMixes);
 
             int newDiscoveries = CountNewDiscoveries(blobMixes, rssMixes);
-            if (newDiscoveries > 0)
+            int updatedEntries = CountUpdatedEntries(blobMixes, rssMixes);
+
+            if (newDiscoveries > 0 || updatedEntries > 0)
             {
                 _logger.LogInformation(
-                    "Discovered {NewCount} new mixes from RSS — writing back to blob catalog.",
-                    newDiscoveries);
+                    "Writing blob catalog — {NewCount} new mixes, {UpdateCount} updated entries.",
+                    newDiscoveries,
+                    updatedEntries);
 
                 await _repository.WriteAsync(merged, cancellationToken).ConfigureAwait(false);
             }
@@ -120,6 +123,43 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 StringComparer.OrdinalIgnoreCase);
 
             return rssMixes.Count(m => !blobUrls.Contains(m.Url));
+        }
+
+        private static int CountUpdatedEntries(
+            IReadOnlyList<Mix> blobMixes,
+            IReadOnlyList<Mix> rssMixes)
+        {
+            if (rssMixes.Count == 0)
+            {
+                return 0;
+            }
+
+            var blobByUrl = new Dictionary<string, Mix>(StringComparer.OrdinalIgnoreCase);
+
+            for (int i = 0; i < blobMixes.Count; i++)
+            {
+                blobByUrl[blobMixes[i].Url] = blobMixes[i];
+            }
+
+            int count = 0;
+
+            for (int i = 0; i < rssMixes.Count; i++)
+            {
+                Mix rssMix = rssMixes[i];
+
+                if (!blobByUrl.TryGetValue(rssMix.Url, out Mix? blobMix))
+                {
+                    continue;
+                }
+
+                if (!string.Equals(rssMix.Description, blobMix.Description, StringComparison.Ordinal)
+                    || !string.Equals(rssMix.Title, blobMix.Title, StringComparison.Ordinal))
+                {
+                    count++;
+                }
+            }
+
+            return count;
         }
 
         private async Task<IReadOnlyList<Mix>> FetchRssSafeAsync(CancellationToken cancellationToken)

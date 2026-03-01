@@ -77,9 +77,7 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
                 Title = item.Title?.Text ?? "Untitled",
                 Url = item.Links.FirstOrDefault()?.Uri.ToString() ?? string.Empty,
                 Description = description,
-                IntroText = TracklistExtractor.ExtractIntroText(description),
                 Tracklist = TracklistExtractor.Extract(description),
-                PublishedAt = item.PublishDate != DateTimeOffset.MinValue ? item.PublishDate : null,
 
                 Genre = mixSchema.Genre ?? string.Empty,
                 Energy = mixSchema.Energy ?? string.Empty,

@@ -52,6 +52,51 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             RegexOptions.IgnoreCase | RegexOptions.Compiled,
             matchTimeout: TimeSpan.FromMilliseconds(100));
 
+        // Words that carry no secondary signal — stripped when deciding if a genre query is pure.
+        private static readonly HashSet<string> GenreQueryFillerWords = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "a", "all", "and", "any", "for", "give", "good", "i", "in",
+            "me", "mix", "mixes", "music", "my", "of", "on", "or",
+            "playlist", "please", "set", "sets", "show", "some",
+            "the", "want", "with",
+        };
+
+        // Pre-sorted longest-first so multi-word phrases ("drum and bass") match before
+        // their shorter substrings ("dnb"). Each tuple is (query alias, catalog genre value).
+        private static readonly (string Alias, string Genre)[] GenreAliasesByLength = new[]
+        {
+            ("liquid drum and bass", "dnb"),
+            ("drum and bass", "dnb"),
+            ("drum & bass", "dnb"),
+            ("ragga jungle", "jungle"),
+            ("electronica", "electronica"),
+            ("tech house", "techno"),
+            ("tech-house", "techno"),
+            ("break beat", "breaks"),
+            ("deep-house", "deep-house"),
+            ("deep house", "deep-house"),
+            ("uk garage", "ukg"),
+            ("breakbeat", "breaks"),
+            ("neurofunk", "dnb"),
+            ("two step", "ukg"),
+            ("uk-bass", "uk-bass"),
+            ("uk bass", "uk-bass"),
+            ("hip-hop", "hip-hop"),
+            ("hip hop", "hip-hop"),
+            ("jungle", "jungle"),
+            ("techno", "techno"),
+            ("breaks", "breaks"),
+            ("hiphop", "hip-hop"),
+            ("garage", "ukg"),
+            ("house", "house"),
+            ("2step", "ukg"),
+            ("2-step", "ukg"),
+            ("d&b", "dnb"),
+            ("ukg", "ukg"),
+            ("dnb", "dnb"),
+            ("idm", "electronica"),
+        };
+
         private readonly ChatClient chat;
         private readonly IMemoryCache cache;
         private readonly ILogger<OpenAiMixRecommender> logger;
@@ -94,13 +139,30 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             var boundedMixes = mixes.Take(MixesUpperBound).ToArray();
             bool isBpmQuery = TryParseBpmQuery(question, out int detectedBpm);
             bool hasBpmComponent = !isBpmQuery && TryExtractBpmFromMixedQuery(question, out detectedBpm);
-            var filteredMixes = (isBpmQuery || hasBpmComponent)
+            Mix[] filteredMixes = (isBpmQuery || hasBpmComponent)
                 ? FilterByBpm(boundedMixes, detectedBpm)
                 : boundedMixes;
 
+            // Genre pre-filter: narrow catalog to the matching genre before sending to AI.
+            // Prevents attention degradation when all 100 mixes are in the prompt.
+            string? detectedGenre = null;
+            bool isPureGenreQuery = false;
+            if (TryExtractGenreFilter(question, out string? extractedGenre, out string? matchedAlias)
+                && extractedGenre is not null
+                && matchedAlias is not null)
+            {
+                Mix[] genreFiltered = FilterByGenre(filteredMixes, extractedGenre);
+                if (genreFiltered.Length > 0)
+                {
+                    filteredMixes = genreFiltered;
+                    detectedGenre = extractedGenre;
+                    isPureGenreQuery = IsPureGenreQuery(question, matchedAlias);
+                }
+            }
+
             // Only emit the BPM-specific prompt note for pure BPM queries.
             // Mixed queries need the AI to handle genre/mood dimensions too.
-            string prompt = BuildPrompt(question, filteredMixes, maxResults, isBpmQuery ? detectedBpm : null);
+            string prompt = BuildPrompt(question, filteredMixes, maxResults, isBpmQuery ? detectedBpm : null, detectedGenre, isPureGenreQuery);
 
             var messages = new List<ChatMessage>
             {
@@ -181,7 +243,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
         private static string BuildCacheKey(string question, int maxResults) =>
             "recommend:" + question.Trim().ToLowerInvariant() + ":" + maxResults.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-        private static string BuildPrompt(string question, IReadOnlyList<Mix> mixes, int maxResults, int? detectedBpm = null)
+        private static string BuildPrompt(string question, IReadOnlyList<Mix> mixes, int maxResults, int? detectedBpm = null, string? detectedGenre = null, bool isPureGenreQuery = false)
         {
             var sb = new StringBuilder();
 
@@ -199,6 +261,22 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 AppendLine();
             }
 
+            if (detectedGenre is not null)
+            {
+                AppendLine("Genre pre-filter applied: only '" + detectedGenre + "' mixes are shown below.");
+
+                if (isPureGenreQuery)
+                {
+                    AppendLine("The query is a pure genre request with no other signals. Return ALL of them, up to the maximum of " + maxResults + ". Do not apply any extra quality gate — every mix shown is already a valid result.");
+                }
+                else
+                {
+                    AppendLine("All of them match the genre. The query also contains additional signals (mood, artist, BPM) — rank by those and exclude any mix that clearly does not satisfy them.");
+                }
+
+                AppendLine();
+            }
+
             AppendLine("Search strategy:");
             AppendLine("- Genre query (e.g. \"dnb mixes\", \"house music\", \"ukg\"): prioritize genre field, then related moods and intro text. Return ALL mixes whose genre matches, not just the first or most recent.");
             AppendLine("- Artist/track query (e.g. \"mixes with Calibre\", \"anything with Noisia\"): search each mix's tracklist for the artist or track name (substring match). Also check intro text. Return ALL mixes that contain the artist/track.");
@@ -207,7 +285,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             AppendLine("- Mixed query (e.g. \"dark dnb with Noisia around 174bpm\"): weight across all dimensions, favour mixes matching the most dimensions.");
             AppendLine("- Decompose the user question into its component signals before searching.");
             AppendLine("- Genre matching: use your music knowledge to match the user query to genre values in the MIX blocks in BOTH directions. The genre field may contain abbreviations (e.g. 'dnb', 'ukg') or full names (e.g. 'drum & bass', 'uk garage'). Common aliases: dnb/d&b = drum & bass, ukg = uk garage, techno ≈ tech house. Match regardless of casing or format. The why anchors must still be copied verbatim from the MIX block genre field.");
-            AppendLine("- IMPORTANT: Always return as many matching mixes as possible, up to the maximum of " + maxResults + ". Scan every mix in the catalogue for matches. Do not stop after finding one match.");
+            AppendLine("- Scan every mix in the catalogue before deciding. Return up to " + maxResults + " mixes that genuinely match the query. Returning fewer results is always better than including a poor match — only include a mix if its metadata clearly supports the query.");
             AppendLine();
             AppendLine("Rules:");
             AppendLine("1) You must only use mix ids provided in the MIX blocks.");
@@ -246,7 +324,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 var m = mixes[i];
 
                 string intro = TakePrefix(m.Description, IntroTextUpperBound);
-                string tracks = string.Join("\n", m.Tracklist.Take(TracklistUpperBound));
+                string tracks = string.Join("\n", m.Tracklist.Take(TracklistUpperBound).Select(t => $"{t.Artist} - {t.Title}"));
 
                 string bpm = FormatBpmAnchor(m.BpmMin, m.BpmMax);
                 string moods = (m.Moods == null || m.Moods.Count == 0)
@@ -327,6 +405,52 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 .ToArray();
         }
 
+        internal static bool TryExtractGenreFilter(string question, out string? genre) =>
+            TryExtractGenreFilter(question, out genre, out _);
+
+        internal static bool TryExtractGenreFilter(string question, out string? genre, out string? matchedAlias)
+        {
+            genre = null;
+            matchedAlias = null;
+
+            if (string.IsNullOrWhiteSpace(question))
+            {
+                return false;
+            }
+
+            string q = question.Trim();
+
+            foreach (var (alias, canonicalGenre) in GenreAliasesByLength)
+            {
+                if (q.Contains(alias, StringComparison.OrdinalIgnoreCase))
+                {
+                    genre = canonicalGenre;
+                    matchedAlias = alias;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        internal static bool IsPureGenreQuery(string question, string matchedAlias)
+        {
+            string remaining = question
+                .Replace(matchedAlias, string.Empty, StringComparison.OrdinalIgnoreCase)
+                .Trim();
+
+            string[] tokens = remaining.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+            return !tokens.Any(t => !GenreQueryFillerWords.Contains(t));
+        }
+
+        internal static Mix[] FilterByGenre(IReadOnlyList<Mix> mixes, string genre)
+        {
+            return mixes
+                .Where(m => string.Equals(m.Genre, genre, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+        }
+
         private static string TakePrefix(string? text, int maxChars)
         {
             if (string.IsNullOrWhiteSpace(text)) return string.Empty;
@@ -397,19 +521,20 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             string genre = (mix.Genre ?? string.Empty).Trim();
             string energy = (mix.Energy ?? string.Empty).Trim();
 
-            string bpmAnchor = BuildBpmAnchor(mix.BpmMin, mix.BpmMax);
+            string bpmAnchor = FormatBpmAnchor(mix.BpmMin, mix.BpmMax);
 
             var moodTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            if (mix.Moods != null)
+
+            foreach (var m in mix.Moods)
             {
-                foreach (var m in mix.Moods)
-                {
-                    var tok = (m ?? string.Empty).Trim();
-                    if (tok.Length > 0) moodTokens.Add(tok);
-                }
+                var tok = (m ?? string.Empty).Trim();
+                if (tok.Length > 0) moodTokens.Add(tok);
             }
 
-            var trackLines = mix.Tracklist?.Where(x => !string.IsNullOrWhiteSpace(x)).ToArray() ?? Array.Empty<string>();
+            var trackLines = mix.Tracklist
+                .Select(t => $"{t.Artist} - {t.Title}")
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .ToArray();
 
             for (int i = 0; i < why.Count; i++)
             {
@@ -456,16 +581,6 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             if (bpmAnchor.Length > 0 && string.Equals(candidate, "bpm: " + bpmAnchor, StringComparison.OrdinalIgnoreCase)) return true;
 
             return false;
-        }
-
-        private static string BuildBpmAnchor(int? min, int? max)
-        {
-            if (min is null && max is null) return string.Empty;
-            if (min is not null && max is null) return min.Value.ToString();
-            if (min is null && max is not null) return max.Value.ToString();
-            int a = min!.Value;
-            int b = max!.Value;
-            return a == b ? a.ToString() : $"{a}-{b}";
         }
 
         private static void EnsureAnchorIsValid(

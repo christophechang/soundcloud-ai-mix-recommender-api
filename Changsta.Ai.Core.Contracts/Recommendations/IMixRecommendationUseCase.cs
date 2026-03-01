@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+using System;
 using Changsta.Ai.Core.Dtos;
 
 namespace Changsta.Ai.Core.Contracts.Recommendations

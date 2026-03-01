@@ -20,7 +20,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
             BpmMin = 172,
             BpmMax = 174,
             Moods = new[] { "driving", "dark", "rolling" },
-            Tracklist = new[] { "Calibre - Pillow Dub", "Noisia - Shellcase" },
+            Tracklist = new[] { new Track { Artist = "Calibre", Title = "Pillow Dub" }, new Track { Artist = "Noisia", Title = "Shellcase" } },
         };
 
         private static readonly IReadOnlyList<Mix> DefaultCatalogue = new[] { DefaultMix };
@@ -810,6 +810,158 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
 
             Assert.That(result, Is.EqualTo(expectMatch));
             Assert.That(bpm, Is.EqualTo(expectedBpm));
+        }
+
+        [TestCase("dnb", true, "dnb")]
+        [TestCase("DNB", true, "dnb")]
+        [TestCase("dnb mixes", true, "dnb")]
+        [TestCase("d&b", true, "dnb")]
+        [TestCase("drum and bass", true, "dnb")]
+        [TestCase("drum & bass", true, "dnb")]
+        [TestCase("liquid drum and bass", true, "dnb")]
+        [TestCase("neurofunk", true, "dnb")]
+        [TestCase("dark dnb with Calibre", true, "dnb")]
+        [TestCase("house", true, "house")]
+        [TestCase("house music", true, "house")]
+        [TestCase("tech house", true, "techno")]
+        [TestCase("tech-house", true, "techno")]
+        [TestCase("deep house", true, "deep-house")]
+        [TestCase("deep-house", true, "deep-house")]
+        [TestCase("ukg", true, "ukg")]
+        [TestCase("uk garage", true, "ukg")]
+        [TestCase("garage", true, "ukg")]
+        [TestCase("two step", true, "ukg")]
+        [TestCase("2-step", true, "ukg")]
+        [TestCase("2step", true, "ukg")]
+        [TestCase("uk-bass", true, "uk-bass")]
+        [TestCase("uk bass", true, "uk-bass")]
+        [TestCase("hip-hop", true, "hip-hop")]
+        [TestCase("hip hop", true, "hip-hop")]
+        [TestCase("hiphop", true, "hip-hop")]
+        [TestCase("jungle", true, "jungle")]
+        [TestCase("ragga jungle", true, "jungle")]
+        [TestCase("techno", true, "techno")]
+        [TestCase("breaks", true, "breaks")]
+        [TestCase("breakbeat", true, "breaks")]
+        [TestCase("break beat", true, "breaks")]
+        [TestCase("electronica", true, "electronica")]
+        [TestCase("idm", true, "electronica")]
+        [TestCase("something dark and heavy", false, null)]
+        [TestCase("Calibre mixes", false, null)]
+        [TestCase("174bpm", false, null)]
+        [TestCase("", false, null)]
+        public void TryExtractGenreFilter_VariousInputs_ReturnsExpected(string question, bool expectMatch, string? expectedGenre)
+        {
+            bool result = OpenAiMixRecommender.TryExtractGenreFilter(question, out string? genre);
+
+            Assert.That(result, Is.EqualTo(expectMatch));
+            Assert.That(genre, Is.EqualTo(expectedGenre));
+        }
+
+        [Test]
+        public void FilterByGenre_MatchingGenre_ReturnsMix()
+        {
+            var mixes = new[]
+            {
+                new Mix
+                {
+                    Id = "m1",
+                    Title = "DnB Mix",
+                    Url = "https://soundcloud.com/test/dnb",
+                    Genre = "dnb",
+                    Energy = "peak",
+                },
+                new Mix
+                {
+                    Id = "m2",
+                    Title = "House Mix",
+                    Url = "https://soundcloud.com/test/house",
+                    Genre = "house",
+                    Energy = "journey",
+                },
+            };
+
+            var result = OpenAiMixRecommender.FilterByGenre(mixes, "dnb");
+
+            Assert.That(result, Has.Length.EqualTo(1));
+            Assert.That(result[0].Id, Is.EqualTo("m1"));
+        }
+
+        [Test]
+        public void FilterByGenre_CaseInsensitive_ReturnsMix()
+        {
+            var mixes = new[]
+            {
+                new Mix
+                {
+                    Id = "m1",
+                    Title = "DnB Mix",
+                    Url = "https://soundcloud.com/test/dnb",
+                    Genre = "DNB",
+                    Energy = "peak",
+                },
+            };
+
+            var result = OpenAiMixRecommender.FilterByGenre(mixes, "dnb");
+
+            Assert.That(result, Has.Length.EqualTo(1));
+        }
+
+        [Test]
+        public void FilterByGenre_NoMatchingGenre_ReturnsEmpty()
+        {
+            var mixes = new[]
+            {
+                new Mix
+                {
+                    Id = "m1",
+                    Title = "House Mix",
+                    Url = "https://soundcloud.com/test/house",
+                    Genre = "house",
+                    Energy = "journey",
+                },
+            };
+
+            var result = OpenAiMixRecommender.FilterByGenre(mixes, "dnb");
+
+            Assert.That(result, Is.Empty);
+        }
+
+        [Test]
+        public void TryExtractGenreFilter_DeepHousePrecedesHouse()
+        {
+            bool result = OpenAiMixRecommender.TryExtractGenreFilter("deep house vibes", out string? genre);
+
+            Assert.That(result, Is.True);
+            Assert.That(genre, Is.EqualTo("deep-house"));
+        }
+
+        [Test]
+        public void TryExtractGenreFilter_ThreeArgOverload_ReturnsMatchedAlias()
+        {
+            bool result = OpenAiMixRecommender.TryExtractGenreFilter("drum and bass mixes", out string? genre, out string? matchedAlias);
+
+            Assert.That(result, Is.True);
+            Assert.That(genre, Is.EqualTo("dnb"));
+            Assert.That(matchedAlias, Is.EqualTo("drum and bass"));
+        }
+
+        [TestCase("dnb", "dnb", true)]
+        [TestCase("DNB mixes", "dnb", true)]
+        [TestCase("show me some dnb", "dnb", true)]
+        [TestCase("give me all the dnb", "dnb", true)]
+        [TestCase("dnb please", "dnb", true)]
+        [TestCase("drum and bass", "drum and bass", true)]
+        [TestCase("house music", "house", true)]
+        [TestCase("dark dnb with Calibre", "dnb", false)]
+        [TestCase("dark dnb", "dnb", false)]
+        [TestCase("dnb at 174bpm", "dnb", false)]
+        [TestCase("rolling dnb", "dnb", false)]
+        public void IsPureGenreQuery_VariousInputs_ReturnsExpected(string question, string matchedAlias, bool expectedPure)
+        {
+            bool result = OpenAiMixRecommender.IsPureGenreQuery(question, matchedAlias);
+
+            Assert.That(result, Is.EqualTo(expectedPure));
         }
     }
 }

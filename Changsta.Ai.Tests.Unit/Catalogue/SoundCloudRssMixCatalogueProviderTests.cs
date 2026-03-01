@@ -9,12 +9,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Parsing;
-using Changsta.Ai.Infrastructure.Tests.Helpers;
+using Changsta.Ai.Tests.Unit.Helpers;
 using Microsoft.Extensions.Caching.Memory;
 using NUnit.Framework;
-using NUnit.Framework.Legacy;
 
-namespace Changsta.Ai.Infrastructure.Tests.Services.SoundCloud.Catalogue
+namespace Changsta.Ai.Tests.Unit.Catalogue
 {
     [TestFixture]
     public sealed class SoundCloudRssMixCatalogueProviderTests
@@ -49,9 +48,6 @@ namespace Changsta.Ai.Infrastructure.Tests.Services.SoundCloud.Catalogue
             Assert.That(first.Id, Is.EqualTo("tag:soundcloud,2010:tracks/2272564208"));
             Assert.That(first.Title, Is.EqualTo("Murda Classics D&B Mix"));
             Assert.That(first.Url, Is.EqualTo("https://soundcloud.com/changsta/murda-classics-d-b-mix"));
-            Assert.That(first.PublishedAt, Is.Not.Null);
-
-            Assert.That(first.IntroText, Is.EqualTo(TracklistExtractor.ExtractIntroText(first.Description)));
             Assert.That(first.Tracklist, Is.EqualTo(TracklistExtractor.Extract(first.Description)));
 
             AssertMixSchemaMapped(first);

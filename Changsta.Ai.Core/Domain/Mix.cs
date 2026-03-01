@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace Changsta.Ai.Core.Domain
 {
@@ -13,11 +12,7 @@ namespace Changsta.Ai.Core.Domain
 
         public string? Description { get; init; }
 
-        public string? IntroText { get; init; }
-
-        public IReadOnlyList<string> Tracklist { get; init; } = Array.Empty<string>();
-
-        public DateTimeOffset? PublishedAt { get; init; }
+        public IReadOnlyList<Track> Tracklist { get; init; } = Array.Empty<Track>();
 
         required public string Genre { get; init; }
 

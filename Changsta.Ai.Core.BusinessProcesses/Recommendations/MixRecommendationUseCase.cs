@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 using Changsta.Ai.Core.Contracts.Ai;
 using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Contracts.Recommendations;
@@ -11,7 +10,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.Recommendations
 {
     public sealed class MixRecommendationUseCase : IMixRecommendationUseCase
     {
-        private const int MaxResultsUpperBound = 5;
+        private const int MaxResultsUpperBound = 20;
         private const int CatalogueMaxItems = 100;
         private readonly IMixAiRecommender _mixAiRecommender;
 
@@ -41,16 +40,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.Recommendations
                 };
             }
 
-            int maxResults = request.MaxResults;
-            if (maxResults <= 0)
-            {
-                maxResults = 1;
-            }
-
-            if (maxResults > MaxResultsUpperBound)
-            {
-                maxResults = MaxResultsUpperBound;
-            }
+            int maxResults = Math.Clamp(request.MaxResults, 1, MaxResultsUpperBound);
 
             var mixes = await _mixCatalogueProvider
                 .GetLatestAsync(CatalogueMaxItems, cancellationToken)

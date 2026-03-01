@@ -10,7 +10,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 
-namespace Changsta.Ai.Infrastructure.Tests.Services.Azure.Catalogue
+namespace Changsta.Ai.Tests.Unit.Catalogue
 {
     [TestFixture]
     public sealed class BlobBackedMixCatalogueProviderTests
@@ -95,6 +95,40 @@ namespace Changsta.Ai.Infrastructure.Tests.Services.Azure.Catalogue
         }
 
         [Test]
+        public async Task GetLatestAsync_updated_rss_description_triggers_write()
+        {
+            var blobMix = MakeMix("1", "https://sc.test/mix-1", description: "Old tracklist line");
+            var rssMix = MakeMix("1", "https://sc.test/mix-1", description: "Fixed tracklist line");
+            var blobRepo = new StubBlobRepository { BlobMixes = new[] { blobMix } };
+
+            var sut = BuildSut(
+                blobRepo: blobRepo,
+                blobMixes: new[] { blobMix },
+                rssMixes: new[] { rssMix });
+
+            await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(blobRepo.WriteCallCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public async Task GetLatestAsync_updated_rss_title_triggers_write()
+        {
+            var blobMix = MakeMix("1", "https://sc.test/mix-1", title: "Old Title");
+            var rssMix = MakeMix("1", "https://sc.test/mix-1", title: "Fixed Title");
+            var blobRepo = new StubBlobRepository { BlobMixes = new[] { blobMix } };
+
+            var sut = BuildSut(
+                blobRepo: blobRepo,
+                blobMixes: new[] { blobMix },
+                rssMixes: new[] { rssMix });
+
+            await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(blobRepo.WriteCallCount, Is.EqualTo(1));
+        }
+
+        [Test]
         public async Task GetLatestAsync_caches_result_on_second_call()
         {
             var mix = MakeMix("1", "https://sc.test/mix-1");
@@ -172,7 +206,7 @@ namespace Changsta.Ai.Infrastructure.Tests.Services.Azure.Catalogue
                 NullLogger<BlobBackedMixCatalogueProvider>.Instance);
         }
 
-        private static Mix MakeMix(string id, string url, string title = "Test Mix")
+        private static Mix MakeMix(string id, string url, string title = "Test Mix", string? description = null)
         {
             return new Mix
             {
@@ -181,6 +215,7 @@ namespace Changsta.Ai.Infrastructure.Tests.Services.Azure.Catalogue
                 Url = url,
                 Genre = "dnb",
                 Energy = "peak",
+                Description = description,
             };
         }
 
