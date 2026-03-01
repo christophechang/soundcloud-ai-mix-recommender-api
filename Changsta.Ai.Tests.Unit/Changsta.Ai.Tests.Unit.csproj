@@ -38,6 +38,7 @@
     <ProjectReference Include="..\Changsta.Ai.Infrastructure.Services.Ai\Changsta.Ai.Infrastructure.Services.Ai.csproj" />
     <ProjectReference Include="..\Changsta.Ai.Infrastructure.Services.Azure\Changsta.Ai.Infrastructure.Services.Azure.csproj" />
     <ProjectReference Include="..\Changsta.Ai.Infrastructure.Services.SoundCloud\Changsta.Ai.Infrastructure.Services.SoundCloud.csproj" />
+    <ProjectReference Include="..\Changsta.Ai.Interface.Api\Changsta.Ai.Interface.Api.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="TestData\**\*.*">

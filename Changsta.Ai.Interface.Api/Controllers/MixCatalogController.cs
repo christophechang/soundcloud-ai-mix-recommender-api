@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -15,6 +16,10 @@ namespace Changsta.Ai.Interface.Api.Controllers
     {
         private const int CatalogMaxItems = 200;
 
+        private const int DefaultPageSize = 20;
+
+        private const int MaxPageSize = 100;
+
         private static readonly Dictionary<string, string> GenreNormalisations = new(StringComparer.OrdinalIgnoreCase)
         {
             { "deephouse", "deep-house" },
@@ -29,22 +34,40 @@ namespace Changsta.Ai.Interface.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetTrackHierarchyAsync(CancellationToken cancellationToken)
+        public async Task<IActionResult> GetCatalogAsync(
+            [FromQuery] string? genre,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = DefaultPageSize,
+            CancellationToken cancellationToken = default)
         {
+            if (page < 1 || pageSize < 1 || pageSize > MaxPageSize)
+            {
+                return BadRequest(new { error = "page must be >= 1 and pageSize must be between 1 and 100." });
+            }
+
             IReadOnlyList<Mix> mixes = await _catalogueProvider
                 .GetLatestAsync(CatalogMaxItems, cancellationToken)
                 .ConfigureAwait(false);
 
+            IEnumerable<Mix> filtered = mixes;
+
+            if (!string.IsNullOrWhiteSpace(genre))
+            {
+                string normalisedQuery = NormalizeGenre(genre);
+                filtered = mixes.Where(m =>
+                    string.Equals(NormalizeGenre(m.Genre), normalisedQuery, StringComparison.OrdinalIgnoreCase));
+            }
+
             var byGenre = new Dictionary<string, Dictionary<string, SortedSet<string>>>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (Mix mix in mixes)
+            foreach (Mix mix in filtered)
             {
-                string genre = NormalizeGenre(mix.Genre);
+                string normalisedGenre = NormalizeGenre(mix.Genre);
 
-                if (!byGenre.TryGetValue(genre, out Dictionary<string, SortedSet<string>>? byArtist))
+                if (!byGenre.TryGetValue(normalisedGenre, out Dictionary<string, SortedSet<string>>? byArtist))
                 {
                     byArtist = new Dictionary<string, SortedSet<string>>(StringComparer.OrdinalIgnoreCase);
-                    byGenre[genre] = byArtist;
+                    byGenre[normalisedGenre] = byArtist;
                 }
 
                 foreach (Track track in mix.Tracklist)
@@ -59,28 +82,147 @@ namespace Changsta.Ai.Interface.Api.Controllers
                 }
             }
 
-            var result = byGenre
+            GenreEntry[] allEntries = byGenre
+                .Where(g => g.Value.Count > 0)
                 .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
-                .Select(g => new
+                .Select(g => new GenreEntry
                 {
                     Genre = g.Key,
                     Artists = g.Value
                         .OrderBy(a => a.Key, StringComparer.OrdinalIgnoreCase)
-                        .Select(a => new
+                        .Select(a => new ArtistEntry
                         {
                             Name = a.Key,
-                            Titles = a.Value.ToList(),
+                            Tracks = a.Value.ToArray(),
                         })
-                        .ToList(),
+                        .ToArray(),
                 })
-                .ToList();
+                .ToArray();
 
-            return Ok(result);
+            return Ok(BuildPage(allEntries, page, pageSize));
+        }
+
+        [HttpGet("artists")]
+        public async Task<IActionResult> GetArtistsAsync(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = DefaultPageSize,
+            CancellationToken cancellationToken = default)
+        {
+            if (page < 1 || pageSize < 1 || pageSize > MaxPageSize)
+            {
+                return BadRequest(new { error = "page must be >= 1 and pageSize must be between 1 and 100." });
+            }
+
+            IReadOnlyList<Mix> mixes = await _catalogueProvider
+                .GetLatestAsync(CatalogMaxItems, cancellationToken)
+                .ConfigureAwait(false);
+
+            var byArtist = new Dictionary<string, SortedSet<string>>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (Mix mix in mixes)
+            {
+                foreach (Track track in mix.Tracklist)
+                {
+                    if (!byArtist.TryGetValue(track.Artist, out SortedSet<string>? titles))
+                    {
+                        titles = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+                        byArtist[track.Artist] = titles;
+                    }
+
+                    titles.Add(track.Title);
+                }
+            }
+
+            ArtistSummary[] allEntries = byArtist
+                .Select(a => new ArtistSummary
+                {
+                    Name = a.Key,
+                    TrackCount = a.Value.Count,
+                    Tracks = a.Value.ToArray(),
+                })
+                .OrderByDescending(a => a.TrackCount)
+                .ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            return Ok(BuildPage(allEntries, page, pageSize));
+        }
+
+        [HttpGet("artists/{name}/mixes")]
+        public async Task<IActionResult> GetMixesByArtistAsync(
+            [FromRoute] string name,
+            CancellationToken cancellationToken = default)
+        {
+            IReadOnlyList<Mix> mixes = await _catalogueProvider
+                .GetLatestAsync(CatalogMaxItems, cancellationToken)
+                .ConfigureAwait(false);
+
+            Mix[] results = mixes
+                .Where(m => m.Tracklist.Any(t =>
+                    string.Equals(t.Artist, name, StringComparison.OrdinalIgnoreCase)))
+                .ToArray();
+
+            return Ok(results);
+        }
+
+        private static CatalogPage<T> BuildPage<T>(T[] allEntries, int page, int pageSize)
+        {
+            int total = allEntries.Length;
+            int totalPages = (int)Math.Ceiling(total / (double)pageSize);
+
+            T[] items = allEntries
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToArray();
+
+            return new CatalogPage<T>
+            {
+                Items = items,
+                Total = total,
+                Page = page,
+                PageSize = pageSize,
+                TotalPages = totalPages,
+            };
         }
 
         private static string NormalizeGenre(string genre) =>
             GenreNormalisations.TryGetValue(genre.Replace("-", string.Empty, StringComparison.Ordinal), out string? canonical)
                 ? canonical
                 : genre;
+
+        public sealed class ArtistEntry
+        {
+            required public string Name { get; init; }
+
+            required public string[] Tracks { get; init; }
+        }
+
+        public sealed class ArtistSummary
+        {
+            required public string Name { get; init; }
+
+            required public int TrackCount { get; init; }
+
+            required public string[] Tracks { get; init; }
+        }
+
+        public sealed class CatalogPage<T>
+        {
+            required public T[] Items { get; init; }
+
+            required public int Total { get; init; }
+
+            required public int Page { get; init; }
+
+            required public int PageSize { get; init; }
+
+            required public int TotalPages { get; init; }
+        }
+
+        public sealed class GenreEntry
+        {
+            required public string Genre { get; init; }
+
+            required public ArtistEntry[] Artists { get; init; }
+        }
     }
 }
