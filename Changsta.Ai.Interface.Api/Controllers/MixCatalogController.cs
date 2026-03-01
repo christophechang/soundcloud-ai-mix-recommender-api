@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -15,6 +16,10 @@ namespace Changsta.Ai.Interface.Api.Controllers
     {
         private const int CatalogMaxItems = 200;
 
+        private const int DefaultPageSize = 20;
+
+        private const int MaxPageSize = 100;
+
         private static readonly Dictionary<string, string> GenreNormalisations = new(StringComparer.OrdinalIgnoreCase)
         {
             { "deephouse", "deep-house" },
@@ -29,58 +34,65 @@ namespace Changsta.Ai.Interface.Api.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetTrackHierarchyAsync(CancellationToken cancellationToken)
+        public async Task<IActionResult> GetCatalogAsync(
+            [FromQuery] string? genre,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = DefaultPageSize,
+            CancellationToken cancellationToken = default)
         {
+            if (page < 1 || pageSize < 1 || pageSize > MaxPageSize)
+            {
+                return BadRequest(new { error = "page must be >= 1 and pageSize must be between 1 and 100." });
+            }
+
             IReadOnlyList<Mix> mixes = await _catalogueProvider
                 .GetLatestAsync(CatalogMaxItems, cancellationToken)
                 .ConfigureAwait(false);
 
-            var byGenre = new Dictionary<string, Dictionary<string, SortedSet<string>>>(StringComparer.OrdinalIgnoreCase);
+            IEnumerable<Mix> filtered = mixes;
 
-            foreach (Mix mix in mixes)
+            if (!string.IsNullOrWhiteSpace(genre))
             {
-                string genre = NormalizeGenre(mix.Genre);
-
-                if (!byGenre.TryGetValue(genre, out Dictionary<string, SortedSet<string>>? byArtist))
-                {
-                    byArtist = new Dictionary<string, SortedSet<string>>(StringComparer.OrdinalIgnoreCase);
-                    byGenre[genre] = byArtist;
-                }
-
-                foreach (Track track in mix.Tracklist)
-                {
-                    if (!byArtist.TryGetValue(track.Artist, out SortedSet<string>? titles))
-                    {
-                        titles = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-                        byArtist[track.Artist] = titles;
-                    }
-
-                    titles.Add(track.Title);
-                }
+                string normalisedQuery = NormalizeGenre(genre);
+                filtered = mixes.Where(m =>
+                    string.Equals(NormalizeGenre(m.Genre), normalisedQuery, StringComparison.OrdinalIgnoreCase));
             }
 
-            var result = byGenre
-                .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
-                .Select(g => new
-                {
-                    Genre = g.Key,
-                    Artists = g.Value
-                        .OrderBy(a => a.Key, StringComparer.OrdinalIgnoreCase)
-                        .Select(a => new
-                        {
-                            Name = a.Key,
-                            Titles = a.Value.ToList(),
-                        })
-                        .ToList(),
-                })
-                .ToList();
+            Mix[] filteredArray = filtered.ToArray();
+            int total = filteredArray.Length;
+            int totalPages = (int)Math.Ceiling(total / (double)pageSize);
 
-            return Ok(result);
+            Mix[] items = filteredArray
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToArray();
+
+            return Ok(new CatalogPage
+            {
+                Items = items,
+                Total = total,
+                Page = page,
+                PageSize = pageSize,
+                TotalPages = totalPages,
+            });
         }
 
         private static string NormalizeGenre(string genre) =>
             GenreNormalisations.TryGetValue(genre.Replace("-", string.Empty, StringComparison.Ordinal), out string? canonical)
                 ? canonical
                 : genre;
+
+        public sealed class CatalogPage
+        {
+            required public Mix[] Items { get; init; }
+
+            required public int Total { get; init; }
+
+            required public int Page { get; init; }
+
+            required public int PageSize { get; init; }
+
+            required public int TotalPages { get; init; }
+        }
     }
 }
