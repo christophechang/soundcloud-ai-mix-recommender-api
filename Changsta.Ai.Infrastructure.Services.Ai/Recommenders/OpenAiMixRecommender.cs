@@ -26,7 +26,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
         private const int BpmQueryMin = 100;
         private const int BpmQueryMax = 200;
         private const int BpmTolerance = 10;
-        private const int RecommendationCacheTtlMinutes = 15;
+        private const int RecommendationCacheTtlMinutes = 60;
 
         private static readonly HashSet<string> TopLevelAllowed = new(StringComparer.Ordinal)
         {
