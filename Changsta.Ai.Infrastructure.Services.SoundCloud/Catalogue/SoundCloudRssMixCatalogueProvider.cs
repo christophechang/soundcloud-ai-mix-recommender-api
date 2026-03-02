@@ -84,6 +84,7 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
                 BpmMin = mixSchema.BpmMin,
                 BpmMax = mixSchema.BpmMax,
                 Moods = mixSchema.Moods,
+                PublishedAt = item.PublishDate == default ? null : item.PublishDate,
             };
 
             return mix;
