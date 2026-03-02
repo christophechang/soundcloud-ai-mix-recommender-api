@@ -1,22 +1,23 @@
 param location string
 param webAppName string
 param appServicePlanId string
-param aspnetcoreEnvironment string
+param isLinux bool = false
+param alwaysOn bool = false
+param appSettings array = []
 
 resource webApp 'Microsoft.Web/sites@2023-12-01' = {
   name: webAppName
   location: location
-  kind: 'app'
+  kind: isLinux ? 'app,linux' : 'app'
   properties: {
     serverFarmId: appServicePlanId
     httpsOnly: true
     siteConfig: {
-      alwaysOn: false
+      alwaysOn: alwaysOn
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
-      appSettings: [
-        { name: 'ASPNETCORE_ENVIRONMENT', value: aspnetcoreEnvironment }
-      ]
+      linuxFxVersion: isLinux ? 'DOTNETCORE|10.0' : ''
+      appSettings: appSettings
     }
   }
 }

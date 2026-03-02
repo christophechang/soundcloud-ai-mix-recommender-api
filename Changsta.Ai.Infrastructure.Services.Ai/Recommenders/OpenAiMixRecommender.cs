@@ -281,6 +281,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             AppendLine("- Genre query (e.g. \"dnb mixes\", \"house music\", \"ukg\"): prioritize genre field, then related moods and intro text. Return ALL mixes whose genre matches, not just the first or most recent.");
             AppendLine("- Artist/track query (e.g. \"mixes with Calibre\", \"anything with Noisia\"): search each mix's tracklist for the artist or track name (substring match). Also check intro text. Return ALL mixes that contain the artist/track.");
             AppendLine("- Mood query (e.g. \"something dark and heavy\", \"uplifting vibes\"): prioritize moods field, then energy, then intro text.");
+            AppendLine("- Scenario/activity query (e.g. \"driving a car\", \"cooking in the kitchen\", \"working out\", \"late night session\", \"morning run\", \"studying\"): interpret the scenario as a set of mood and energy signals BEFORE searching. Map the activity to likely mood and energy tokens that exist in the MIX blocks (e.g. driving/commuting → driving, rolling; gym/workout/running → aggressive, energetic; late night/studying/focus → dark, mellow, deep; cooking/casual/background → upbeat, chill; party/dancing → high, euphoric). Then match using those inferred mood tokens and energy values. The why anchors must still be verbatim tokens from that mix's moods or energy fields — never use the scenario description itself as an anchor.");
             AppendLine("- Tempo/BPM query: if the user question is a bare number between 100 and 200 (e.g. \"130\", \"174\") or a number with 'bpm' suffix (e.g. \"130bpm\", \"170 bpm\"), treat it as a BPM query. Match mixes whose bpm value or bpm range includes or is close to that number. Do NOT interpret bare numbers as genre or mood signals.");
             AppendLine("- Mixed query (e.g. \"dark dnb with Noisia around 174bpm\"): weight across all dimensions, favour mixes matching the most dimensions.");
             AppendLine("- Decompose the user question into its component signals before searching.");
@@ -290,7 +291,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             AppendLine("Rules:");
             AppendLine("1) You must only use mix ids provided in the MIX blocks.");
             AppendLine("2) Output strict JSON only, matching the JSON schema exactly, no extra properties, and do not include ``` anywhere.");
-            AppendLine("3) Do not use outside knowledge. Only use evidence from the same mix block you are recommending.");
+            AppendLine("3) You may use your knowledge to interpret the user's query (e.g. inferring moods from a scenario like \"driving\" or \"cooking\"). However, all evidence in the why anchors MUST come only from the same mix block you are recommending — never fabricate anchors.");
             AppendLine("4) Evidence may come from intro, genre, energy, bpm, moods, or tracklist.");
             AppendLine("5) Every why string MUST be a quoted ANCHOR copied verbatim from that same mix block, and nothing else.");
             AppendLine("6) Allowed why formats are exactly: \"ANCHOR\" or \"ANCHOR\".");
@@ -305,7 +306,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             AppendLine("11) results length must be between 0 and " + maxResults + ".");
             AppendLine("12) why must contain 1 to 4 strings.");
             AppendLine("13) confidence must be between 0 and 1.");
-            AppendLine("14) title and url are REQUIRED for each result, and MUST be copied exactly from the same MIX block (no edits).");
+            AppendLine("14) title and url are REQUIRED for each result, and MUST be copied character-for-character from the same MIX block. Do not rephrase, change punctuation, alter apostrophes or quotes, change capitalisation, or edit in any way. Any deviation will cause the response to be rejected.");
             AppendLine("15) clarifyingQuestion must be null.");
             AppendLine("16) reason is REQUIRED for each result. It must be a 1-2 sentence natural-language explanation of why this mix matches the user question. Be specific and helpful. Maximum 300 characters.");
             AppendLine("17) reason is free-text and should reference the matching signals (genre, mood, artist, tempo) in a readable way. Do not just repeat the anchors.");
@@ -499,8 +500,8 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 if (!allowedById.TryGetValue(r.MixId, out var mix)) throw new InvalidOperationException("AI returned an unknown mixId.");
                 if (string.IsNullOrWhiteSpace(r.Title)) throw new InvalidOperationException("AI returned a result with no title.");
                 if (string.IsNullOrWhiteSpace(r.Url)) throw new InvalidOperationException("AI returned a result with no url.");
-                if (!string.Equals(r.Title, mix.Title, StringComparison.Ordinal)) throw new InvalidOperationException("AI returned a title that does not match the MIX block.");
-                if (!string.Equals(r.Url, mix.Url, StringComparison.Ordinal)) throw new InvalidOperationException("AI returned a url that does not match the MIX block.");
+                if (!string.Equals(r.Title, mix.Title, StringComparison.Ordinal)) throw new InvalidOperationException($"AI returned a title that does not match the MIX block for mixId='{r.MixId}'. Copy the title character-for-character from the MIX block — do not paraphrase, change punctuation, or alter any character.");
+                if (!string.Equals(r.Url, mix.Url, StringComparison.Ordinal)) throw new InvalidOperationException($"AI returned a url that does not match the MIX block for mixId='{r.MixId}'. Copy the url character-for-character from the MIX block.");
                 if (string.IsNullOrWhiteSpace(r.Reason)) throw new InvalidOperationException("AI returned a result with no reason.");
                 if (r.Reason.Length > 300) throw new InvalidOperationException("AI returned a reason that is too long.");
                 if (r.Why is null || r.Why.Count < 1 || r.Why.Count > 4) throw new InvalidOperationException("AI returned invalid why list.");
