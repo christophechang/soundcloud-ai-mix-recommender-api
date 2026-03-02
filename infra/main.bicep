@@ -7,22 +7,31 @@ param environment string
 
 param location string = 'westeurope'
 
-// Enforced Free tier to guarantee zero cost on PAYG subscription
+// Dev/QA: pass 'F1' to create an inline Free-tier Windows plan.
+// Prod: leave at default — the inline plan is skipped when sharedPlanName is set.
 @allowed([
   'F1'
 ])
-param planSkuName string
+param planSkuName string = 'F1'
+
+// Declare planSkuTier so .bicepparam files that pass it are valid.
+// Unused for prod (sharedPlanName takes effect); used for dev/qa inline plan.
+param planSkuTier string = 'Free'
+
+// Provide the name of the pre-existing shared App Service Plan for prod.
+// Leave empty for dev/qa — an F1 Windows plan is created inline instead.
+param sharedPlanName string = ''
 
 var namePrefix = 'changsta-ai-mixrec'
-var planName = 'asp-${namePrefix}-${environment}'
 var webAppName = '${namePrefix}-${environment}'
 var storageAccountName = 'stchangstamixrec${environment}'
+var useSharedPlan = !empty(sharedPlanName)
+var aspnetcoreEnvironment = environment == 'prod' ? 'Production' : (environment == 'qa' ? 'QA' : 'Development')
 
-// Basic tier name for B1, Free tier name for F1
-var planSkuTier = planSkuName == 'B1' ? 'Basic' : 'Free'
-
-resource plan 'Microsoft.Web/serverfarms@2022-09-01' = {
-  name: planName
+// Dev/QA only: F1 Windows plan created inline.
+// Skipped for prod — the shared B1 Linux plan (infra/shared/plan-prod.bicep) is used instead.
+resource inlinePlan 'Microsoft.Web/serverfarms@2022-09-01' = if (!useSharedPlan) {
+  name: 'asp-${namePrefix}-${environment}'
   location: location
   sku: {
     name: planSkuName
@@ -34,38 +43,12 @@ resource plan 'Microsoft.Web/serverfarms@2022-09-01' = {
   }
 }
 
-resource web 'Microsoft.Web/sites@2022-09-01' = {
-  name: webAppName
-  location: location
-  properties: {
-    serverFarmId: plan.id
-    httpsOnly: true
-    siteConfig: {
-      // AlwaysOn only really matters for paid SKUs
-      alwaysOn: planSkuName == 'B1'
-      minTlsVersion: '1.2'
-      ftpsState: 'Disabled'
-      appSettings: [
-        {
-          name: 'ASPNETCORE_ENVIRONMENT'
-          value: environment == 'prod' ? 'Production' : (environment == 'qa' ? 'QA' : 'Development')
-        }
-        {
-          name: 'Azure__BlobCatalog__ConnectionString'
-          value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};AccountKey=${storageAccount.listKeys().keys[0].value};EndpointSuffix=${az.environment().suffixes.storage}'
-        }
-        {
-          name: 'Azure__BlobCatalog__ContainerName'
-          value: 'mix-catalog'
-        }
-        {
-          name: 'Azure__BlobCatalog__BlobName'
-          value: 'catalog.json'
-        }
-      ]
-    }
-  }
-}
+// Resolve the plan ID:
+//   prod  → shared plan (pre-deployed via infra/shared/plan-prod.bicep)
+//   dev/qa → inline F1 plan above
+var resolvedPlanId = useSharedPlan
+  ? resourceId('Microsoft.Web/serverfarms', sharedPlanName)
+  : inlinePlan.id
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: storageAccountName
@@ -95,7 +78,36 @@ resource catalogContainer 'Microsoft.Storage/storageAccounts/blobServices/contai
   }
 }
 
-output webAppName string = web.name
-output defaultHostName string = web.properties.defaultHostName
-output appServicePlanName string = plan.name
+module webapp 'modules/webapp.bicep' = {
+  name: 'deploy-webapp-${environment}'
+  params: {
+    location: location
+    webAppName: webAppName
+    appServicePlanId: resolvedPlanId
+    isLinux: useSharedPlan
+    alwaysOn: useSharedPlan
+    appSettings: [
+      {
+        name: 'ASPNETCORE_ENVIRONMENT'
+        value: aspnetcoreEnvironment
+      }
+      {
+        name: 'Azure__BlobCatalog__ConnectionString'
+        value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};AccountKey=${storageAccount.listKeys().keys[0].value};EndpointSuffix=${az.environment().suffixes.storage}'
+      }
+      {
+        name: 'Azure__BlobCatalog__ContainerName'
+        value: 'mix-catalog'
+      }
+      {
+        name: 'Azure__BlobCatalog__BlobName'
+        value: 'catalog.json'
+      }
+    ]
+  }
+}
+
+output webAppName string = webapp.outputs.webAppName
+output defaultHostName string = webapp.outputs.defaultHostName
+output appServicePlanId string = resolvedPlanId
 output storageAccountName string = storageAccount.name

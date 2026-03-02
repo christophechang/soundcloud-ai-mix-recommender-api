@@ -4,6 +4,6 @@
   "parameters": {
     "environment": { "value": "prod" },
     "location": { "value": "westeurope" },
-    "planSkuName": { "value": "F1" }
+    "sharedPlanName": { "value": "asp-changsta-ai-mixrec-prod" }
   }
 }
