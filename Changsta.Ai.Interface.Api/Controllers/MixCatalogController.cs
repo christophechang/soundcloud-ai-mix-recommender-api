@@ -102,6 +102,28 @@ namespace Changsta.Ai.Interface.Api.Controllers
             return Ok(BuildPage(allEntries, page, pageSize));
         }
 
+        [HttpGet("mixes")]
+        public async Task<IActionResult> GetMixesAsync(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = DefaultPageSize,
+            CancellationToken cancellationToken = default)
+        {
+            if (page < 1 || pageSize < 1 || pageSize > MaxPageSize)
+            {
+                return BadRequest(new { error = "page must be >= 1 and pageSize must be between 1 and 100." });
+            }
+
+            IReadOnlyList<Mix> mixes = await _catalogueProvider
+                .GetLatestAsync(CatalogMaxItems, cancellationToken)
+                .ConfigureAwait(false);
+
+            Mix[] ordered = mixes
+                .OrderByDescending(m => m.PublishedAt ?? DateTimeOffset.MinValue)
+                .ToArray();
+
+            return Ok(BuildPage(ordered, page, pageSize));
+        }
+
         [HttpGet("artists")]
         public async Task<IActionResult> GetArtistsAsync(
             [FromQuery] int page = 1,

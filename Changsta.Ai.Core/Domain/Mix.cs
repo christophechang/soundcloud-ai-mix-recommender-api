@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace Changsta.Ai.Core.Domain
 {
@@ -23,5 +24,7 @@ namespace Changsta.Ai.Core.Domain
         public int? BpmMax { get; init; }
 
         public IReadOnlyList<string> Moods { get; init; } = Array.Empty<string>();
+
+        public DateTimeOffset? PublishedAt { get; init; }
     }
 }
