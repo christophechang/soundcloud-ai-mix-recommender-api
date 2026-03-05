@@ -78,6 +78,9 @@ WebDeployPackage
 # Click-Once directory
 publish
 
+# Claude Folder
+.claude/
+
 # Publish Web Output
 *.Publish.xml
 
