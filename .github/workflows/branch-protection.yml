@@ -13,4 +13,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Branch protection check
-        run: echo "Branch protection check passed."
+        run: echo "Branch protection check passed." 
