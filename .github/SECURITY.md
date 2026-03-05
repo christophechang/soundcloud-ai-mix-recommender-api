@@ -8,7 +8,7 @@ If you discover a security vulnerability in this project, please report it priva
 Go to the repository → **Security** tab → **Report a vulnerability**
 
 If you cannot use GitHub's reporting feature, please contact:  
-**[add your email address or contact link here]**
+**info@changsta.com**
 
 When reporting a vulnerability, please include:
 
