@@ -17,6 +17,29 @@ The guiding principle: **`reason` is creative; `why` is evidence. Both are requi
 
 ---
 
+## Why I Built This
+
+I'm a long-time DJ and music collector, and over the years I've accumulated a large catalog of mixes and tracks across genres such as Drum & Bass, Breakbeat, House, UK Garage, and UK Bass.
+
+Finding the right mix for a specific mood, tempo, or artist often requires manually scanning tracklists and remembering which mixes contain certain sounds or DJs. I built this project to explore whether a hybrid recommendation engine could solve that problem.
+
+The goal of the system is to allow natural language queries such as:
+
+“dark rolling dnb around 174 bpm”
+“something with Calibre or atmospheric liquid”
+“breakbeat with a rave vibe”
+
+The API interprets these queries, filters a catalog of mixes sourced from SoundCloud RSS feeds, and then uses a combination of deterministic ranking and AI reasoning to recommend the best matches.
+
+This project serves two purposes:
+
+- **Practical tool** – helping me and others rediscover mixes based on musical characteristics.
+- **Engineering experiment** – exploring how traditional backend architecture can integrate AI reasoning in a controlled, explainable way.
+
+Rather than relying purely on AI, the system combines deterministic filtering with AI-assisted interpretation to keep recommendations predictable, efficient, and transparent.
+
+---
+
 ## How It Works
 
 The API feeds up to 100 mixes from a persistent Azure Blob Storage catalog (supplemented by the live SoundCloud RSS feed) into a single OpenAI ChatCompletion call, with a structured prompt that:
