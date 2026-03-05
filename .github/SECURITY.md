@@ -4,30 +4,68 @@
 
 If you discover a security vulnerability in this project, please report it privately rather than opening a public issue.
 
-**Use GitHub's private vulnerability reporting:**
-Repository → Security tab → "Report a vulnerability"
+**Preferred method:** GitHub Private Vulnerability Reporting  
+Go to the repository → **Security** tab → **Report a vulnerability**
 
-Please include:
-- A description of the vulnerability and its potential impact
-- Steps to reproduce
-- Any suggested fixes if you have them
+If you cannot use GitHub's reporting feature, please contact:  
+**[add your email address or contact link here]**
 
-I'll aim to respond within a few days. This is a personal project, so please bear that in mind when setting expectations on response time.
+When reporting a vulnerability, please include:
+
+- A description of the vulnerability and its potential impact  
+- Steps to reproduce the issue  
+- Proof of concept or example requests if possible  
+- Any suggested fixes or mitigation ideas (optional)
+
+I will acknowledge reports when I can. This is a personal project, so response times may vary.
+
+---
 
 ## Scope
 
-This is a personal portfolio project. It is a read-only recommendation API backed by a public SoundCloud RSS feed. There is no user authentication, no user data stored, and no payment processing.
+This project is a **personal portfolio recommendation API** backed by a **public SoundCloud RSS feed**.
 
-In scope:
-- The `/api/mixes/recommend` and `/api/catalog` endpoints
-- Authentication or authorisation bypass (if any)
-- Injection vulnerabilities
+The application:
 
-Out of scope:
-- Rate limiting bypass (already mitigated)
-- Denial of service against a free-tier App Service
-- Social engineering
+- Stores **no user data**
+- Has **no authentication system**
+- Performs **no payment processing**
+
+### In Scope
+
+Security issues affecting the API itself, including:
+
+- `/api/mixes/recommend`
+- `/api/catalog`
+- Injection vulnerabilities (SQL, command, template, etc.)
+- Server-side request forgery (SSRF)
+- Deserialization vulnerabilities
+- Security misconfiguration that could expose secrets or infrastructure
+- Unexpected access to non-public endpoints or internal resources
+
+### Out of Scope
+
+The following are generally out of scope:
+
+- Denial-of-service or load testing against the service
+- Social engineering attacks
+- Vulnerabilities in third-party services or providers outside this project
+
+---
+
+## Testing Guidelines
+
+Please follow responsible testing practices:
+
+- Do not intentionally degrade service availability
+- Avoid generating excessive traffic
+- Limit testing to requests you control
+- Do not attempt to access or modify data that does not belong to you
+
+---
 
 ## Disclosure
 
-I follow coordinated disclosure. Please allow reasonable time to address the issue before any public disclosure.
+This project follows **coordinated disclosure**.
+
+Please allow reasonable time for the issue to be investigated and resolved before making the vulnerability public. If a disclosure timeline is needed, it can be agreed upon during the reporting process.
