@@ -169,6 +169,49 @@ namespace Changsta.Ai.Interface.Api.Controllers
             return Ok(BuildPage(allEntries, page, pageSize));
         }
 
+        [HttpGet("tracks")]
+        public async Task<IActionResult> GetTracksAsync(
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 50,
+            CancellationToken cancellationToken = default)
+        {
+            if (page < 1 || pageSize < 1 || pageSize > MaxPageSize)
+            {
+                return BadRequest(new { error = "page must be >= 1 and pageSize must be between 1 and 100." });
+            }
+
+            IReadOnlyList<Mix> mixes = await _catalogueProvider
+                .GetLatestAsync(CatalogMaxItems, cancellationToken)
+                .ConfigureAwait(false);
+
+            TrackSummary[] allEntries = mixes
+                .SelectMany(m => m.Tracklist.Select(t => (Mix: m, Track: t)))
+                .GroupBy(a => (
+                    Artist: a.Track.Artist.Trim().ToLowerInvariant(),
+                    Title: a.Track.Title.Trim().ToLowerInvariant()))
+                .Select(g =>
+                {
+                    Track first = g.First().Track;
+                    return new TrackSummary
+                    {
+                        Artist = first.Artist.Trim(),
+                        Title = first.Title.Trim(),
+                        RecurrenceCount = g.Count(),
+                        GenresSeen = g
+                            .Select(a => NormalizeGenre(a.Mix.Genre))
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+                            .ToArray(),
+                    };
+                })
+                .OrderByDescending(t => t.RecurrenceCount)
+                .ThenBy(t => t.Artist, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            return Ok(BuildPage(allEntries, page, pageSize));
+        }
+
         [HttpGet("artists/{name}/mixes")]
         public async Task<IActionResult> GetMixesByArtistAsync(
             [FromRoute] string name,
@@ -245,6 +288,17 @@ namespace Changsta.Ai.Interface.Api.Controllers
             required public string Genre { get; init; }
 
             required public ArtistEntry[] Artists { get; init; }
+        }
+
+        public sealed class TrackSummary
+        {
+            required public string Artist { get; init; }
+
+            required public string[] GenresSeen { get; init; }
+
+            required public int RecurrenceCount { get; init; }
+
+            required public string Title { get; init; }
         }
     }
 }
