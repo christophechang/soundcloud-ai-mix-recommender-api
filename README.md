@@ -187,6 +187,115 @@ Uses OIDC authentication with Azure Service Principal and environment-scoped sec
 
 ---
 
+## SoundCloud Integration
+
+### RSS Feed Limitations
+
+The API pulls mix metadata from your SoundCloud profile via the public RSS feed. However, **the RSS feed does not guarantee a full pull of all mixes** — SoundCloud typically exposes only the most recent 20–50 tracks, regardless of how many you have uploaded. For large catalogs this means a significant portion of your mixes will not appear in the RSS feed at all.
+
+For example, with 100+ mixes uploaded, the RSS feed may return only ~50. The remaining mixes must be seeded manually into the Azure Blob Storage catalog (see [Seeding the Catalog](#seeding-the-catalog) below). Once the initial load is done, the API will automatically discover and persist any new mixes going forward on each cache refresh.
+
+---
+
+### Mix Description Format
+
+All structured metadata is extracted from the SoundCloud track description. Each mix description must follow this three-part format exactly:
+
+**1. Short intro**
+
+A 1–2 sentence description of the mix's feel, sound, and progression. This text is indexed and used as an evidence anchor for AI reasoning (`why` fields).
+
+**2. Tracklisting**
+
+Must be headed with the exact label `Tracklisting` (no colon) on its own line, followed by one track per line in `Artist - Title` format:
+
+```
+Tracklisting
+Higgo - 3K (Instrumental)
+Pa Salieu - Belly (Bakey Edit)
+Gorgon City - 5AM At Bagleys (Extended Mix)
+```
+
+Every track line is stored individually and can be used as a verbatim evidence anchor during recommendation validation.
+
+**3. JSON metadata snippet**
+
+A single line at the bottom of the description using the `[changsta:mix:v1 {...}]` tag:
+
+```
+[changsta:mix:v1 {"genre":"ukg","energy":"high","bpm":[132,140],"moods":["groovy","driving","dark","warehouse","energetic"]}]
+```
+
+| Property | Type | Description |
+|---|---|---|
+| `genre` | string | Primary genre tag (e.g. `"dnb"`, `"ukg"`, `"breakbeat"`, `"house"`) |
+| `energy` | string | Energy level: `"low"`, `"medium"`, `"high"` |
+| `bpm` | [int, int] | BPM range as a two-element array, e.g. `[132, 140]` |
+| `moods` | string[] | 2–5 mood tokens describing the vibe (e.g. `"dark"`, `"driving"`, `"warehouse"`, `"liquid"`) |
+
+If the JSON snippet is missing or malformed, the mix will still appear in the catalog but without structured metadata, which significantly reduces the quality of AI recommendations for that mix.
+
+**Full example:**
+
+```
+The Flex Mix 5 starts off polite with that UKG swing, then gradually heads towards warehouse territory
+
+Tracklisting
+Higgo - 3K (Instrumental)
+Pa Salieu - Belly (Bakey Edit)
+Gorgon City - 5AM At Bagleys (Extended Mix)
+Shermanology, Champion - Badder
+THIRTZY - Chit Chat
+Ed Case, Ms Dynamite - Hype (Ed Case Re-Fix) (Dirty) 1B 137
+Prozak - Yush
+Eloq, TALONS - 4 Million (Original Mix)
+Bodhi - T.O.P.
+MC DT, Silva Bumpa - Doin' It feat. MC DT (Original Mix)
+Gorgon City, Interplanetary Criminal - Contact (Extended)
+Andre Zimmer - Watch Diss (Original Mix)
+DJ Hybrid - Soldier Original Mix
+Hirobbie - Taste (Original Mix)
+
+[changsta:mix:v1 {"genre":"ukg","energy":"high","bpm":[132,140],"moods":["groovy","driving","dark","warehouse","energetic"]}]
+```
+
+---
+
+### Seeding the Catalog
+
+For mixes that fall outside the RSS window, use the included `catalog_import_template.csv` in the project root to prepare your back-catalog data, then upload the resulting JSON to the `catalog.json` blob in Azure Blob Storage. Once uploaded, the API will merge blob and RSS data on the next cache refresh and persist any new RSS discoveries back to blob automatically.
+
+---
+
+## TuneFinder Integration
+
+This API is one half of a larger music discovery system called **[TuneFinder](https://www.soltechconsulting.co.uk/case-studies/tunefinder)**.
+
+### What TuneFinder Does
+
+TuneFinder automates DJ crate-digging. It aggregates ~2,000 new release candidates each week across Beatport, Juno Download, Bandcamp, Traxsource, Resident Advisor, and Subsurface Selections, then scores and ranks them to surface 15–20 relevant tracks — reducing what was several hours of manual discovery down to a five-minute weekly read.
+
+### Role of This API
+
+This API provides the **taste layer** that TuneFinder's scoring engine runs against. Specifically, it exposes:
+
+- **A deduplicated track catalog** — every track that has appeared across all published mixes, sourced from the blob-backed catalog described above. TuneFinder uses this to build a known-track exclusion set, preventing recommendations for music already owned.
+- **Artist affinity data** — artists appearing across multiple mixes carry higher recurrence weight (3× multiplier) in TuneFinder's scoring signals. The more frequently an artist appears in the mix catalog, the stronger their influence on new release rankings.
+
+The `GET /api/catalog/tracks` endpoint serves this data directly.
+
+### Discovery → Taste → Report
+
+TuneFinder's weekly pipeline works in three stages:
+
+1. **Discovery** — Six parallel source fetchers scrape new releases and deduplicate cross-source candidates
+2. **Scoring** — Seven weighted signals are applied, with artist affinity (derived from this API's catalog) being the strongest predictor
+3. **Report generation** — A two-stage LLM pipeline writes per-track reasoning (MiniMax M2.5 / Groq fallback) then formats the full Discord report in Claude Sonnet's voice
+
+This API's role is entirely in stage 2 — it is the source of truth for what has already been played and who the trusted artists are.
+
+---
+
 ## Running Locally
 
 ### 1. Install and start Azurite
