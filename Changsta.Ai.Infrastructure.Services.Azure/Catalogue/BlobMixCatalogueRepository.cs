@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure;
+using Azure.Identity;
 using Azure.Storage.Blobs;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Infrastructure.Services.Azure.Configuration;
@@ -35,6 +36,15 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             var resolved = options?.Value ?? throw new ArgumentNullException(nameof(options));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
+            bool hasConnectionString = !string.IsNullOrWhiteSpace(resolved.ConnectionString);
+            bool hasServiceEndpoint = !string.IsNullOrWhiteSpace(resolved.ServiceEndpoint);
+
+            if (!hasConnectionString && !hasServiceEndpoint)
+            {
+                throw new InvalidOperationException(
+                    "Either Azure:BlobCatalog:ConnectionString or Azure:BlobCatalog:ServiceEndpoint must be configured.");
+            }
+
             if (string.IsNullOrWhiteSpace(resolved.ContainerName))
             {
                 throw new InvalidOperationException("Azure:BlobCatalog:ContainerName is not configured.");
@@ -45,23 +55,15 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 throw new InvalidOperationException("Azure:BlobCatalog:BlobName is not configured.");
             }
 
-            if (!string.IsNullOrWhiteSpace(resolved.ConnectionString))
+            if (hasServiceEndpoint)
             {
-                _containerClient = new BlobContainerClient(resolved.ConnectionString, resolved.ContainerName);
-            }
-            else if (!string.IsNullOrWhiteSpace(resolved.ServiceEndpoint))
-            {
-                // Production path: Managed Identity via DefaultAzureCredential.
-                // Requires Azure.Identity package — add Azure.Identity to this project to enable.
-                throw new InvalidOperationException(
-                    "Azure:BlobCatalog:ServiceEndpoint is set but Managed Identity authentication is not yet implemented. " +
-                    "Add the Azure.Identity package and replace this throw with: " +
-                    "new BlobContainerClient(new Uri(resolved.ServiceEndpoint + \"/\" + resolved.ContainerName), new DefaultAzureCredential())");
+                var containerUri = new Uri(
+                    resolved.ServiceEndpoint!.TrimEnd('/') + "/" + resolved.ContainerName);
+                _containerClient = new BlobContainerClient(containerUri, new DefaultAzureCredential());
             }
             else
             {
-                throw new InvalidOperationException(
-                    "Azure:BlobCatalog: either ConnectionString (dev) or ServiceEndpoint (prod) must be configured.");
+                _containerClient = new BlobContainerClient(resolved.ConnectionString, resolved.ContainerName);
             }
 
             _blobName = resolved.BlobName;

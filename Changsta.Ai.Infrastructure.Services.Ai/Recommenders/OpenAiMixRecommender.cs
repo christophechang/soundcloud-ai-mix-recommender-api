@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -213,21 +214,28 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
                     return results;
                 }
-                catch (Exception ex) when (ex is InvalidOperationException or JsonException)
+                catch (Exception ex) when (ex is InvalidOperationException or JsonException or HttpRequestException)
                 {
                     lastException = ex;
                     this.logger.LogWarning(
                         ex,
-                        "AI recommendation attempt {Attempt}/{MaxAttempts} failed validation.",
+                        "AI recommendation attempt {Attempt}/{MaxAttempts} failed.",
                         attempt,
                         MaxRetryAttempts);
 
-                    if (attempt < MaxRetryAttempts && rawContent.Length > 0)
+                    if (attempt < MaxRetryAttempts)
                     {
-                        messages.Add(new AssistantChatMessage(rawContent));
-                        messages.Add(new UserChatMessage(
-                            "Your response failed validation: " + ex.Message +
-                            " Fix only the specific problem and respond with strict JSON only."));
+                        await Task.Delay(
+                            TimeSpan.FromSeconds(Math.Pow(2, attempt - 1)),
+                            cancellationToken).ConfigureAwait(false);
+
+                        if (rawContent.Length > 0)
+                        {
+                            messages.Add(new AssistantChatMessage(rawContent));
+                            messages.Add(new UserChatMessage(
+                                "Your response failed validation: " + ex.Message +
+                                " Fix only the specific problem and respond with strict JSON only."));
+                        }
                     }
                 }
             }
@@ -245,6 +253,12 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
         internal static string BuildPrompt(string question, IReadOnlyList<Mix> mixes, int maxResults, int? detectedBpm = null, string? detectedGenre = null, bool isPureGenreQuery = false)
         {
+            // Strip prompt-delimiter sequences to prevent fence breakout.
+            question = question
+                .Replace(">>>", string.Empty, StringComparison.Ordinal)
+                .Replace("<<<", string.Empty, StringComparison.Ordinal)
+                .Trim();
+
             var sb = new StringBuilder();
 
             void AppendLine(string? s = null) => sb.AppendLine(s ?? string.Empty);
