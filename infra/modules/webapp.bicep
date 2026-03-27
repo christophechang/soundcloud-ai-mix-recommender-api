@@ -9,6 +9,9 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
   name: webAppName
   location: location
   kind: isLinux ? 'app,linux' : 'app'
+  identity: {
+    type: 'SystemAssigned'
+  }
   properties: {
     serverFarmId: appServicePlanId
     httpsOnly: true
@@ -24,3 +27,4 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
 
 output webAppName string = webApp.name
 output defaultHostName string = webApp.properties.defaultHostName
+output principalId string = webApp.identity.principalId

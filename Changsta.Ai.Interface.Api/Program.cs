@@ -45,16 +45,29 @@ builder.Services.AddCors(options =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddApplicationInsightsTelemetry();
+
+builder.Services.AddHealthChecks();
+
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient("SoundCloudRss", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
 builder.Services.AddMemoryCache();
+
+bool trustCloudflareHeader = builder.Configuration.GetValue<bool>("RateLimiting:TrustCloudflareHeader");
 
 builder.Services.AddRateLimiter(options =>
 {
     // 10 requests per minute per client IP.
-    // Uses CF-Connecting-IP (set by Cloudflare) with a fallback to the TCP remote address.
+    // CF-Connecting-IP is only trusted when RateLimiting:TrustCloudflareHeader is true (prod only).
+    // In all other environments the TCP RemoteIpAddress is used directly.
     options.AddPolicy("recommend", httpContext =>
         RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: httpContext.Request.Headers["CF-Connecting-IP"].FirstOrDefault()
+            partitionKey: (trustCloudflareHeader
+                ? httpContext.Request.Headers["CF-Connecting-IP"].FirstOrDefault()
+                : null)
                 ?? httpContext.Connection.RemoteIpAddress?.ToString()
                 ?? "unknown",
             factory: _ => new FixedWindowRateLimiterOptions
@@ -93,7 +106,7 @@ builder.Services.AddScoped<SoundCloudRssMixCatalogueProvider>(sp =>
         ?? throw new InvalidOperationException("SoundCloud:RssUrl is not configured.");
 
     return new SoundCloudRssMixCatalogueProvider(
-        httpClientFactory.CreateClient(),
+        httpClientFactory.CreateClient("SoundCloudRss"),
         rssUrl,
         cache);
 });
@@ -132,5 +145,7 @@ app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapControllers();
+
+app.MapHealthChecks("/health");
 
 app.Run();

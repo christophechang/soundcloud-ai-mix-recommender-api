@@ -14,6 +14,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
     {
         private const string CacheKey = "blob_catalog_";
         private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(1);
+        private static readonly SemaphoreSlim LoadSemaphore = new SemaphoreSlim(1, 1);
 
         private readonly IMixCatalogueProvider _innerProvider;
         private readonly IBlobMixCatalogueRepository _repository;
@@ -39,34 +40,49 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 return cached.Count > maxItems ? cached.Take(maxItems).ToArray() : cached;
             }
 
-            IReadOnlyList<Mix> blobMixes = await _repository
-                .ReadAsync(cancellationToken)
-                .ConfigureAwait(false);
+            await LoadSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-            IReadOnlyList<Mix> rssMixes = await FetchRssSafeAsync(cancellationToken)
-                .ConfigureAwait(false);
-
-            IReadOnlyList<Mix> merged = MergeCatalogs(blobMixes, rssMixes);
-
-            int newDiscoveries = CountNewDiscoveries(blobMixes, rssMixes);
-            int updatedEntries = CountUpdatedEntries(blobMixes, rssMixes);
-
-            if (newDiscoveries > 0 || updatedEntries > 0)
+            try
             {
-                _logger.LogInformation(
-                    "Writing blob catalog — {NewCount} new mixes, {UpdateCount} updated entries.",
-                    newDiscoveries,
-                    updatedEntries);
+                // Re-check after acquiring the semaphore — a concurrent request may have already loaded.
+                if (_cache.TryGetValue(CacheKey, out cached) && cached is not null)
+                {
+                    return cached.Count > maxItems ? cached.Take(maxItems).ToArray() : cached;
+                }
 
-                await _repository.WriteAsync(merged, cancellationToken).ConfigureAwait(false);
+                IReadOnlyList<Mix> blobMixes = await _repository
+                    .ReadAsync(cancellationToken)
+                    .ConfigureAwait(false);
+
+                IReadOnlyList<Mix> rssMixes = await FetchRssSafeAsync(cancellationToken)
+                    .ConfigureAwait(false);
+
+                IReadOnlyList<Mix> merged = MergeCatalogs(blobMixes, rssMixes);
+
+                int newDiscoveries = CountNewDiscoveries(blobMixes, rssMixes);
+                int updatedEntries = CountUpdatedEntries(blobMixes, rssMixes);
+
+                if (newDiscoveries > 0 || updatedEntries > 0)
+                {
+                    _logger.LogInformation(
+                        "Writing blob catalog — {NewCount} new mixes, {UpdateCount} updated entries.",
+                        newDiscoveries,
+                        updatedEntries);
+
+                    await _repository.WriteAsync(merged, cancellationToken).ConfigureAwait(false);
+                }
+
+                _cache.Set(CacheKey, merged, new MemoryCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = CacheTtl,
+                });
+
+                return merged.Count > maxItems ? merged.Take(maxItems).ToArray() : merged;
             }
-
-            _cache.Set(CacheKey, merged, new MemoryCacheEntryOptions
+            finally
             {
-                AbsoluteExpirationRelativeToNow = CacheTtl,
-            });
-
-            return merged.Count > maxItems ? merged.Take(maxItems).ToArray() : merged;
+                LoadSemaphore.Release();
+            }
         }
 
         private static IReadOnlyList<Mix> MergeCatalogs(

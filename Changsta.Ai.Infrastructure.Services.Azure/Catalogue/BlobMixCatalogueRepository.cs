@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure;
+using Azure.Identity;
 using Azure.Storage.Blobs;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Infrastructure.Services.Azure.Configuration;
@@ -35,9 +36,13 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             var resolved = options?.Value ?? throw new ArgumentNullException(nameof(options));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-            if (string.IsNullOrWhiteSpace(resolved.ConnectionString))
+            bool hasConnectionString = !string.IsNullOrWhiteSpace(resolved.ConnectionString);
+            bool hasServiceEndpoint = !string.IsNullOrWhiteSpace(resolved.ServiceEndpoint);
+
+            if (!hasConnectionString && !hasServiceEndpoint)
             {
-                throw new InvalidOperationException("Azure:BlobCatalog:ConnectionString is not configured.");
+                throw new InvalidOperationException(
+                    "Either Azure:BlobCatalog:ConnectionString or Azure:BlobCatalog:ServiceEndpoint must be configured.");
             }
 
             if (string.IsNullOrWhiteSpace(resolved.ContainerName))
@@ -50,7 +55,17 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 throw new InvalidOperationException("Azure:BlobCatalog:BlobName is not configured.");
             }
 
-            _containerClient = new BlobContainerClient(resolved.ConnectionString, resolved.ContainerName);
+            if (hasServiceEndpoint)
+            {
+                var containerUri = new Uri(
+                    resolved.ServiceEndpoint!.TrimEnd('/') + "/" + resolved.ContainerName);
+                _containerClient = new BlobContainerClient(containerUri, new DefaultAzureCredential());
+            }
+            else
+            {
+                _containerClient = new BlobContainerClient(resolved.ConnectionString, resolved.ContainerName);
+            }
+
             _blobName = resolved.BlobName;
         }
 
