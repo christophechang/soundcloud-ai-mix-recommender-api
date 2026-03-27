@@ -25,6 +25,8 @@ param sharedPlanName string = ''
 var namePrefix = 'changsta-ai-mixrec'
 var webAppName = '${namePrefix}-${environment}'
 var storageAccountName = 'stchangstamixrec${environment}'
+var logAnalyticsName = 'log-${namePrefix}-${environment}'
+var appInsightsName = 'appi-${namePrefix}-${environment}'
 var useSharedPlan = !empty(sharedPlanName)
 var aspnetcoreEnvironment = environment == 'prod' ? 'Production' : (environment == 'qa' ? 'QA' : 'Development')
 
@@ -49,6 +51,27 @@ resource inlinePlan 'Microsoft.Web/serverfarms@2022-09-01' = if (!useSharedPlan)
 var resolvedPlanId = useSharedPlan
   ? resourceId('Microsoft.Web/serverfarms', sharedPlanName)
   : inlinePlan.id
+
+resource logAnalyticsWorkspace 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
+  name: logAnalyticsName
+  location: location
+  properties: {
+    sku: {
+      name: 'PerGB2018'
+    }
+    retentionInDays: 30
+  }
+}
+
+resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
+  name: appInsightsName
+  location: location
+  kind: 'web'
+  properties: {
+    Application_Type: 'web'
+    WorkspaceResourceId: logAnalyticsWorkspace.id
+  }
+}
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' = {
   name: storageAccountName
@@ -92,8 +115,8 @@ module webapp 'modules/webapp.bicep' = {
         value: aspnetcoreEnvironment
       }
       {
-        name: 'Azure__BlobCatalog__ConnectionString'
-        value: 'DefaultEndpointsProtocol=https;AccountName=${storageAccount.name};AccountKey=${storageAccount.listKeys().keys[0].value};EndpointSuffix=${az.environment().suffixes.storage}'
+        name: 'Azure__BlobCatalog__ServiceEndpoint'
+        value: storageAccount.properties.primaryEndpoints.blob
       }
       {
         name: 'Azure__BlobCatalog__ContainerName'
@@ -103,7 +126,28 @@ module webapp 'modules/webapp.bicep' = {
         name: 'Azure__BlobCatalog__BlobName'
         value: 'catalog.json'
       }
+      {
+        name: 'RateLimiting__TrustCloudflareHeader'
+        value: 'true'
+      }
+      {
+        name: 'ApplicationInsights__ConnectionString'
+        value: appInsights.properties.ConnectionString
+      }
     ]
+  }
+}
+
+// Grant the App Service's system-assigned identity permission to read and write blobs.
+var storageBlobDataContributorRoleId = 'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
+
+resource blobRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: storageAccount
+  name: guid(storageAccount.id, webAppName, storageBlobDataContributorRoleId)
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageBlobDataContributorRoleId)
+    principalId: webapp.outputs.principalId
+    principalType: 'ServicePrincipal'
   }
 }
 
@@ -111,3 +155,4 @@ output webAppName string = webapp.outputs.webAppName
 output defaultHostName string = webapp.outputs.defaultHostName
 output appServicePlanId string = resolvedPlanId
 output storageAccountName string = storageAccount.name
+output appInsightsName string = appInsights.name
