@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using System.Collections.Generic;
 
 namespace Changsta.Ai.Core.Dtos
 {
@@ -9,5 +7,7 @@ namespace Changsta.Ai.Core.Dtos
         required public IReadOnlyList<MixRecommendationResultDto> Results { get; init; }
 
         public string? ClarifyingQuestion { get; init; }
+
+        public int MaxResultsApplied { get; init; }
     }
 }

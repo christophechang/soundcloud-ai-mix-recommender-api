@@ -18,12 +18,16 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
 {
     internal sealed class BlobMixCatalogueRepository : IBlobMixCatalogueRepository
     {
+        private const int WriteFailureThreshold = 3;
+
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             PropertyNameCaseInsensitive = true,
             Converters = { new TrackListJsonConverter() },
         };
+
+        private static int _consecutiveWriteFailures;
 
         private readonly BlobContainerClient _containerClient;
         private readonly string _blobName;
@@ -98,6 +102,14 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
 
         public async Task WriteAsync(IReadOnlyList<Mix> mixes, CancellationToken cancellationToken)
         {
+            if (_consecutiveWriteFailures >= WriteFailureThreshold)
+            {
+                _logger.LogWarning(
+                    "Blob write circuit breaker open — skipping write after {Failures} consecutive failures.",
+                    _consecutiveWriteFailures);
+                return;
+            }
+
             try
             {
                 await _containerClient
@@ -120,10 +132,17 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 await blobClient
                     .UploadAsync(stream, overwrite: true, cancellationToken)
                     .ConfigureAwait(false);
+
+                System.Threading.Interlocked.Exchange(ref _consecutiveWriteFailures, 0);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to write blob catalog — merged result was still returned to caller.");
+                System.Threading.Interlocked.Increment(ref _consecutiveWriteFailures);
+                _logger.LogError(
+                    ex,
+                    "Failed to write blob catalog ({Failures}/{Threshold}) — merged result was still returned to caller.",
+                    _consecutiveWriteFailures,
+                    WriteFailureThreshold);
             }
         }
 

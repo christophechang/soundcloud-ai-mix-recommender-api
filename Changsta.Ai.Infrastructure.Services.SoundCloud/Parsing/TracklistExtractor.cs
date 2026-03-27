@@ -47,7 +47,7 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Parsing
 
                 if (separatorIndex < 0)
                 {
-                    break;
+                    continue;
                 }
 
                 string artist = line.Substring(0, separatorIndex).Trim();

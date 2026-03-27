@@ -20,12 +20,14 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
     public sealed partial class OpenAiMixRecommender : IMixAiRecommender
     {
         private const int MixesUpperBound = 100;
+        private const int MixesPromptBudget = 60;
+        private const int PromptCharBudget = 80_000;
         private const int TracklistUpperBound = 30;
         private const int IntroTextUpperBound = 220;
         private const int MoodsUpperBound = 20;
         private const int MaxRetryAttempts = 3;
-        private const int BpmQueryMin = 100;
-        private const int BpmQueryMax = 200;
+        private const int BpmQueryMin = 60;
+        private const int BpmQueryMax = 299;
         private const int BpmTolerance = 10;
         private const int RecommendationCacheTtlMinutes = 60;
 
@@ -46,10 +48,10 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
         };
 
         // Matches a BPM signal embedded in a longer question.
-        // Alt 1: context word + number 100-200  e.g. "around 130", "at 174", "~130"
-        // Alt 2: number 100-200 + "bpm" suffix  e.g. "130bpm", "174 bpm"
+        // Alt 1: context word + number 60-299  e.g. "around 130", "at 174", "~90"
+        // Alt 2: number 60-299 + "bpm" suffix  e.g. "130bpm", "90 bpm"
         private static readonly Regex BpmInMixedQueryPattern = new(
-            @"(?:around|at|about|@|~)\s*(1\d{2}|200)(?!\d)|(?<!\w)(1\d{2}|200)\s*bpm",
+            @"(?:around|at|about|@|~)\s*([6-9]\d|[1-2]\d{2})(?!\d)|(?<!\w)([6-9]\d|[1-2]\d{2})\s*bpm",
             RegexOptions.IgnoreCase | RegexOptions.Compiled,
             matchTimeout: TimeSpan.FromMilliseconds(100));
 
@@ -240,12 +242,9 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 }
             }
 
-            this.logger.LogError(
-                lastException,
-                "All {MaxAttempts} AI recommendation attempts failed. Returning empty results.",
-                MaxRetryAttempts);
-
-            return Array.Empty<MixAiRecommendation>();
+            throw new HttpRequestException(
+                "AI recommendation service is temporarily unavailable after all retry attempts.",
+                lastException);
         }
 
         private static string BuildCacheKey(string question, int maxResults) =>
@@ -332,11 +331,17 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             AppendLine("<<<");
             AppendLine(question);
             AppendLine(">>>");
+            // Guard against exceeding the model context window.
+            // Each mix is ~800 chars; 100 mixes × 800 ≈ 80k — cap at MixesPromptBudget if over limit.
+            IReadOnlyList<Mix> budgetedMixes = sb.Length + (mixes.Count * 800) > PromptCharBudget
+                ? mixes.Take(MixesPromptBudget).ToArray()
+                : mixes;
+
             AppendLine("Mixes:");
 
-            for (int i = 0; i < mixes.Count; i++)
+            for (int i = 0; i < budgetedMixes.Count; i++)
             {
-                var m = mixes[i];
+                var m = budgetedMixes[i];
 
                 string intro = TakePrefix(m.Description, IntroTextUpperBound);
                 string tracks = string.Join("\n", m.Tracklist.Take(TracklistUpperBound).Select(t => $"{t.Artist} - {t.Title}"));
@@ -359,7 +364,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 AppendLine(tracks);
                 AppendLine("END_MIX");
 
-                if (i < mixes.Count - 1) AppendLine();
+                if (i < budgetedMixes.Count - 1) AppendLine();
             }
 
             return sb.ToString().Trim();
@@ -462,7 +467,17 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
         internal static Mix[] FilterByGenre(IReadOnlyList<Mix> mixes, string genre)
         {
             return mixes
-                .Where(m => string.Equals(m.Genre, genre, StringComparison.OrdinalIgnoreCase))
+                .Where(m =>
+                {
+                    if (string.IsNullOrWhiteSpace(m.Genre)) return false;
+
+                    // Normalize the mix's own genre through the alias table so that catalog
+                    // values like "tech-house" match a query resolved to "techno".
+                    TryExtractGenreFilter(m.Genre, out string? normalizedMixGenre);
+                    string effectiveGenre = normalizedMixGenre ?? m.Genre;
+
+                    return string.Equals(effectiveGenre, genre, StringComparison.OrdinalIgnoreCase);
+                })
                 .ToArray();
         }
 

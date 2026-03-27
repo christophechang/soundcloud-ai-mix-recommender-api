@@ -1,12 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Text;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace Changsta.Ai.Core.Dtos
 {
     public sealed class MixRecommendationRequestDto
     {
+        [MinLength(1)]
         [MaxLength(500)]
         required public string Question { get; init; }
 

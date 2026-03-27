@@ -82,8 +82,9 @@ builder.Services.AddRateLimiter(options =>
     {
         context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
         context.HttpContext.Response.ContentType = "application/json";
+        context.HttpContext.Response.Headers["Retry-After"] = "60";
         await context.HttpContext.Response.WriteAsJsonAsync(
-            new { message = "Too many requests. Please wait a moment and try again." },
+            new { error = "Too many requests. Please wait a moment and try again." },
             cancellationToken).ConfigureAwait(false);
     };
 });
@@ -96,6 +97,9 @@ builder.Services.Configure<OpenAiOptions>(
 
 builder.Services.AddAzureBlobMixCatalog(builder.Configuration);
 
+// SoundCloudRssMixCatalogueProvider is registered as its concrete type (not as IMixCatalogueProvider)
+// to avoid a circular DI graph: BlobBackedMixCatalogueProvider also implements IMixCatalogueProvider
+// and wraps SoundCloudRssMixCatalogueProvider as its inner provider.
 builder.Services.AddScoped<SoundCloudRssMixCatalogueProvider>(sp =>
 {
     var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
