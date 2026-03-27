@@ -50,10 +50,22 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
                 throw new HttpRequestException("RSS feed contains no items collection.");
             }
 
-            IReadOnlyList<Mix> mixes = feed.Items
-                .Take(maxItems)
-                .Select(MapItem)
-                .ToArray();
+            var mixList = new List<Mix>();
+
+            foreach (var item in feed.Items.Take(maxItems))
+            {
+                try
+                {
+                    mixList.Add(MapItem(item));
+                }
+                catch (Exception)
+                {
+                    // Skip items whose schema cannot be parsed rather than failing the whole feed.
+                    continue;
+                }
+            }
+
+            IReadOnlyList<Mix> mixes = mixList;
 
             _cache.Set(cacheKey, mixes, new MemoryCacheEntryOptions
             {

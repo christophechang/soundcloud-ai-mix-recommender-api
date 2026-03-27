@@ -352,6 +352,29 @@ namespace Changsta.Ai.Tests.Unit.Controllers
             Assert.That(results, Has.Length.EqualTo(1));
         }
 
+        // ── NormalizeGenre null safety ────────────────────────────────────────
+        [Test]
+        public async Task GetCatalogAsync_mix_with_null_genre_does_not_throw()
+        {
+            var mixes = new[]
+            {
+                MakeMix("1", "dnb", ("Artist A", "Track 1")),
+                new Mix
+                {
+                    Id = "2",
+                    Title = "Null Genre Mix",
+                    Url = "https://sc.test/mix-2",
+                    Genre = null!,
+                    Energy = "high",
+                    Tracklist = new[] { new Track { Artist = "Artist B", Title = "Track 2" } },
+                },
+            };
+
+            var page = await InvokeCatalogAsync(BuildSut(mixes), null, 1, 20);
+
+            Assert.That(page.Total, Is.GreaterThanOrEqualTo(1));
+        }
+
         // ── Helpers ───────────────────────────────────────────────────────────
         private static async Task<MixCatalogController.CatalogPage<MixCatalogController.GenreEntry>> InvokeCatalogAsync(
             MixCatalogController sut,

@@ -95,6 +95,44 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
                     cancellationToken: CancellationToken.None));
         }
 
+        [Test]
+        public async Task GetLatestAsync_skips_items_that_fail_schema_extraction()
+        {
+            // Arrange — first item has a valid schema block, second has none.
+            const string rss = """
+                <?xml version="1.0" encoding="utf-8"?>
+                <rss version="2.0">
+                  <channel>
+                    <title>Test Feed</title>
+                    <link>https://example.test</link>
+                    <description>Test</description>
+                    <item>
+                      <guid>https://soundcloud.com/test/good-mix</guid>
+                      <title>Good Mix</title>
+                      <link>https://soundcloud.com/test/good-mix</link>
+                      <description>Intro [changsta:mix:v1 {"genre":"dnb","energy":"peak","bpm":[172,174],"moods":["dark"]}]</description>
+                    </item>
+                    <item>
+                      <guid>https://soundcloud.com/test/bad-mix</guid>
+                      <title>Bad Mix</title>
+                      <link>https://soundcloud.com/test/bad-mix</link>
+                      <description>No schema block here</description>
+                    </item>
+                  </channel>
+                </rss>
+                """;
+
+            using var httpClient = CreateHttpClient(HttpStatusCode.OK, rss, RssUrl);
+            var sut = new SoundCloudRssMixCatalogueProvider(httpClient, RssUrl, new MemoryCache(new MemoryCacheOptions()));
+
+            // Act
+            var result = await sut.GetLatestAsync(maxItems: 50, cancellationToken: CancellationToken.None);
+
+            // Assert — only the valid item is returned; no exception is thrown.
+            Assert.That(result, Has.Count.EqualTo(1));
+            Assert.That(result[0].Title, Is.EqualTo("Good Mix"));
+        }
+
         private static void AssertMixSchemaMapped(Changsta.Ai.Core.Domain.Mix mix)
         {
             // Provider now sets required schema fields, validate they match the embedded schema in Description

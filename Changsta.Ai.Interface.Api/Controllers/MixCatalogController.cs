@@ -249,7 +249,8 @@ namespace Changsta.Ai.Interface.Api.Controllers
             };
         }
 
-        private static string NormalizeGenre(string genre) =>
+        private static string NormalizeGenre(string? genre) =>
+            string.IsNullOrEmpty(genre) ? string.Empty :
             GenreNormalisations.TryGetValue(genre.Replace("-", string.Empty, StringComparison.Ordinal), out string? canonical)
                 ? canonical
                 : genre;
