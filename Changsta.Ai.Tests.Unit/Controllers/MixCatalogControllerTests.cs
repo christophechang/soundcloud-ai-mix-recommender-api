@@ -306,9 +306,9 @@ namespace Changsta.Ai.Tests.Unit.Controllers
                 MakeMix("3", "breaks", ("Shy One", "Track 3"), ("Calibre", "Track 4")),
             };
 
-            Mix[] results = await InvokeMixesByArtistAsync(BuildSut(mixes), "Shy One");
+            var page = await InvokeMixesByArtistAsync(BuildSut(mixes), "Shy One");
 
-            Assert.That(results.Select(m => m.Id), Is.EquivalentTo(new[] { "1", "3" }));
+            Assert.That(page.Items.Select(m => m.Id), Is.EquivalentTo(new[] { "1", "3" }));
         }
 
         [Test]
@@ -320,23 +320,23 @@ namespace Changsta.Ai.Tests.Unit.Controllers
                 MakeMix("2", "dnb", ("Calibre", "Track 2")),
             };
 
-            Mix[] results = await InvokeMixesByArtistAsync(BuildSut(mixes), "shy one");
+            var page = await InvokeMixesByArtistAsync(BuildSut(mixes), "shy one");
 
-            Assert.That(results, Has.Length.EqualTo(1));
-            Assert.That(results[0].Id, Is.EqualTo("1"));
+            Assert.That(page.Items, Has.Length.EqualTo(1));
+            Assert.That(page.Items[0].Id, Is.EqualTo("1"));
         }
 
         [Test]
-        public async Task GetMixesByArtistAsync_returns_empty_when_artist_not_found()
+        public async Task GetMixesByArtistAsync_returns_404_when_artist_not_found()
         {
             var mixes = new[]
             {
                 MakeMix("1", "breaks", ("Shy One", "Track 1")),
             };
 
-            Mix[] results = await InvokeMixesByArtistAsync(BuildSut(mixes), "Unknown Artist");
+            IActionResult result = await BuildSut(mixes).GetMixesByArtistAsync("Unknown Artist", 1, 20, CancellationToken.None);
 
-            Assert.That(results, Is.Empty);
+            Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
         }
 
         [Test]
@@ -347,9 +347,32 @@ namespace Changsta.Ai.Tests.Unit.Controllers
                 MakeMix("1", "breaks", ("Shy One", "Track 1"), ("Shy One", "Track 2")),
             };
 
-            Mix[] results = await InvokeMixesByArtistAsync(BuildSut(mixes), "Shy One");
+            var page = await InvokeMixesByArtistAsync(BuildSut(mixes), "Shy One");
 
-            Assert.That(results, Has.Length.EqualTo(1));
+            Assert.That(page.Items, Has.Length.EqualTo(1));
+        }
+
+        // ── NormalizeGenre null safety ────────────────────────────────────────
+        [Test]
+        public async Task GetCatalogAsync_mix_with_null_genre_does_not_throw()
+        {
+            var mixes = new[]
+            {
+                MakeMix("1", "dnb", ("Artist A", "Track 1")),
+                new Mix
+                {
+                    Id = "2",
+                    Title = "Null Genre Mix",
+                    Url = "https://sc.test/mix-2",
+                    Genre = null!,
+                    Energy = "high",
+                    Tracklist = new[] { new Track { Artist = "Artist B", Title = "Track 2" } },
+                },
+            };
+
+            var page = await InvokeCatalogAsync(BuildSut(mixes), null, 1, 20);
+
+            Assert.That(page.Total, Is.GreaterThanOrEqualTo(1));
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────
@@ -372,10 +395,10 @@ namespace Changsta.Ai.Tests.Unit.Controllers
             return (MixCatalogController.CatalogPage<MixCatalogController.ArtistSummary>)((OkObjectResult)result).Value!;
         }
 
-        private static async Task<Mix[]> InvokeMixesByArtistAsync(MixCatalogController sut, string name)
+        private static async Task<MixCatalogController.CatalogPage<Mix>> InvokeMixesByArtistAsync(MixCatalogController sut, string name)
         {
-            IActionResult result = await sut.GetMixesByArtistAsync(name, CancellationToken.None);
-            return (Mix[])((OkObjectResult)result).Value!;
+            IActionResult result = await sut.GetMixesByArtistAsync(name, 1, 20, CancellationToken.None);
+            return (MixCatalogController.CatalogPage<Mix>)((OkObjectResult)result).Value!;
         }
 
         private static MixCatalogController BuildSut(IReadOnlyList<Mix> mixes)

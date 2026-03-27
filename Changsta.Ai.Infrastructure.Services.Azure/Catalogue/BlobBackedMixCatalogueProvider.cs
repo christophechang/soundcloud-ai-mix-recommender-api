@@ -39,9 +39,19 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 return cached.Count > maxItems ? cached.Take(maxItems).ToArray() : cached;
             }
 
-            IReadOnlyList<Mix> blobMixes = await _repository
-                .ReadAsync(cancellationToken)
-                .ConfigureAwait(false);
+            bool blobReadSucceeded = true;
+            IReadOnlyList<Mix> blobMixes;
+
+            try
+            {
+                blobMixes = await _repository.ReadAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Blob catalog read failed — serving RSS-only catalog and skipping write-back to avoid overwriting intact data.");
+                blobMixes = Array.Empty<Mix>();
+                blobReadSucceeded = false;
+            }
 
             IReadOnlyList<Mix> rssMixes = await FetchRssSafeAsync(cancellationToken)
                 .ConfigureAwait(false);
@@ -51,7 +61,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             int newDiscoveries = CountNewDiscoveries(blobMixes, rssMixes);
             int updatedEntries = CountUpdatedEntries(blobMixes, rssMixes);
 
-            if (newDiscoveries > 0 || updatedEntries > 0)
+            if (blobReadSucceeded && (newDiscoveries > 0 || updatedEntries > 0))
             {
                 _logger.LogInformation(
                     "Writing blob catalog — {NewCount} new mixes, {UpdateCount} updated entries.",
@@ -82,7 +92,29 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
 
             foreach (var mix in rssMixes)
             {
-                byUrl[mix.Url] = mix;
+                if (byUrl.TryGetValue(mix.Url, out Mix? existing))
+                {
+                    // Preserve curated blob metadata (genre, energy, BPM, moods, tracklist).
+                    // Only update title and description, which reflect live RSS changes.
+                    byUrl[mix.Url] = new Mix
+                    {
+                        Id = existing.Id,
+                        Title = mix.Title,
+                        Url = existing.Url,
+                        Description = mix.Description,
+                        Tracklist = existing.Tracklist,
+                        Genre = existing.Genre,
+                        Energy = existing.Energy,
+                        BpmMin = existing.BpmMin,
+                        BpmMax = existing.BpmMax,
+                        Moods = existing.Moods,
+                        PublishedAt = mix.PublishedAt ?? existing.PublishedAt,
+                    };
+                }
+                else
+                {
+                    byUrl[mix.Url] = mix;
+                }
             }
 
             var blobUrls = new HashSet<string>(

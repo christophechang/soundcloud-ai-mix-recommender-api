@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -28,33 +29,33 @@ namespace Changsta.Ai.Interface.Api.Middleware
                 throw new ArgumentNullException(nameof(context));
             }
 
-            try
+            string correlationId = context.TraceIdentifier;
+
+            using (_logger.BeginScope(new Dictionary<string, object> { ["CorrelationId"] = correlationId }))
             {
-                await _next(context).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                string correlationId = context.TraceIdentifier;
-
-                _logger.LogError(
-                    ex,
-                    "Unhandled exception. CorrelationId: {CorrelationId}",
-                    correlationId);
-
-                int statusCode = GetStatusCode(ex);
-
-                context.Response.StatusCode = statusCode;
-                context.Response.ContentType = "application/json";
-
-                var error = new ErrorResponse
+                try
                 {
-                    Message = GetSafeMessage(statusCode),
-                    CorrelationId = correlationId,
-                };
+                    await _next(context).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Unhandled exception.");
 
-                string json = JsonSerializer.Serialize(error);
+                    int statusCode = GetStatusCode(ex);
 
-                await context.Response.WriteAsync(json).ConfigureAwait(false);
+                    context.Response.StatusCode = statusCode;
+                    context.Response.ContentType = "application/json";
+
+                    var error = new ErrorResponse
+                    {
+                        Error = GetSafeMessage(statusCode),
+                        CorrelationId = correlationId,
+                    };
+
+                    string json = JsonSerializer.Serialize(error);
+
+                    await context.Response.WriteAsync(json).ConfigureAwait(false);
+                }
             }
         }
 

@@ -73,6 +73,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.Recommendations
             {
                 Results = results,
                 ClarifyingQuestion = null,
+                MaxResultsApplied = maxResults,
             };
         }
     }

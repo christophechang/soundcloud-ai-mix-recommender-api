@@ -6,6 +6,37 @@ The guiding principle: **`reason` is creative; `why` is evidence. Both are requi
 
 ---
 
+## Quick Start
+
+**Prerequisites:**
+
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- [Node.js](https://nodejs.org/) (required only if running Azurite via `npm`)
+- An OpenAI API key
+- A SoundCloud numeric user ID (see [RSS Feed](#rss-feed-limitations))
+
+**Steps:**
+
+```bash
+# 1. Start local blob storage (Azurite)
+npm install -g azurite
+azurite --silent --location /tmp/azurite --debug /tmp/azurite-debug.log
+
+# 2. Set secrets
+dotnet user-secrets set "OpenAI:ApiKey" "your-key-here" --project Changsta.Ai.Interface.Api
+dotnet user-secrets set "Azure:BlobCatalog:ConnectionString" "UseDevelopmentStorage=true" --project Changsta.Ai.Interface.Api
+dotnet user-secrets set "SoundCloud:RssUrl" "https://feeds.soundcloud.com/users/soundcloud:users:YOUR_USER_ID/sounds.rss" --project Changsta.Ai.Interface.Api
+
+# 3. Build and run
+dotnet restore
+dotnet build soundcloud-ai-mix-recommender-api.sln
+dotnet run --project Changsta.Ai.Interface.Api
+```
+
+Swagger UI: `http://localhost:<port>/swagger` (port shown in terminal output). Swagger is only mounted when `ASPNETCORE_ENVIRONMENT=Development` — this is the default for `dotnet run` via the `launchSettings.json` profile.
+
+---
+
 ## Project Goals
 
 - Accept free-text queries — genre, artist, track name, mood, tempo, or any combination
@@ -25,9 +56,9 @@ Finding the right mix for a specific mood, tempo, or artist often requires manua
 
 The goal of the system is to allow natural language queries such as:
 
-“dark rolling dnb around 174 bpm”
-“something with Calibre or atmospheric liquid”
-“breakbeat with a rave vibe”
+"dark rolling dnb around 174 bpm"
+"something with Calibre or atmospheric liquid"
+"breakbeat with a rave vibe"
 
 The API interprets these queries, filters a catalog of mixes sourced from SoundCloud RSS feeds, and then uses a combination of deterministic ranking and AI reasoning to recommend the best matches.
 
@@ -48,7 +79,7 @@ The API feeds up to 100 mixes from a persistent Azure Blob Storage catalog (supp
 2. **Generates a `reason`** per result: a free-text 1-2 sentence explanation written by the AI (creative, not validated)
 3. **Generates `why` anchors** per result: 1-4 quoted strings copied verbatim from the mix's own metadata (deterministic, server-validated)
 
-If validation fails the AI response is retried up to 3 times before returning an empty result set.
+If validation fails the AI response is retried up to 3 times with exponential backoff before returning a 503.
 
 ---
 
@@ -82,7 +113,8 @@ POST /api/mixes/recommend
       "confidence": 0.92
     }
   ],
-  "clarifyingQuestion": null
+  "clarifyingQuestion": null,
+  "maxResultsApplied": 3
 }
 ```
 
@@ -123,8 +155,8 @@ Before any result is returned:
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `question` | string | yes | Natural language query |
-| `maxResults` | integer | no | Default `3`, min `1`, max `20` |
+| `question` | string | yes | Natural language query. Min 1, max 2000 characters. |
+| `maxResults` | integer | no | Default `3`, min `1`, max `20`. Silently clamped if out of range. |
 
 **Response fields:**
 
@@ -136,18 +168,56 @@ Before any result is returned:
 | `results[].reason` | string | AI-written explanation of the match |
 | `results[].why` | string[] | 1–4 evidence anchors, each verified against mix metadata |
 | `results[].confidence` | float | 0.0–1.0 |
-| `clarifyingQuestion` | string\|null | Non-null only when `question` is blank |
+| `clarifyingQuestion` | string\|null | Non-null only when `question` is empty or whitespace |
+| `maxResultsApplied` | integer | The effective maxResults used after clamping |
 
-`results` may be an empty array on `200` — this means the AI found no catalogue mixes with sufficient evidence to match the query.
+`results` may be an empty array on `200` — this means the AI found no catalogue mixes with sufficient evidence to match the query, or all retry attempts were exhausted. A `503` means the upstream HTTP connection to the AI service failed entirely.
 
 ---
 
 ### `GET /api/catalog`
 
-Returns the full merged catalog (blob + RSS, up to 200 mixes) as a JSON array of mix objects. Useful for:
+Returns a paginated `CatalogPage<GenreEntry>` of the merged catalog (blob + RSS, up to 200 mixes), grouped by genre with artists and tracks nested inside. Useful for verifying which mixes the AI can see.
 
-- Exporting the current catalog to seed new mixes into blob storage
-- Verifying which mixes the AI can see
+**Query parameters:** `?genre=dnb` (optional filter), `?page=1`, `?pageSize=20` (max 100)
+
+---
+
+### `GET /api/catalog/mixes`
+
+Returns a paginated `CatalogPage<Mix>` of all mixes ordered by publish date descending.
+
+**Query parameters:** `?page=1`, `?pageSize=20` (max 100)
+
+---
+
+### `GET /api/catalog/artists`
+
+Returns a paginated `CatalogPage<ArtistSummary>` of all artists ordered by track recurrence count descending.
+
+**Query parameters:** `?page=1`, `?pageSize=20` (max 100)
+
+---
+
+### `GET /api/catalog/tracks`
+
+Returns a paginated `CatalogPage<TrackSummary>` of all tracks, deduplicated, with recurrence count and genres seen. Used by TuneFinder for crate-digging exclusion and artist affinity scoring.
+
+**Query parameters:** `?page=1`, `?pageSize=20` (max 100)
+
+---
+
+### `GET /api/catalog/artists/{name}/mixes`
+
+Returns a paginated `CatalogPage<Mix>` of all mixes containing a track by the named artist.
+
+**Query parameters:** `?page=1`, `?pageSize=20` (max 100)
+
+---
+
+### `GET /health`
+
+Returns `Healthy` when the process is running. Used by Azure App Service for health probes.
 
 ---
 
@@ -157,12 +227,14 @@ Returns the full merged catalog (blob + RSS, up to 200 mixes) as a JSON array of
 - OpenAI SDK v2.1.0 (ChatCompletion)
 - System.ServiceModel.Syndication (RSS parsing)
 - Azure Blob Storage (persistent mix catalog — Azure.Storage.Blobs 12.24)
+- Azure Managed Identity (DefaultAzureCredential in production)
+- Application Insights (workspace-based, per environment)
 - IMemoryCache (1-hour merged catalog TTL)
 - ASP.NET Core rate limiting (10 req/min per IP)
 - System.Text.Json
 - NUnit 4 + FluentAssertions
 - GitHub Actions
-- Azure App Service (F1 free tier) + Azure Storage Account (Standard_LRS)
+- Azure App Service (F1 free tier for dev/qa, B1 for prod) + Azure Storage Account (Standard_LRS)
 - Bicep (IaC)
 
 ---
@@ -197,6 +269,18 @@ For example, with 100+ mixes uploaded, the RSS feed may return only ~50. The rem
 
 ---
 
+### RSS Feed URL
+
+The RSS URL requires your **numeric SoundCloud user ID**, not your username slug. You can find it by visiting your SoundCloud profile and checking the RSS feed URL format:
+
+```
+https://feeds.soundcloud.com/users/soundcloud:users:YOUR_NUMERIC_ID/sounds.rss
+```
+
+Replace `YOUR_NUMERIC_ID` with your actual numeric ID (e.g. `41105`). You can find this ID by inspecting network requests on your SoundCloud profile page or using a tool like [this SoundCloud ID finder](https://www.soundcharts.com/blog/soundcloud-user-id).
+
+---
+
 ### Mix Description Format
 
 All structured metadata is extracted from the SoundCloud track description. Each mix description must follow this three-part format exactly:
@@ -216,7 +300,7 @@ Pa Salieu - Belly (Bakey Edit)
 Gorgon City - 5AM At Bagleys (Extended Mix)
 ```
 
-Every track line is stored individually and can be used as a verbatim evidence anchor during recommendation validation.
+Every track line is stored individually and can be used as a verbatim evidence anchor during recommendation validation. Lines that do not match `Artist - Title` format are skipped.
 
 **3. JSON metadata snippet**
 
@@ -263,7 +347,7 @@ Hirobbie - Taste (Original Mix)
 
 ### Seeding the Catalog
 
-For mixes that fall outside the RSS window, use the included `catalog_import_template.csv` in the project root to prepare your back-catalog data, then upload the resulting JSON to the `catalog.json` blob in Azure Blob Storage. Once uploaded, the API will merge blob and RSS data on the next cache refresh and persist any new RSS discoveries back to blob automatically.
+For mixes that fall outside the RSS window, prepare a JSON document matching the `MixCatalogDocument` schema and upload it as `catalog.json` to the `mix-catalog` container in Azure Blob Storage. Once uploaded, the API will merge blob and RSS data on the next cache refresh and persist any new RSS discoveries back to blob automatically.
 
 ---
 
@@ -298,7 +382,12 @@ This API's role is entirely in stage 2 — it is the source of truth for what ha
 
 ## Running Locally
 
-### 1. Install and start Azurite
+### 1. Install prerequisites
+
+- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
+- [Node.js](https://nodejs.org/) (for Azurite via npm) or [Docker](https://www.docker.com/)
+
+### 2. Install and start Azurite
 
 Azurite is a local Azure Storage emulator. It replaces the real Azure Storage account during local development.
 
@@ -324,49 +413,32 @@ The blob service listens on `http://127.0.0.1:10000` by default.
 
 ---
 
-### 2. Configure secrets
+### 3. Configure secrets
 
-Add to `appsettings.Development.json` or user secrets:
+Use user secrets (recommended — keeps secrets out of source control):
 
-```json
-{
-  "OpenAI": {
-    "ApiKey": "your-key-here",
-    "Model": "gpt-4o-mini"
-  },
-  "SoundCloud": {
-    "RssUrl": "https://feeds.soundcloud.com/users/soundcloud:users:YOUR_ID/sounds.rss"
-  },
-  "Azure": {
-    "BlobCatalog": {
-      "ConnectionString": "UseDevelopmentStorage=true",
-      "ContainerName": "mix-catalog",
-      "BlobName": "catalog.json"
-    }
-  }
-}
+```bash
+dotnet user-secrets set "OpenAI:ApiKey" "your-key-here" --project Changsta.Ai.Interface.Api
+dotnet user-secrets set "OpenAI:Model" "gpt-4o-mini" --project Changsta.Ai.Interface.Api
+dotnet user-secrets set "SoundCloud:RssUrl" "https://feeds.soundcloud.com/users/soundcloud:users:YOUR_NUMERIC_ID/sounds.rss" --project Changsta.Ai.Interface.Api
+dotnet user-secrets set "Azure:BlobCatalog:ConnectionString" "UseDevelopmentStorage=true" --project Changsta.Ai.Interface.Api
 ```
 
 `UseDevelopmentStorage=true` is the well-known connection string that points to Azurite. No extra configuration is needed — the app creates the `mix-catalog` container automatically on first write.
 
-To set via user secrets instead (recommended, keeps secrets out of source control):
-
-```
-dotnet user-secrets set "Azure:BlobCatalog:ConnectionString" "UseDevelopmentStorage=true" --project Changsta.Ai.Interface.Api
-dotnet user-secrets set "OpenAI:ApiKey" "your-key-here" --project Changsta.Ai.Interface.Api
-```
-
 ---
 
-### 3. Run
+### 4. Build and run
 
-```
+```bash
+dotnet restore
+dotnet build soundcloud-ai-mix-recommender-api.sln
 dotnet run --project Changsta.Ai.Interface.Api
 ```
 
 On first request the app fetches the RSS feed and writes the initial `catalog.json` blob to Azurite. Subsequent requests within the 1-hour cache window are served from memory.
 
-Once running, the Swagger UI is available at `http://localhost:5059/swagger` (port may vary — check terminal output).
+Once running, the Swagger UI is available at `http://localhost:<port>/swagger` (port shown in terminal output).
 
 To inspect or edit the blob directly, use [Azure Storage Explorer](https://azure.microsoft.com/en-us/products/storage/storage-explorer/) and connect to `http://127.0.0.1:10000` with the Azurite account key (`devstoreaccount1` / `Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==`).
 

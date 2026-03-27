@@ -9,5 +9,7 @@ namespace Changsta.Ai.Core.Dtos
         required public IReadOnlyList<MixRecommendationResultDto> Results { get; init; }
 
         public string? ClarifyingQuestion { get; init; }
+
+        public int? MaxResultsApplied { get; init; }
     }
 }

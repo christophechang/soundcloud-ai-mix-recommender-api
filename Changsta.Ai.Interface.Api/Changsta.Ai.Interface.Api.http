@@ -1,6 +1,59 @@
-@Changsta.Ai.Interface.Api_HostAddress = http://localhost:5237
+@HostAddress = http://localhost:5237
 
-GET {{Changsta.Ai.Interface.Api_HostAddress}}/weatherforecast/
+### Recommend mixes
+POST {{HostAddress}}/api/mixes/recommend
+Content-Type: application/json
+
+{
+  "question": "dark rolling dnb around 174bpm",
+  "maxResults": 3
+}
+
+###
+
+### Recommend mixes — genre query
+POST {{HostAddress}}/api/mixes/recommend
+Content-Type: application/json
+
+{
+  "question": "house music",
+  "maxResults": 5
+}
+
+###
+
+### Browse catalog grouped by genre
+GET {{HostAddress}}/api/catalog?page=1&pageSize=20
+Accept: application/json
+
+###
+
+### Browse mixes ordered by date
+GET {{HostAddress}}/api/catalog/mixes?page=1&pageSize=20
+Accept: application/json
+
+###
+
+### Browse artists by track recurrence
+GET {{HostAddress}}/api/catalog/artists?page=1&pageSize=20
+Accept: application/json
+
+###
+
+### Browse deduplicated tracks
+GET {{HostAddress}}/api/catalog/tracks?page=1&pageSize=20
+Accept: application/json
+
+###
+
+### Mixes by artist name
+GET {{HostAddress}}/api/catalog/artists/Calibre/mixes
+Accept: application/json
+
+###
+
+### Health check
+GET {{HostAddress}}/health
 Accept: application/json
 
 ###

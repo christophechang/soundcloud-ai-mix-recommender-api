@@ -172,7 +172,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
         [HttpGet("tracks")]
         public async Task<IActionResult> GetTracksAsync(
             [FromQuery] int page = 1,
-            [FromQuery] int pageSize = 50,
+            [FromQuery] int pageSize = DefaultPageSize,
             CancellationToken cancellationToken = default)
         {
             if (page < 1 || pageSize < 1 || pageSize > MaxPageSize)
@@ -215,8 +215,15 @@ namespace Changsta.Ai.Interface.Api.Controllers
         [HttpGet("artists/{name}/mixes")]
         public async Task<IActionResult> GetMixesByArtistAsync(
             [FromRoute] string name,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = DefaultPageSize,
             CancellationToken cancellationToken = default)
         {
+            if (page < 1 || pageSize < 1 || pageSize > MaxPageSize)
+            {
+                return BadRequest(new { error = "page must be >= 1 and pageSize must be between 1 and 100." });
+            }
+
             IReadOnlyList<Mix> mixes = await _catalogueProvider
                 .GetLatestAsync(CatalogMaxItems, cancellationToken)
                 .ConfigureAwait(false);
@@ -226,7 +233,12 @@ namespace Changsta.Ai.Interface.Api.Controllers
                     string.Equals(t.Artist, name, StringComparison.OrdinalIgnoreCase)))
                 .ToArray();
 
-            return Ok(results);
+            if (results.Length == 0)
+            {
+                return NotFound(new { error = $"No mixes found for artist '{name}'." });
+            }
+
+            return Ok(BuildPage(results, page, pageSize));
         }
 
         private static CatalogPage<T> BuildPage<T>(T[] allEntries, int page, int pageSize)
@@ -249,7 +261,8 @@ namespace Changsta.Ai.Interface.Api.Controllers
             };
         }
 
-        private static string NormalizeGenre(string genre) =>
+        private static string NormalizeGenre(string? genre) =>
+            string.IsNullOrEmpty(genre) ? string.Empty :
             GenreNormalisations.TryGetValue(genre.Replace("-", string.Empty, StringComparison.Ordinal), out string? canonical)
                 ? canonical
                 : genre;

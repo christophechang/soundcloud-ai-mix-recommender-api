@@ -35,11 +35,6 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             var resolved = options?.Value ?? throw new ArgumentNullException(nameof(options));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-            if (string.IsNullOrWhiteSpace(resolved.ConnectionString))
-            {
-                throw new InvalidOperationException("Azure:BlobCatalog:ConnectionString is not configured.");
-            }
-
             if (string.IsNullOrWhiteSpace(resolved.ContainerName))
             {
                 throw new InvalidOperationException("Azure:BlobCatalog:ContainerName is not configured.");
@@ -50,7 +45,25 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 throw new InvalidOperationException("Azure:BlobCatalog:BlobName is not configured.");
             }
 
-            _containerClient = new BlobContainerClient(resolved.ConnectionString, resolved.ContainerName);
+            if (!string.IsNullOrWhiteSpace(resolved.ConnectionString))
+            {
+                _containerClient = new BlobContainerClient(resolved.ConnectionString, resolved.ContainerName);
+            }
+            else if (!string.IsNullOrWhiteSpace(resolved.ServiceEndpoint))
+            {
+                // Production path: Managed Identity via DefaultAzureCredential.
+                // Requires Azure.Identity package — add Azure.Identity to this project to enable.
+                throw new InvalidOperationException(
+                    "Azure:BlobCatalog:ServiceEndpoint is set but Managed Identity authentication is not yet implemented. " +
+                    "Add the Azure.Identity package and replace this throw with: " +
+                    "new BlobContainerClient(new Uri(resolved.ServiceEndpoint + \"/\" + resolved.ContainerName), new DefaultAzureCredential())");
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    "Azure:BlobCatalog: either ConnectionString (dev) or ServiceEndpoint (prod) must be configured.");
+            }
+
             _blobName = resolved.BlobName;
         }
 
@@ -72,11 +85,6 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             catch (RequestFailedException ex) when (ex.Status == 404)
             {
                 _logger.LogInformation("Blob catalog not found — starting with empty catalog on first run.");
-                return Array.Empty<Mix>();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to read blob catalog — treating as empty.");
                 return Array.Empty<Mix>();
             }
         }
@@ -185,7 +193,10 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
 
                 for (int i = 0; i < value.Count; i++)
                 {
-                    writer.WriteStringValue($"{value[i].Artist} - {value[i].Title}");
+                    writer.WriteStartObject();
+                    writer.WriteString("artist", value[i].Artist);
+                    writer.WriteString("title", value[i].Title);
+                    writer.WriteEndObject();
                 }
 
                 writer.WriteEndArray();
