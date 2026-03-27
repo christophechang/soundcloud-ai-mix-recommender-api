@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Text;
 
 namespace Changsta.Ai.Core.Dtos
 {
@@ -8,6 +10,6 @@ namespace Changsta.Ai.Core.Dtos
 
         public string? ClarifyingQuestion { get; init; }
 
-        public int MaxResultsApplied { get; init; }
+        public int? MaxResultsApplied { get; init; }
     }
 }

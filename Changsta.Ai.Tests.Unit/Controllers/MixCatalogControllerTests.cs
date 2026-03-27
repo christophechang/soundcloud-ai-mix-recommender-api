@@ -327,16 +327,16 @@ namespace Changsta.Ai.Tests.Unit.Controllers
         }
 
         [Test]
-        public async Task GetMixesByArtistAsync_returns_empty_when_artist_not_found()
+        public async Task GetMixesByArtistAsync_returns_404_when_artist_not_found()
         {
             var mixes = new[]
             {
                 MakeMix("1", "breaks", ("Shy One", "Track 1")),
             };
 
-            var page = await InvokeMixesByArtistAsync(BuildSut(mixes), "Unknown Artist");
+            IActionResult result = await BuildSut(mixes).GetMixesByArtistAsync("Unknown Artist", 1, 20, CancellationToken.None);
 
-            Assert.That(page.Items, Is.Empty);
+            Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
         }
 
         [Test]

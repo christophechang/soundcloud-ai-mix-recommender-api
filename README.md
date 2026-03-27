@@ -25,6 +25,7 @@ azurite --silent --location /tmp/azurite --debug /tmp/azurite-debug.log
 # 2. Set secrets
 dotnet user-secrets set "OpenAI:ApiKey" "your-key-here" --project Changsta.Ai.Interface.Api
 dotnet user-secrets set "Azure:BlobCatalog:ConnectionString" "UseDevelopmentStorage=true" --project Changsta.Ai.Interface.Api
+dotnet user-secrets set "SoundCloud:RssUrl" "https://feeds.soundcloud.com/users/soundcloud:users:YOUR_USER_ID/sounds.rss" --project Changsta.Ai.Interface.Api
 
 # 3. Build and run
 dotnet restore
@@ -32,7 +33,7 @@ dotnet build soundcloud-ai-mix-recommender-api.sln
 dotnet run --project Changsta.Ai.Interface.Api
 ```
 
-Swagger UI: `http://localhost:<port>/swagger` (port shown in terminal output).
+Swagger UI: `http://localhost:<port>/swagger` (port shown in terminal output). Swagger is only mounted when `ASPNETCORE_ENVIRONMENT=Development` — this is the default for `dotnet run` via the `launchSettings.json` profile.
 
 ---
 
@@ -154,7 +155,7 @@ Before any result is returned:
 
 | Field | Type | Required | Notes |
 |---|---|---|---|
-| `question` | string | yes | Natural language query. Min 1, max 500 characters. |
+| `question` | string | yes | Natural language query. Min 1, max 2000 characters. |
 | `maxResults` | integer | no | Default `3`, min `1`, max `20`. Silently clamped if out of range. |
 
 **Response fields:**
@@ -167,10 +168,10 @@ Before any result is returned:
 | `results[].reason` | string | AI-written explanation of the match |
 | `results[].why` | string[] | 1–4 evidence anchors, each verified against mix metadata |
 | `results[].confidence` | float | 0.0–1.0 |
-| `clarifyingQuestion` | string\|null | Always null |
+| `clarifyingQuestion` | string\|null | Non-null only when `question` is empty or whitespace |
 | `maxResultsApplied` | integer | The effective maxResults used after clamping |
 
-`results` may be an empty array on `200` — this means the AI found no catalogue mixes with sufficient evidence to match the query. A `503` means the AI service failed all retry attempts.
+`results` may be an empty array on `200` — this means the AI found no catalogue mixes with sufficient evidence to match the query, or all retry attempts were exhausted. A `503` means the upstream HTTP connection to the AI service failed entirely.
 
 ---
 

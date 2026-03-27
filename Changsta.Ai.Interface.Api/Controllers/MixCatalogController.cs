@@ -233,6 +233,11 @@ namespace Changsta.Ai.Interface.Api.Controllers
                     string.Equals(t.Artist, name, StringComparison.OrdinalIgnoreCase)))
                 .ToArray();
 
+            if (results.Length == 0)
+            {
+                return NotFound(new { error = $"No mixes found for artist '{name}'." });
+            }
+
             return Ok(BuildPage(results, page, pageSize));
         }
 

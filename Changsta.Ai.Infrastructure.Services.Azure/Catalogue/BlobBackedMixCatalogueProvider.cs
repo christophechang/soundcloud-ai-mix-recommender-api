@@ -14,7 +14,6 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
     {
         private const string CacheKey = "blob_catalog_";
         private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(1);
-        private static readonly SemaphoreSlim LoadSemaphore = new SemaphoreSlim(1, 1);
 
         private readonly IMixCatalogueProvider _innerProvider;
         private readonly IBlobMixCatalogueRepository _repository;
@@ -40,49 +39,44 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 return cached.Count > maxItems ? cached.Take(maxItems).ToArray() : cached;
             }
 
-            await LoadSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            bool blobReadSucceeded = true;
+            IReadOnlyList<Mix> blobMixes;
 
             try
             {
-                // Re-check after acquiring the semaphore — a concurrent request may have already loaded.
-                if (_cache.TryGetValue(CacheKey, out cached) && cached is not null)
-                {
-                    return cached.Count > maxItems ? cached.Take(maxItems).ToArray() : cached;
-                }
-
-                IReadOnlyList<Mix> blobMixes = await _repository
-                    .ReadAsync(cancellationToken)
-                    .ConfigureAwait(false);
-
-                IReadOnlyList<Mix> rssMixes = await FetchRssSafeAsync(cancellationToken)
-                    .ConfigureAwait(false);
-
-                IReadOnlyList<Mix> merged = MergeCatalogs(blobMixes, rssMixes);
-
-                int newDiscoveries = CountNewDiscoveries(blobMixes, rssMixes);
-                int updatedEntries = CountUpdatedEntries(blobMixes, rssMixes);
-
-                if (newDiscoveries > 0 || updatedEntries > 0)
-                {
-                    _logger.LogInformation(
-                        "Writing blob catalog — {NewCount} new mixes, {UpdateCount} updated entries.",
-                        newDiscoveries,
-                        updatedEntries);
-
-                    await _repository.WriteAsync(merged, cancellationToken).ConfigureAwait(false);
-                }
-
-                _cache.Set(CacheKey, merged, new MemoryCacheEntryOptions
-                {
-                    AbsoluteExpirationRelativeToNow = CacheTtl,
-                });
-
-                return merged.Count > maxItems ? merged.Take(maxItems).ToArray() : merged;
+                blobMixes = await _repository.ReadAsync(cancellationToken).ConfigureAwait(false);
             }
-            finally
+            catch (Exception ex)
             {
-                LoadSemaphore.Release();
+                _logger.LogError(ex, "Blob catalog read failed — serving RSS-only catalog and skipping write-back to avoid overwriting intact data.");
+                blobMixes = Array.Empty<Mix>();
+                blobReadSucceeded = false;
             }
+
+            IReadOnlyList<Mix> rssMixes = await FetchRssSafeAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            IReadOnlyList<Mix> merged = MergeCatalogs(blobMixes, rssMixes);
+
+            int newDiscoveries = CountNewDiscoveries(blobMixes, rssMixes);
+            int updatedEntries = CountUpdatedEntries(blobMixes, rssMixes);
+
+            if (blobReadSucceeded && (newDiscoveries > 0 || updatedEntries > 0))
+            {
+                _logger.LogInformation(
+                    "Writing blob catalog — {NewCount} new mixes, {UpdateCount} updated entries.",
+                    newDiscoveries,
+                    updatedEntries);
+
+                await _repository.WriteAsync(merged, cancellationToken).ConfigureAwait(false);
+            }
+
+            _cache.Set(CacheKey, merged, new MemoryCacheEntryOptions
+            {
+                AbsoluteExpirationRelativeToNow = CacheTtl,
+            });
+
+            return merged.Count > maxItems ? merged.Take(maxItems).ToArray() : merged;
         }
 
         private static IReadOnlyList<Mix> MergeCatalogs(
@@ -98,7 +92,29 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
 
             foreach (var mix in rssMixes)
             {
-                byUrl[mix.Url] = mix;
+                if (byUrl.TryGetValue(mix.Url, out Mix? existing))
+                {
+                    // Preserve curated blob metadata (genre, energy, BPM, moods, tracklist).
+                    // Only update title and description, which reflect live RSS changes.
+                    byUrl[mix.Url] = new Mix
+                    {
+                        Id = existing.Id,
+                        Title = mix.Title,
+                        Url = existing.Url,
+                        Description = mix.Description,
+                        Tracklist = existing.Tracklist,
+                        Genre = existing.Genre,
+                        Energy = existing.Energy,
+                        BpmMin = existing.BpmMin,
+                        BpmMax = existing.BpmMax,
+                        Moods = existing.Moods,
+                        PublishedAt = mix.PublishedAt ?? existing.PublishedAt,
+                    };
+                }
+                else
+                {
+                    byUrl[mix.Url] = mix;
+                }
             }
 
             var blobUrls = new HashSet<string>(

@@ -105,6 +105,7 @@ builder.Services.AddScoped<SoundCloudRssMixCatalogueProvider>(sp =>
     var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
     var configuration = sp.GetRequiredService<IConfiguration>();
     var cache = sp.GetRequiredService<IMemoryCache>();
+    var logger = sp.GetRequiredService<ILogger<SoundCloudRssMixCatalogueProvider>>();
 
     string rssUrl = configuration["SoundCloud:RssUrl"]
         ?? throw new InvalidOperationException("SoundCloud:RssUrl is not configured.");
@@ -112,7 +113,8 @@ builder.Services.AddScoped<SoundCloudRssMixCatalogueProvider>(sp =>
     return new SoundCloudRssMixCatalogueProvider(
         httpClientFactory.CreateClient("SoundCloudRss"),
         rssUrl,
-        cache);
+        cache,
+        logger);
 });
 
 builder.Services.AddScoped<IMixCatalogueProvider>(sp =>

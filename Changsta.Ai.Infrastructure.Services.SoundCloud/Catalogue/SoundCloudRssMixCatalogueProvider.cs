@@ -5,6 +5,7 @@ using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Models;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Parsing;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 
 namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
 {
@@ -16,12 +17,14 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
         private readonly HttpClient _httpClient;
         private readonly string _rssUrl;
         private readonly IMemoryCache _cache;
+        private readonly ILogger<SoundCloudRssMixCatalogueProvider> _logger;
 
-        public SoundCloudRssMixCatalogueProvider(HttpClient httpClient, string rssUrl, IMemoryCache cache)
+        public SoundCloudRssMixCatalogueProvider(HttpClient httpClient, string rssUrl, IMemoryCache cache, ILogger<SoundCloudRssMixCatalogueProvider> logger)
         {
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
             _rssUrl = rssUrl ?? throw new ArgumentNullException(nameof(rssUrl));
             _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         public async Task<IReadOnlyList<Mix>> GetLatestAsync(int maxItems, CancellationToken cancellationToken)
@@ -37,7 +40,8 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
             response.EnsureSuccessStatusCode();
 
             using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-            using var reader = XmlReader.Create(stream);
+            var xmlSettings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit };
+            using var reader = XmlReader.Create(stream, xmlSettings);
 
             SyndicationFeed? feed = SyndicationFeed.Load(reader);
             if (feed is null)
@@ -58,9 +62,10 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
                 {
                     mixList.Add(MapItem(item));
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
                     // Skip items whose schema cannot be parsed rather than failing the whole feed.
+                    _logger.LogWarning(ex, "Skipping RSS item '{ItemId}' — failed to parse.", item.Id);
                     continue;
                 }
             }

@@ -31,6 +31,15 @@ namespace Changsta.Ai.Core.BusinessProcesses.Recommendations
                 throw new ArgumentNullException(nameof(request));
             }
 
+            if (string.IsNullOrWhiteSpace(request.Question))
+            {
+                return new MixRecommendationResponseDto
+                {
+                    Results = Array.Empty<MixRecommendationResultDto>(),
+                    ClarifyingQuestion = "Ask me what kind of mix you want.",
+                };
+            }
+
             int maxResults = Math.Clamp(request.MaxResults, 1, MaxResultsUpperBound);
 
             var mixes = await _mixCatalogueProvider

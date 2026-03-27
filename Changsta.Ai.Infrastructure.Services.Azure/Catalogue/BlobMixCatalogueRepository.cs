@@ -6,7 +6,6 @@ using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure;
-using Azure.Identity;
 using Azure.Storage.Blobs;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Infrastructure.Services.Azure.Configuration;
@@ -18,16 +17,12 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
 {
     internal sealed class BlobMixCatalogueRepository : IBlobMixCatalogueRepository
     {
-        private const int WriteFailureThreshold = 3;
-
         private static readonly JsonSerializerOptions JsonOptions = new()
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             PropertyNameCaseInsensitive = true,
             Converters = { new TrackListJsonConverter() },
         };
-
-        private static int _consecutiveWriteFailures;
 
         private readonly BlobContainerClient _containerClient;
         private readonly string _blobName;
@@ -40,15 +35,6 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             var resolved = options?.Value ?? throw new ArgumentNullException(nameof(options));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-            bool hasConnectionString = !string.IsNullOrWhiteSpace(resolved.ConnectionString);
-            bool hasServiceEndpoint = !string.IsNullOrWhiteSpace(resolved.ServiceEndpoint);
-
-            if (!hasConnectionString && !hasServiceEndpoint)
-            {
-                throw new InvalidOperationException(
-                    "Either Azure:BlobCatalog:ConnectionString or Azure:BlobCatalog:ServiceEndpoint must be configured.");
-            }
-
             if (string.IsNullOrWhiteSpace(resolved.ContainerName))
             {
                 throw new InvalidOperationException("Azure:BlobCatalog:ContainerName is not configured.");
@@ -59,15 +45,23 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 throw new InvalidOperationException("Azure:BlobCatalog:BlobName is not configured.");
             }
 
-            if (hasServiceEndpoint)
+            if (!string.IsNullOrWhiteSpace(resolved.ConnectionString))
             {
-                var containerUri = new Uri(
-                    resolved.ServiceEndpoint!.TrimEnd('/') + "/" + resolved.ContainerName);
-                _containerClient = new BlobContainerClient(containerUri, new DefaultAzureCredential());
+                _containerClient = new BlobContainerClient(resolved.ConnectionString, resolved.ContainerName);
+            }
+            else if (!string.IsNullOrWhiteSpace(resolved.ServiceEndpoint))
+            {
+                // Production path: Managed Identity via DefaultAzureCredential.
+                // Requires Azure.Identity package — add Azure.Identity to this project to enable.
+                throw new InvalidOperationException(
+                    "Azure:BlobCatalog:ServiceEndpoint is set but Managed Identity authentication is not yet implemented. " +
+                    "Add the Azure.Identity package and replace this throw with: " +
+                    "new BlobContainerClient(new Uri(resolved.ServiceEndpoint + \"/\" + resolved.ContainerName), new DefaultAzureCredential())");
             }
             else
             {
-                _containerClient = new BlobContainerClient(resolved.ConnectionString, resolved.ContainerName);
+                throw new InvalidOperationException(
+                    "Azure:BlobCatalog: either ConnectionString (dev) or ServiceEndpoint (prod) must be configured.");
             }
 
             _blobName = resolved.BlobName;
@@ -93,23 +87,10 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 _logger.LogInformation("Blob catalog not found — starting with empty catalog on first run.");
                 return Array.Empty<Mix>();
             }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to read blob catalog — treating as empty.");
-                return Array.Empty<Mix>();
-            }
         }
 
         public async Task WriteAsync(IReadOnlyList<Mix> mixes, CancellationToken cancellationToken)
         {
-            if (_consecutiveWriteFailures >= WriteFailureThreshold)
-            {
-                _logger.LogWarning(
-                    "Blob write circuit breaker open — skipping write after {Failures} consecutive failures.",
-                    _consecutiveWriteFailures);
-                return;
-            }
-
             try
             {
                 await _containerClient
@@ -132,17 +113,10 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 await blobClient
                     .UploadAsync(stream, overwrite: true, cancellationToken)
                     .ConfigureAwait(false);
-
-                System.Threading.Interlocked.Exchange(ref _consecutiveWriteFailures, 0);
             }
             catch (Exception ex)
             {
-                System.Threading.Interlocked.Increment(ref _consecutiveWriteFailures);
-                _logger.LogError(
-                    ex,
-                    "Failed to write blob catalog ({Failures}/{Threshold}) — merged result was still returned to caller.",
-                    _consecutiveWriteFailures,
-                    WriteFailureThreshold);
+                _logger.LogError(ex, "Failed to write blob catalog — merged result was still returned to caller.");
             }
         }
 
@@ -219,7 +193,10 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
 
                 for (int i = 0; i < value.Count; i++)
                 {
-                    writer.WriteStringValue($"{value[i].Artist} - {value[i].Title}");
+                    writer.WriteStartObject();
+                    writer.WriteString("artist", value[i].Artist);
+                    writer.WriteString("title", value[i].Title);
+                    writer.WriteEndObject();
                 }
 
                 writer.WriteEndArray();
