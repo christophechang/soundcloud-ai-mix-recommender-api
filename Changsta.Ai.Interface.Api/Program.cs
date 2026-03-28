@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Threading.RateLimiting;
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Changsta.Ai.Core.BusinessProcesses.Recommendations;
 using Changsta.Ai.Core.Contracts.Ai;
 using Changsta.Ai.Core.Contracts.Catalogue;
@@ -45,7 +46,15 @@ builder.Services.AddCors(options =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-builder.Services.AddApplicationInsightsTelemetry();
+string? aiConnectionString = builder.Configuration["ApplicationInsights:ConnectionString"];
+
+if (!string.IsNullOrEmpty(aiConnectionString))
+{
+    builder.Services.AddOpenTelemetry().UseAzureMonitor(o =>
+    {
+        o.ConnectionString = aiConnectionString;
+    });
+}
 
 builder.Services.AddHealthChecks();
 

@@ -37,6 +37,11 @@ namespace Changsta.Ai.Interface.Api.Middleware
                 {
                     await _next(context).ConfigureAwait(false);
                 }
+                catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+                {
+                    // Request was aborted by the client — no response needed.
+                    return;
+                }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Unhandled exception.");
