@@ -185,6 +185,145 @@ namespace Changsta.Ai.Tests.Unit.Controllers
             Assert.That(page.Items[0].Genre, Is.EqualTo("dnb"));
         }
 
+        // ── GET /api/catalog/genres ──────────────────────────────────────────
+        [Test]
+        public async Task GetGenresAsync_returns_sorted_distinct_normalised_genres()
+        {
+            var mixes = new[]
+            {
+                MakeMix("1", "house", ("Artist A", "Track 1")),
+                MakeMix("2", "dnb", ("Artist B", "Track 2")),
+                MakeMix("3", "breaks", ("Artist C", "Track 3")),
+                MakeMix("4", "dnb", ("Artist D", "Track 4")),
+            };
+
+            string[] genres = await InvokeGenresAsync(BuildSut(mixes));
+
+            Assert.That(genres, Is.EqualTo(new[] { "breaks", "dnb", "house" }));
+        }
+
+        [Test]
+        public async Task GetGenresAsync_normalises_aliases()
+        {
+            var mixes = new[]
+            {
+                MakeMix("1", "deep-house", ("Artist A", "Track 1")),
+                MakeMix("2", "deephouse", ("Artist B", "Track 2")),
+            };
+
+            string[] genres = await InvokeGenresAsync(BuildSut(mixes));
+
+            Assert.That(genres, Is.EqualTo(new[] { "deep-house" }));
+        }
+
+        [Test]
+        public async Task GetGenresAsync_excludes_mixes_with_null_or_whitespace_genre()
+        {
+            var mixes = new[]
+            {
+                MakeMix("1", "breaks", ("Artist A", "Track 1")),
+                new Mix
+                {
+                    Id = "2",
+                    Title = "No Genre",
+                    Url = "https://sc.test/mix-2",
+                    Genre = null!,
+                    Energy = "high",
+                    Tracklist = Array.Empty<Track>(),
+                },
+            };
+
+            string[] genres = await InvokeGenresAsync(BuildSut(mixes));
+
+            Assert.That(genres, Is.EqualTo(new[] { "breaks" }));
+        }
+
+        [Test]
+        public async Task GetGenresAsync_returns_empty_when_no_mixes()
+        {
+            string[] genres = await InvokeGenresAsync(BuildSut(Array.Empty<Mix>()));
+
+            Assert.That(genres, Is.Empty);
+        }
+
+        // ── GET /api/catalog/mixes ───────────────────────────────────────────
+        [Test]
+        public async Task GetMixesAsync_no_genre_returns_all_mixes()
+        {
+            var mixes = new[]
+            {
+                MakeMix("1", "breaks", ("Artist A", "Track 1")),
+                MakeMix("2", "dnb", ("Artist B", "Track 2")),
+                MakeMix("3", "house", ("Artist C", "Track 3")),
+            };
+
+            var page = await InvokeMixesAsync(BuildSut(mixes), null, 1, 20);
+
+            Assert.That(page.Total, Is.EqualTo(3));
+        }
+
+        [Test]
+        public async Task GetMixesAsync_filters_by_genre_case_insensitive()
+        {
+            var mixes = new[]
+            {
+                MakeMix("1", "breaks", ("Artist A", "Track 1")),
+                MakeMix("2", "dnb", ("Artist B", "Track 2")),
+                MakeMix("3", "breaks", ("Artist C", "Track 3")),
+            };
+
+            var page = await InvokeMixesAsync(BuildSut(mixes), "Breaks", 1, 20);
+
+            Assert.That(page.Total, Is.EqualTo(2));
+            Assert.That(page.Items.Select(m => m.Id), Is.EquivalentTo(new[] { "1", "3" }));
+        }
+
+        [Test]
+        public async Task GetMixesAsync_genre_filter_returns_empty_when_no_match()
+        {
+            var mixes = new[]
+            {
+                MakeMix("1", "breaks", ("Artist A", "Track 1")),
+            };
+
+            var page = await InvokeMixesAsync(BuildSut(mixes), "techno", 1, 20);
+
+            Assert.That(page.Total, Is.EqualTo(0));
+        }
+
+        [Test]
+        public async Task GetMixesAsync_normalises_genre_alias()
+        {
+            var mixes = new[]
+            {
+                MakeMix("1", "deep-house", ("Artist A", "Track 1")),
+                MakeMix("2", "dnb", ("Artist B", "Track 2")),
+            };
+
+            var page = await InvokeMixesAsync(BuildSut(mixes), "deephouse", 1, 20);
+
+            Assert.That(page.Total, Is.EqualTo(1));
+            Assert.That(page.Items[0].Id, Is.EqualTo("1"));
+        }
+
+        [Test]
+        public async Task GetMixesAsync_returns_400_for_invalid_page()
+        {
+            IActionResult result = await BuildSut(Array.Empty<Mix>())
+                .GetMixesAsync(null, 0, 20, CancellationToken.None);
+
+            Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        }
+
+        [Test]
+        public async Task GetMixesAsync_returns_400_for_invalid_page_size()
+        {
+            IActionResult result = await BuildSut(Array.Empty<Mix>())
+                .GetMixesAsync(null, 1, 101, CancellationToken.None);
+
+            Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
+        }
+
         // ── GET /api/catalog/artists ──────────────────────────────────────────
         [Test]
         public async Task GetArtistsAsync_orders_by_track_count_desc()
@@ -384,6 +523,23 @@ namespace Changsta.Ai.Tests.Unit.Controllers
         {
             IActionResult result = await sut.GetCatalogAsync(genre, page, pageSize, CancellationToken.None);
             return (MixCatalogController.CatalogPage<MixCatalogController.GenreEntry>)((OkObjectResult)result).Value!;
+        }
+
+        private static async Task<string[]> InvokeGenresAsync(MixCatalogController sut)
+        {
+            IActionResult result = await sut.GetGenresAsync(CancellationToken.None);
+            var value = (MixCatalogController.GenresResponse)((OkObjectResult)result).Value!;
+            return value.Genres;
+        }
+
+        private static async Task<MixCatalogController.CatalogPage<Mix>> InvokeMixesAsync(
+            MixCatalogController sut,
+            string? genre,
+            int page,
+            int pageSize)
+        {
+            IActionResult result = await sut.GetMixesAsync(genre, page, pageSize, CancellationToken.None);
+            return (MixCatalogController.CatalogPage<Mix>)((OkObjectResult)result).Value!;
         }
 
         private static async Task<MixCatalogController.CatalogPage<MixCatalogController.ArtistSummary>> InvokeArtistsAsync(

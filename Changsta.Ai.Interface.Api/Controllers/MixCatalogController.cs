@@ -102,8 +102,26 @@ namespace Changsta.Ai.Interface.Api.Controllers
             return Ok(BuildPage(allEntries, page, pageSize));
         }
 
+        [HttpGet("genres")]
+        public async Task<IActionResult> GetGenresAsync(CancellationToken cancellationToken = default)
+        {
+            IReadOnlyList<Mix> mixes = await _catalogueProvider
+                .GetLatestAsync(CatalogMaxItems, cancellationToken)
+                .ConfigureAwait(false);
+
+            string[] genres = mixes
+                .Where(m => !string.IsNullOrWhiteSpace(m.Genre))
+                .Select(m => NormalizeGenre(m.Genre))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => g, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            return Ok(new GenresResponse { Genres = genres });
+        }
+
         [HttpGet("mixes")]
         public async Task<IActionResult> GetMixesAsync(
+            [FromQuery] string? genre,
             [FromQuery] int page = 1,
             [FromQuery] int pageSize = DefaultPageSize,
             CancellationToken cancellationToken = default)
@@ -117,7 +135,16 @@ namespace Changsta.Ai.Interface.Api.Controllers
                 .GetLatestAsync(CatalogMaxItems, cancellationToken)
                 .ConfigureAwait(false);
 
-            Mix[] ordered = mixes
+            IEnumerable<Mix> filtered = mixes;
+
+            if (!string.IsNullOrWhiteSpace(genre))
+            {
+                string normalisedQuery = NormalizeGenre(genre);
+                filtered = mixes.Where(m =>
+                    string.Equals(NormalizeGenre(m.Genre), normalisedQuery, StringComparison.OrdinalIgnoreCase));
+            }
+
+            Mix[] ordered = filtered
                 .OrderByDescending(m => m.PublishedAt ?? DateTimeOffset.MinValue)
                 .ToArray();
 
@@ -266,6 +293,11 @@ namespace Changsta.Ai.Interface.Api.Controllers
             GenreNormalisations.TryGetValue(genre.Replace("-", string.Empty, StringComparison.Ordinal), out string? canonical)
                 ? canonical
                 : genre;
+
+        public sealed class GenresResponse
+        {
+            required public string[] Genres { get; init; }
+        }
 
         public sealed class ArtistEntry
         {
