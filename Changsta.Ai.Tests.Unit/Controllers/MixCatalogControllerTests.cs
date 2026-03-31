@@ -319,7 +319,7 @@ namespace Changsta.Ai.Tests.Unit.Controllers
         public async Task GetMixesAsync_returns_400_for_invalid_page_size()
         {
             IActionResult result = await BuildSut(Array.Empty<Mix>())
-                .GetMixesAsync(null, 1, 101, CancellationToken.None);
+                .GetMixesAsync(null, 1, 201, CancellationToken.None);
 
             Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
         }
@@ -429,7 +429,7 @@ namespace Changsta.Ai.Tests.Unit.Controllers
         public async Task GetArtistsAsync_returns_400_for_invalid_page_size()
         {
             IActionResult result = await BuildSut(Array.Empty<Mix>())
-                .GetArtistsAsync(1, 101, CancellationToken.None);
+                .GetArtistsAsync(1, 201, CancellationToken.None);
 
             Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
         }
