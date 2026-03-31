@@ -135,10 +135,10 @@ namespace Changsta.Ai.Tests.Unit.Controllers
         }
 
         [Test]
-        public async Task GetCatalogAsync_returns_400_for_page_size_over_100()
+        public async Task GetCatalogAsync_returns_400_for_page_size_over_200()
         {
             IActionResult result = await BuildSut(Array.Empty<Mix>())
-                .GetCatalogAsync(null, 1, 101, CancellationToken.None);
+                .GetCatalogAsync(null, 1, 201, CancellationToken.None);
 
             Assert.That(result, Is.InstanceOf<BadRequestObjectResult>());
         }
