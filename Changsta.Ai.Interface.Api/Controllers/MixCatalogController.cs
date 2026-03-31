@@ -18,7 +18,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
 
         private const int DefaultPageSize = 20;
 
-        private const int MaxPageSize = 100;
+        private const int MaxPageSize = 200;
 
         private static readonly Dictionary<string, string> GenreNormalisations = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -128,7 +128,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
         {
             if (page < 1 || pageSize < 1 || pageSize > MaxPageSize)
             {
-                return BadRequest(new { error = "page must be >= 1 and pageSize must be between 1 and 100." });
+                return BadRequest(new { error = $"page must be >= 1 and pageSize must be between 1 and {MaxPageSize}." });
             }
 
             IReadOnlyList<Mix> mixes = await _catalogueProvider
