@@ -25,10 +25,11 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
         private const int ArtistsUpperBound = 12;
         private const int IntroTextUpperBound = 140;
         private const int MoodsUpperBound = 20;
-        private const int MaxRetryAttempts = 3;
+        private const int MaxRetryAttempts = 2;
         private const int BpmQueryMin = 100;
         private const int BpmQueryMax = 200;
         private const int BpmTolerance = 10;
+        private const int MaxBpmRegexQuestionLength = 500;
         private const int RecommendationCacheTtlMinutes = 60;
 
         private static readonly HashSet<string> TopLevelAllowed = new(StringComparer.Ordinal)
@@ -285,10 +286,6 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
                     if (attempt < MaxRetryAttempts)
                     {
-                        await Task.Delay(
-                            TimeSpan.FromSeconds(Math.Pow(2, attempt - 1)),
-                            cancellationToken).ConfigureAwait(false);
-
                         if (rawContent.Length > 0)
                         {
                             messages.Add(new AssistantChatMessage(rawContent));
@@ -522,7 +519,23 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
         internal static bool TryExtractBpmFromMixedQuery(string question, out int bpm)
         {
             bpm = 0;
-            var match = BpmInMixedQueryPattern.Match(question);
+
+            if (string.IsNullOrWhiteSpace(question) || question.Length > MaxBpmRegexQuestionLength)
+            {
+                return false;
+            }
+
+            Match match;
+
+            try
+            {
+                match = BpmInMixedQueryPattern.Match(question);
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                return false;
+            }
+
             if (!match.Success) return false;
 
             string raw = match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value;

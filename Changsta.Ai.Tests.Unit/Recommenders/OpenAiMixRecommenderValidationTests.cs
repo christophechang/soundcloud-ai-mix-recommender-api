@@ -264,6 +264,26 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
         }
 
         [Test]
+        public void TryExtractBpmFromMixedQuery_ValidMixedQuery_ReturnsTrue()
+        {
+            bool result = OpenAiMixRecommender.TryExtractBpmFromMixedQuery("dark dnb around 174bpm", out int bpm);
+
+            Assert.That(result, Is.True);
+            Assert.That(bpm, Is.EqualTo(174));
+        }
+
+        [Test]
+        public void TryExtractBpmFromMixedQuery_OverMaxQuestionLength_ReturnsFalse()
+        {
+            string query = new string('a', 501) + " 174 bpm";
+
+            bool result = OpenAiMixRecommender.TryExtractBpmFromMixedQuery(query, out int bpm);
+
+            Assert.That(result, Is.False);
+            Assert.That(bpm, Is.EqualTo(0));
+        }
+
+        [Test]
         public void BuildPrompt_DefaultsToArtistsWithoutTracklist()
         {
             string prompt = OpenAiMixRecommender.BuildPrompt("find mixes with Calibre", DefaultCatalogue, 3);

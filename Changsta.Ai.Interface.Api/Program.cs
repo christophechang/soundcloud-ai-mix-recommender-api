@@ -161,6 +161,8 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+app.MapGet("/", () => Results.NoContent());
+
 app.MapHealthChecks("/health");
 
 app.Run();
