@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -21,8 +22,8 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
     {
         private const int MixesUpperBound = 100;
         private const int TracklistUpperBound = 30;
-        private const int ArtistsUpperBound = 20;
-        private const int IntroTextUpperBound = 220;
+        private const int ArtistsUpperBound = 12;
+        private const int IntroTextUpperBound = 140;
         private const int MoodsUpperBound = 20;
         private const int MaxRetryAttempts = 3;
         private const int BpmQueryMin = 100;
@@ -142,6 +143,8 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             int maxResults,
             CancellationToken cancellationToken)
         {
+            var totalStopwatch = Stopwatch.StartNew();
+
             if (string.IsNullOrWhiteSpace(question)) throw new ArgumentException("Question is required.", nameof(question));
             mixes = mixes ?? throw new ArgumentNullException(nameof(mixes));
             if (maxResults <= 0) throw new ArgumentOutOfRangeException(nameof(maxResults));
@@ -149,6 +152,13 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             string cacheKey = BuildCacheKey(question, maxResults);
             if (this.cache.TryGetValue(cacheKey, out IReadOnlyList<MixAiRecommendation>? cached) && cached != null)
             {
+                totalStopwatch.Stop();
+                this.logger.LogInformation(
+                    "Recommendation cache hit. questionLength={QuestionLength} maxResults={MaxResults} resultCount={ResultCount} totalMs={TotalMs}",
+                    question.Length,
+                    maxResults,
+                    cached.Count,
+                    totalStopwatch.ElapsedMilliseconds);
                 return cached;
             }
 
@@ -188,6 +198,15 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 isPureGenreQuery,
                 includeTrackTitles);
 
+            this.logger.LogInformation(
+                "Recommendation request prepared. questionLength={QuestionLength} maxResults={MaxResults} mixCount={MixCount} trackSpecific={TrackSpecific} promptMode={PromptMode} promptLength={PromptLength}",
+                question.Length,
+                maxResults,
+                filteredMixes.Length,
+                includeTrackTitles,
+                includeTrackTitles ? "tracklist" : "artists",
+                prompt.Length);
+
             var messages = new List<ChatMessage>
             {
                 new SystemChatMessage("You are a recommendation engine. Output must be strict JSON only. Do not wrap output in ``` fences."),
@@ -201,6 +220,8 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
             for (int attempt = 1; attempt <= MaxRetryAttempts; attempt++)
             {
+                var attemptStopwatch = Stopwatch.StartNew();
+
                 try
                 {
                     ChatCompletion completion = await chat
@@ -235,11 +256,27 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                         this.cache.Set(cacheKey, (IReadOnlyList<MixAiRecommendation>)results, TimeSpan.FromMinutes(RecommendationCacheTtlMinutes));
                     }
 
+                    attemptStopwatch.Stop();
+                    totalStopwatch.Stop();
+                    this.logger.LogInformation(
+                        "Recommendation request succeeded. attempt={Attempt} resultCount={ResultCount} openAiMs={OpenAiMs} totalMs={TotalMs}",
+                        attempt,
+                        results.Length,
+                        attemptStopwatch.ElapsedMilliseconds,
+                        totalStopwatch.ElapsedMilliseconds);
                     return results;
                 }
                 catch (Exception ex) when (ex is InvalidOperationException or JsonException or HttpRequestException)
                 {
+                    attemptStopwatch.Stop();
                     lastException = ex;
+                    this.logger.LogInformation(
+                        "Recommendation attempt failed. attempt={Attempt} maxAttempts={MaxAttempts} openAiMs={OpenAiMs} failureType={FailureType} message={FailureMessage}",
+                        attempt,
+                        MaxRetryAttempts,
+                        attemptStopwatch.ElapsedMilliseconds,
+                        ex.GetType().Name,
+                        ex.Message);
                     this.logger.LogWarning(
                         ex,
                         "AI recommendation attempt {Attempt}/{MaxAttempts} failed.",
@@ -267,6 +304,11 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 lastException,
                 "All {MaxAttempts} AI recommendation attempts failed. Returning empty results.",
                 MaxRetryAttempts);
+            totalStopwatch.Stop();
+            this.logger.LogInformation(
+                "Recommendation request failed after retries. maxAttempts={MaxAttempts} totalMs={TotalMs}",
+                MaxRetryAttempts,
+                totalStopwatch.ElapsedMilliseconds);
 
             return Array.Empty<MixAiRecommendation>();
         }
@@ -293,81 +335,72 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
             void AppendLine(string? s = null) => sb.AppendLine(s ?? string.Empty);
 
-            AppendLine("Task: Recommend mixes that answer the user question using only the mixes provided.");
-            AppendLine("Mode: STRICT");
+            AppendLine("Task: Recommend mixes that answer the user question using only the MIX blocks below.");
             AppendLine();
 
             if (detectedBpm.HasValue)
             {
-                AppendLine("BPM query detected: the user is requesting mixes at approximately " + detectedBpm.Value + " BPM.");
-                AppendLine("The mixes below have already been pre-filtered to those within BPM range. Recommend all of them.");
-                AppendLine("Use the bpm anchor from each MIX block as the primary why evidence (e.g. \"bpm: 132-140\"). Do NOT use the user's query text as an anchor.");
+                AppendLine("BPM query detected: mixes shown are already within range. Use a literal bpm anchor from the MIX block, not the user's wording.");
                 AppendLine();
             }
 
             if (detectedGenre is not null)
             {
-                AppendLine("Genre pre-filter applied: only '" + detectedGenre + "' mixes are shown below.");
+                AppendLine("Genre pre-filter applied: only '" + detectedGenre + "' mixes are shown.");
 
                 if (isPureGenreQuery)
                 {
-                    AppendLine("The query is a pure genre request with no other signals. Return ALL of them, up to the maximum of " + maxResults + ". Do not apply any extra quality gate — every mix shown is already a valid result.");
+                    AppendLine("Pure genre query: return all matching mixes up to " + maxResults + ".");
                 }
                 else
                 {
-                    AppendLine("All of them match the genre. The query also contains additional signals (mood, artist, BPM) — rank by those and exclude any mix that clearly does not satisfy them.");
+                    AppendLine("All shown mixes match the genre. Rank by the remaining signals only.");
                 }
 
                 AppendLine();
             }
 
             AppendLine("Search strategy:");
-            AppendLine("- Genre query (e.g. \"dnb mixes\", \"house music\", \"ukg\"): prioritize genre field, then related moods and intro text. Return ALL mixes whose genre matches, not just the first or most recent.");
+            AppendLine("- Genre query: prioritize genre, then moods and intro. Return all genuine matches.");
             if (includeTrackTitles)
             {
-                AppendLine("- Artist/track query (e.g. \"mixes with Calibre\", \"anything with Noisia\", \"track with Pillow Dub\"): search each mix's artists list and tracklist for the artist or track name. Also check intro text. Return ALL mixes that contain the artist/track.");
+                AppendLine("- Artist/track query: search artists and tracklist, then intro.");
             }
             else
             {
-                AppendLine("- Artist query (e.g. \"mixes with Calibre\", \"anything with Noisia\"): search each mix's artists list for the artist name. Also check intro text. Return ALL mixes that contain the artist.");
+                AppendLine("- Artist query: search artists, then intro.");
             }
-            AppendLine("- Mood query (e.g. \"something dark and heavy\", \"uplifting vibes\"): prioritize moods field, then energy, then intro text.");
-            AppendLine("- Scenario/activity query (e.g. \"driving a car\", \"cooking in the kitchen\", \"working out\", \"late night session\", \"morning run\", \"studying\"): interpret the scenario as a set of mood and energy signals BEFORE searching. Map the activity to likely mood and energy tokens that exist in the MIX blocks (e.g. driving/commuting → driving, rolling; gym/workout/running → aggressive, energetic; late night/studying/focus → dark, mellow, deep; cooking/casual/background → upbeat, chill; party/dancing → high, euphoric). Then match using those inferred mood tokens and energy values. The why anchors must still be verbatim tokens from that mix's moods or energy fields — never use the scenario description itself as an anchor.");
-            AppendLine("- Tempo/BPM query: if the user question is a bare number between 100 and 200 (e.g. \"130\", \"174\") or a number with 'bpm' suffix (e.g. \"130bpm\", \"170 bpm\"), treat it as a BPM query. Match mixes whose bpm value or bpm range includes or is close to that number. Do NOT interpret bare numbers as genre or mood signals.");
-            AppendLine("- Mixed query (e.g. \"dark dnb with Noisia around 174bpm\"): weight across all dimensions, favour mixes matching the most dimensions.");
-            AppendLine("- Decompose the user question into its component signals before searching.");
-            AppendLine("- Genre matching: use your music knowledge to match the user query to genre values in the MIX blocks in BOTH directions. The genre field may contain abbreviations (e.g. 'dnb', 'ukg') or full names (e.g. 'drum & bass', 'uk garage'). Common aliases: dnb/d&b = drum & bass, ukg = uk garage, techno ≈ tech house. Match regardless of casing or format. The why anchors must still be copied verbatim from the MIX block genre field.");
-            AppendLine("- Scan every mix in the catalogue before deciding. Return up to " + maxResults + " mixes that genuinely match the query. Returning fewer results is always better than including a poor match — only include a mix if its metadata clearly supports the query.");
+            AppendLine("- Mood query: prioritize moods, then energy, then intro. Prefer literal metadata over inferred labels.");
+            AppendLine("- Scenario/activity query: infer mood and energy for ranking, but only use evidence literally present in the chosen MIX block. Check structured fields first: genre, energy, moods, artists, bpm. Use intro only as a fallback.");
+            AppendLine("- Tempo/BPM query: treat a bare 100-200 number or number+bpm as tempo. Match nearby bpm values or ranges only.");
+            AppendLine("- Mixed query: combine all signals and prefer mixes matching the most dimensions.");
+            AppendLine("- Genre aliases are allowed for ranking, but why anchors must still be copied verbatim from the MIX block.");
+            AppendLine("- Scan the full catalogue shown. Return up to " + maxResults + " genuine matches only.");
             AppendLine();
             AppendLine("Rules:");
-            AppendLine("1) You must only use mix ids provided in the MIX blocks.");
-            AppendLine("2) Output strict JSON only, matching the JSON schema exactly, no extra properties, and do not include ``` anywhere.");
-            AppendLine("3) You may use your knowledge to interpret the user's query (e.g. inferring moods from a scenario like \"driving\" or \"cooking\"). However, all evidence in the why anchors MUST come only from the same mix block you are recommending — never fabricate anchors.");
+            AppendLine("1) Use only mix ids from the MIX blocks.");
+            AppendLine("2) Output strict JSON only. No markdown fences and no extra properties.");
+            AppendLine("3) You may infer meaning from the query, but every why anchor must come from the same MIX block.");
+            AppendLine("4) If a mood, genre, artist, bpm, or intro phrase is not literally present in that MIX block, do not use it as a why anchor.");
             AppendLine(includeTrackTitles
-                ? "4) Evidence may come from intro, genre, energy, bpm, moods, artists, or tracklist."
-                : "4) Evidence may come from intro, genre, energy, bpm, moods, or artists.");
-            AppendLine("5) Every why string MUST be a quoted ANCHOR copied verbatim from that same mix block, and nothing else.");
-            AppendLine("6) Allowed why formats are exactly: \"ANCHOR\" or \"ANCHOR\".");
+                ? "5) Evidence may come from intro, genre, energy, bpm, moods, artists, or tracklist."
+                : "5) Evidence may come from intro, genre, energy, bpm, moods, or artists.");
+            AppendLine("6) Every why string must be a quoted anchor copied verbatim from that MIX block.");
+            AppendLine("6b) Prefer the shortest valid anchors from structured fields first: genre, energy, one mood token, one artist, or bpm. Use intro only if no structured anchor works.");
             AppendLine(includeTrackTitles
-                ? "6b) Example valid why values: \"\\\"dnb\\\"\", \"\\\"peak\\\".\", \"\\\"bpm: 172-174\\\"\", \"\\\"driving\\\"\", \"\\\"Calibre\\\"\", \"\\\"Calibre - Pillow Dub\\\"\"."
-                : "6b) Example valid why values: \"\\\"dnb\\\"\", \"\\\"peak\\\".\", \"\\\"bpm: 172-174\\\"\", \"\\\"driving\\\"\", \"\\\"Calibre\\\"\".");
-            AppendLine("6c) Example invalid why values: \"dnb\", \"\\\"dnb\\\" and more\", \"genre: dnb\", \"\\\"driving rolling\\\"\", \"\\\"bpm 172-174\\\"\".");
+                ? "7) Valid anchors include values like \"\\\"dnb\\\"\", \"\\\"peak\\\"\", \"\\\"bpm: 172-174\\\"\", \"\\\"Calibre\\\"\", or \"\\\"Calibre - Pillow Dub\\\"\"."
+                : "7) Valid anchors include values like \"\\\"dnb\\\"\", \"\\\"peak\\\"\", \"\\\"bpm: 172-174\\\"\", or \"\\\"Calibre\\\"\".");
+            AppendLine("8) Invalid anchors include unquoted text, combined moods, rewritten values, descriptive phrases not copied exactly from intro, or tokens absent from the MIX block.");
             AppendLine(includeTrackTitles
-                ? "7) The ANCHOR must appear verbatim in that mix block intro OR be exactly one of: genre, energy, one mood token, an artist name, \"bpm: X\" or \"bpm: X-Y\", OR be a substring of a tracklist line from that mix."
-                : "7) The ANCHOR must appear verbatim in that mix block intro OR be exactly one of: genre, energy, one mood token, an artist name, or \"bpm: X\" or \"bpm: X-Y\".");
-            AppendLine("7a) If the ANCHOR comes from moods, it MUST be exactly ONE mood token (no spaces). Examples: \"\\\"driving\\\"\", \"\\\"aggressive\\\"\".");
-            AppendLine("7b) Never combine multiple moods into one ANCHOR. This is invalid: \"\\\"driving rolling dark\\\"\".");
-            AppendLine("8) Never output the full moods or artists list as a why string, and never include the literal prefixes \"moods:\", \"genre:\", \"energy:\", \"artists:\" in any why string.");
-            AppendLine("9) If you cannot produce at least 1 valid why string for a mix, do not include that mix.");
-            AppendLine("10) If insufficient evidence exists overall, return zero results.");
-            AppendLine("11) results length must be between 0 and " + maxResults + ".");
-            AppendLine("12) why must contain 1 to 4 strings.");
-            AppendLine("13) confidence must be between 0 and 1.");
-            AppendLine("14) title and url are REQUIRED for each result, and MUST be copied character-for-character from the same MIX block. Do not rephrase, change punctuation, alter apostrophes or quotes, change capitalisation, or edit in any way. Any deviation will cause the response to be rejected.");
-            AppendLine("15) clarifyingQuestion must be null.");
-            AppendLine("16) reason is REQUIRED for each result. It must be a 1-2 sentence natural-language explanation of why this mix matches the user question. Be specific and helpful. Maximum 300 characters.");
-            AppendLine("17) reason is free-text and should reference the matching signals (genre, mood, artist, tempo) in a readable way. Do not just repeat the anchors.");
-            AppendLine("18) If any rule is violated, your response will be rejected.");
+                ? "9) Anchors may be intro substrings, genre, energy, one mood token, one artist name, bpm, or a tracklist substring."
+                : "9) Anchors may be intro substrings, genre, energy, one mood token, one artist name, or bpm.");
+            AppendLine("10) Never normalize or rewrite anchors, and never output full moods or artists lists or prefixes like \"genre:\".");
+            AppendLine("10b) Do not invent adjective phrases like \"classic anthemic\" or \"late-night energy\" unless that exact phrase appears in the intro.");
+            AppendLine("11) If you cannot produce at least one valid why anchor for a mix, exclude it.");
+            AppendLine("12) Return 0 to " + maxResults + " results. why must contain 1 to 4 strings. confidence must be between 0 and 1.");
+            AppendLine("13) title and url must be copied character-for-character from the same MIX block.");
+            AppendLine("14) clarifyingQuestion must be null.");
+            AppendLine("15) reason is required, specific, and max 300 characters.");
             AppendLine();
             AppendLine("JSON schema:");
             AppendLine("{ \"results\": [ { \"mixId\": \"...\", \"title\": \"...\", \"url\": \"...\", \"reason\": \"...\", \"why\": [\"...\"], \"confidence\": 0.0 } ], \"clarifyingQuestion\": null }");
