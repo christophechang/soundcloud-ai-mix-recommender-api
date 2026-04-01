@@ -182,6 +182,27 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
         }
 
         [Test]
+        public void ParseAndValidate_QuotedArtistAnchor_Succeeds()
+        {
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
+                    "title": "Test Mix",
+                    "url": "https://soundcloud.com/test/mix",
+                    "reason": "Features Calibre which matches your artist search.",
+                    "why": ["\"dnb\"", "\"Calibre\""],
+                    "confidence": 0.75
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.DoesNotThrow(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
         public void ParseAndValidate_QuotedTracklistAnchor_Succeeds()
         {
             // "Calibre - Pillow Dub" is a full tracklist line
@@ -201,6 +222,64 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
 
             Assert.DoesNotThrow(() =>
                 OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void BuildArtistAnchors_DeduplicatesArtists_PreservingReadableForm()
+        {
+            var mix = new Mix
+            {
+                Id = "mix-2",
+                Title = "Artist Test Mix",
+                Url = "https://soundcloud.com/test/artist-mix",
+                Genre = "dnb",
+                Energy = "peak",
+                Tracklist = new[]
+                {
+                    new Track { Artist = "Calibre", Title = "One" },
+                    new Track { Artist = " calibre ", Title = "Two" },
+                    new Track { Artist = "Noisia", Title = "Three" },
+                },
+            };
+
+            string[] artists = OpenAiMixRecommender.BuildArtistAnchors(mix);
+
+            Assert.That(artists, Is.EqualTo(new[] { "Calibre", "Noisia" }));
+        }
+
+        [Test]
+        public void IsTrackSpecificQuery_ExplicitTrackLanguage_ReturnsTrue()
+        {
+            bool result = OpenAiMixRecommender.IsTrackSpecificQuery("find mixes with the track Pillow Dub");
+
+            Assert.That(result, Is.True);
+        }
+
+        [Test]
+        public void IsTrackSpecificQuery_ArtistRequest_ReturnsFalse()
+        {
+            bool result = OpenAiMixRecommender.IsTrackSpecificQuery("find mixes with Calibre");
+
+            Assert.That(result, Is.False);
+        }
+
+        [Test]
+        public void BuildPrompt_DefaultsToArtistsWithoutTracklist()
+        {
+            string prompt = OpenAiMixRecommender.BuildPrompt("find mixes with Calibre", DefaultCatalogue, 3);
+
+            Assert.That(prompt, Does.Contain("artists: Calibre | Noisia"));
+            Assert.That(prompt, Does.Not.Contain("tracklist:"));
+        }
+
+        [Test]
+        public void BuildPrompt_TrackSpecificQuery_IncludesTracklist()
+        {
+            string prompt = OpenAiMixRecommender.BuildPrompt("find mixes with the track Pillow Dub", DefaultCatalogue, 3, includeTrackTitles: true);
+
+            Assert.That(prompt, Does.Contain("artists: Calibre | Noisia"));
+            Assert.That(prompt, Does.Contain("tracklist:"));
+            Assert.That(prompt, Does.Contain("Calibre - Pillow Dub"));
         }
 
         [Test]

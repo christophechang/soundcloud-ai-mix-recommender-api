@@ -21,6 +21,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
     {
         private const int MixesUpperBound = 100;
         private const int TracklistUpperBound = 30;
+        private const int ArtistsUpperBound = 20;
         private const int IntroTextUpperBound = 220;
         private const int MoodsUpperBound = 20;
         private const int MaxRetryAttempts = 3;
@@ -60,6 +61,20 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             "me", "mix", "mixes", "music", "my", "of", "on", "or",
             "playlist", "please", "set", "sets", "show", "some",
             "the", "want", "with",
+        };
+
+        private static readonly string[] TrackSpecificHints = new[]
+        {
+            "track",
+            "tracks",
+            "song",
+            "songs",
+            "tune",
+            "tunes",
+            "title",
+            "titles",
+            "feat.",
+            "featuring",
         };
 
         // Pre-sorted longest-first so multi-word phrases ("drum and bass") match before
@@ -163,7 +178,15 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
             // Only emit the BPM-specific prompt note for pure BPM queries.
             // Mixed queries need the AI to handle genre/mood dimensions too.
-            string prompt = BuildPrompt(question, filteredMixes, maxResults, isBpmQuery ? detectedBpm : null, detectedGenre, isPureGenreQuery);
+            bool includeTrackTitles = IsTrackSpecificQuery(question);
+            string prompt = BuildPrompt(
+                question,
+                filteredMixes,
+                maxResults,
+                isBpmQuery ? detectedBpm : null,
+                detectedGenre,
+                isPureGenreQuery,
+                includeTrackTitles);
 
             var messages = new List<ChatMessage>
             {
@@ -251,7 +274,14 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
         private static string BuildCacheKey(string question, int maxResults) =>
             "recommend:" + question.Trim().ToLowerInvariant() + ":" + maxResults.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
-        internal static string BuildPrompt(string question, IReadOnlyList<Mix> mixes, int maxResults, int? detectedBpm = null, string? detectedGenre = null, bool isPureGenreQuery = false)
+        internal static string BuildPrompt(
+            string question,
+            IReadOnlyList<Mix> mixes,
+            int maxResults,
+            int? detectedBpm = null,
+            string? detectedGenre = null,
+            bool isPureGenreQuery = false,
+            bool includeTrackTitles = false)
         {
             // Strip prompt-delimiter sequences to prevent fence breakout.
             question = question
@@ -293,7 +323,14 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
             AppendLine("Search strategy:");
             AppendLine("- Genre query (e.g. \"dnb mixes\", \"house music\", \"ukg\"): prioritize genre field, then related moods and intro text. Return ALL mixes whose genre matches, not just the first or most recent.");
-            AppendLine("- Artist/track query (e.g. \"mixes with Calibre\", \"anything with Noisia\"): search each mix's tracklist for the artist or track name (substring match). Also check intro text. Return ALL mixes that contain the artist/track.");
+            if (includeTrackTitles)
+            {
+                AppendLine("- Artist/track query (e.g. \"mixes with Calibre\", \"anything with Noisia\", \"track with Pillow Dub\"): search each mix's artists list and tracklist for the artist or track name. Also check intro text. Return ALL mixes that contain the artist/track.");
+            }
+            else
+            {
+                AppendLine("- Artist query (e.g. \"mixes with Calibre\", \"anything with Noisia\"): search each mix's artists list for the artist name. Also check intro text. Return ALL mixes that contain the artist.");
+            }
             AppendLine("- Mood query (e.g. \"something dark and heavy\", \"uplifting vibes\"): prioritize moods field, then energy, then intro text.");
             AppendLine("- Scenario/activity query (e.g. \"driving a car\", \"cooking in the kitchen\", \"working out\", \"late night session\", \"morning run\", \"studying\"): interpret the scenario as a set of mood and energy signals BEFORE searching. Map the activity to likely mood and energy tokens that exist in the MIX blocks (e.g. driving/commuting → driving, rolling; gym/workout/running → aggressive, energetic; late night/studying/focus → dark, mellow, deep; cooking/casual/background → upbeat, chill; party/dancing → high, euphoric). Then match using those inferred mood tokens and energy values. The why anchors must still be verbatim tokens from that mix's moods or energy fields — never use the scenario description itself as an anchor.");
             AppendLine("- Tempo/BPM query: if the user question is a bare number between 100 and 200 (e.g. \"130\", \"174\") or a number with 'bpm' suffix (e.g. \"130bpm\", \"170 bpm\"), treat it as a BPM query. Match mixes whose bpm value or bpm range includes or is close to that number. Do NOT interpret bare numbers as genre or mood signals.");
@@ -306,15 +343,21 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             AppendLine("1) You must only use mix ids provided in the MIX blocks.");
             AppendLine("2) Output strict JSON only, matching the JSON schema exactly, no extra properties, and do not include ``` anywhere.");
             AppendLine("3) You may use your knowledge to interpret the user's query (e.g. inferring moods from a scenario like \"driving\" or \"cooking\"). However, all evidence in the why anchors MUST come only from the same mix block you are recommending — never fabricate anchors.");
-            AppendLine("4) Evidence may come from intro, genre, energy, bpm, moods, or tracklist.");
+            AppendLine(includeTrackTitles
+                ? "4) Evidence may come from intro, genre, energy, bpm, moods, artists, or tracklist."
+                : "4) Evidence may come from intro, genre, energy, bpm, moods, or artists.");
             AppendLine("5) Every why string MUST be a quoted ANCHOR copied verbatim from that same mix block, and nothing else.");
             AppendLine("6) Allowed why formats are exactly: \"ANCHOR\" or \"ANCHOR\".");
-            AppendLine("6b) Example valid why values: \"\\\"dnb\\\"\", \"\\\"peak\\\".\", \"\\\"bpm: 172-174\\\"\", \"\\\"driving\\\"\", \"\\\"Lake People - Night Drive\\\"\".");
+            AppendLine(includeTrackTitles
+                ? "6b) Example valid why values: \"\\\"dnb\\\"\", \"\\\"peak\\\".\", \"\\\"bpm: 172-174\\\"\", \"\\\"driving\\\"\", \"\\\"Calibre\\\"\", \"\\\"Calibre - Pillow Dub\\\"\"."
+                : "6b) Example valid why values: \"\\\"dnb\\\"\", \"\\\"peak\\\".\", \"\\\"bpm: 172-174\\\"\", \"\\\"driving\\\"\", \"\\\"Calibre\\\"\".");
             AppendLine("6c) Example invalid why values: \"dnb\", \"\\\"dnb\\\" and more\", \"genre: dnb\", \"\\\"driving rolling\\\"\", \"\\\"bpm 172-174\\\"\".");
-            AppendLine("7) The ANCHOR must appear verbatim in that mix block intro OR be exactly one of: genre, energy, one mood token, \"bpm: X\" or \"bpm: X-Y\", OR be a substring of a tracklist line from that mix.");
+            AppendLine(includeTrackTitles
+                ? "7) The ANCHOR must appear verbatim in that mix block intro OR be exactly one of: genre, energy, one mood token, an artist name, \"bpm: X\" or \"bpm: X-Y\", OR be a substring of a tracklist line from that mix."
+                : "7) The ANCHOR must appear verbatim in that mix block intro OR be exactly one of: genre, energy, one mood token, an artist name, or \"bpm: X\" or \"bpm: X-Y\".");
             AppendLine("7a) If the ANCHOR comes from moods, it MUST be exactly ONE mood token (no spaces). Examples: \"\\\"driving\\\"\", \"\\\"aggressive\\\"\".");
             AppendLine("7b) Never combine multiple moods into one ANCHOR. This is invalid: \"\\\"driving rolling dark\\\"\".");
-            AppendLine("8) Never output the full moods list as a why string, and never include the literal prefixes \"moods:\", \"genre:\", \"energy:\" in any why string.");
+            AppendLine("8) Never output the full moods or artists list as a why string, and never include the literal prefixes \"moods:\", \"genre:\", \"energy:\", \"artists:\" in any why string.");
             AppendLine("9) If you cannot produce at least 1 valid why string for a mix, do not include that mix.");
             AppendLine("10) If insufficient evidence exists overall, return zero results.");
             AppendLine("11) results length must be between 0 and " + maxResults + ".");
@@ -340,6 +383,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 var m = mixes[i];
 
                 string intro = TakePrefix(m.Description, IntroTextUpperBound);
+                string artists = string.Join(" | ", BuildArtistAnchors(m).Take(ArtistsUpperBound));
                 string tracks = string.Join("\n", m.Tracklist.Take(TracklistUpperBound).Select(t => $"{t.Artist} - {t.Title}"));
 
                 string bpm = FormatBpmAnchor(m.BpmMin, m.BpmMax);
@@ -356,8 +400,13 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 AppendLine("energy: " + (m.Energy ?? string.Empty));
                 AppendLine("bpm: " + bpm);
                 AppendLine("moods: " + moods);
-                AppendLine("tracklist:");
-                AppendLine(tracks);
+                AppendLine("artists: " + artists);
+
+                if (includeTrackTitles)
+                {
+                    AppendLine("tracklist:");
+                    AppendLine(tracks);
+                }
                 AppendLine("END_MIX");
 
                 if (i < mixes.Count - 1) AppendLine();
@@ -374,6 +423,48 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             int a = min!.Value;
             int b = max!.Value;
             return a == b ? a.ToString() : $"{a}-{b}";
+        }
+
+        internal static bool IsTrackSpecificQuery(string question)
+        {
+            if (string.IsNullOrWhiteSpace(question))
+            {
+                return false;
+            }
+
+            if (question.Contains("\"", StringComparison.Ordinal) || question.Contains('\'', StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            return TrackSpecificHints.Any(hint => question.Contains(hint, StringComparison.OrdinalIgnoreCase));
+        }
+
+        internal static string[] BuildArtistAnchors(Mix mix)
+        {
+            if (mix.Tracklist is null || mix.Tracklist.Count == 0)
+            {
+                return Array.Empty<string>();
+            }
+
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var artists = new List<string>();
+
+            foreach (Track track in mix.Tracklist)
+            {
+                string artist = (track.Artist ?? string.Empty).Trim();
+                if (artist.Length == 0)
+                {
+                    continue;
+                }
+
+                if (seen.Add(NormalizeAnchorKey(artist)))
+                {
+                    artists.Add(artist);
+                }
+            }
+
+            return artists.ToArray();
         }
 
         internal static bool TryParseBpmQuery(string question, out int bpm)
@@ -547,6 +638,8 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 if (tok.Length > 0) moodTokens.Add(tok);
             }
 
+            string[] artists = BuildArtistAnchors(mix);
+
             var trackLines = mix.Tracklist
                 .Select(t => $"{t.Artist} - {t.Title}")
                 .Where(x => !string.IsNullOrWhiteSpace(x))
@@ -558,7 +651,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
                 if (TryExtractQuotedAnchor(original, out var anchor))
                 {
-                    EnsureAnchorIsValid(anchor, intro, genre, energy, bpmAnchor, moodTokens, trackLines, mix.Id);
+                    EnsureAnchorIsValid(anchor, intro, genre, energy, bpmAnchor, moodTokens, artists, trackLines, mix.Id);
                     continue;
                 }
 
@@ -569,7 +662,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 if (IsAllowedUnquotedAnchor(candidate, genre, energy, bpmAnchor, moodTokens))
                 {
                     why[i] = "\"" + candidate + "\"";
-                    EnsureAnchorIsValid(candidate, intro, genre, energy, bpmAnchor, moodTokens, trackLines, mix.Id);
+                    EnsureAnchorIsValid(candidate, intro, genre, energy, bpmAnchor, moodTokens, artists, trackLines, mix.Id);
                     continue;
                 }
 
@@ -606,6 +699,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             string energy,
             string bpmAnchor,
             HashSet<string> moodTokens,
+            string[] artists,
             string[] trackLines,
             string mixId)
         {
@@ -620,16 +714,22 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                  string.Equals(anchor, "bpm: " + bpmAnchor, StringComparison.OrdinalIgnoreCase));
 
             bool foundInMoods = moodTokens.Contains(anchor);
+            bool foundInArtists = artists.Any(artist => string.Equals(anchor, artist, StringComparison.OrdinalIgnoreCase));
 
             bool foundInTracklist = trackLines.Any(line => line.Contains(anchor, StringComparison.Ordinal));
 
-            if (!(foundInIntro || foundInGenre || foundInEnergy || foundInBpm || foundInMoods || foundInTracklist))
+            if (!(foundInIntro || foundInGenre || foundInEnergy || foundInBpm || foundInMoods || foundInArtists || foundInTracklist))
             {
                 throw new InvalidOperationException(
                     "Why anchor not found in MIX block. " +
                     $"mixId='{mixId}', anchor='{anchor}', " +
-                    $"foundInIntro={foundInIntro}, foundInGenre={foundInGenre}, foundInEnergy={foundInEnergy}, foundInBpm={foundInBpm}, foundInMoods={foundInMoods}, foundInTracklist={foundInTracklist}.");
+                    $"foundInIntro={foundInIntro}, foundInGenre={foundInGenre}, foundInEnergy={foundInEnergy}, foundInBpm={foundInBpm}, foundInMoods={foundInMoods}, foundInArtists={foundInArtists}, foundInTracklist={foundInTracklist}.");
             }
+        }
+
+        private static string NormalizeAnchorKey(string value)
+        {
+            return string.Concat(value.Trim().Where(c => !char.IsWhiteSpace(c))).ToLowerInvariant();
         }
 
         private static bool TryExtractQuotedAnchor(string value, out string anchor)
