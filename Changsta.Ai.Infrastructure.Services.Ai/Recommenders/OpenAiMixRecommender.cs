@@ -191,9 +191,10 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             // Only emit the BPM-specific prompt note for pure BPM queries.
             // Mixed queries need the AI to handle genre/mood dimensions too.
             bool includeTrackTitles = IsTrackSpecificQuery(question);
+            (Mix[] promptMixes, Dictionary<string, string> promptIdToRealId) = BuildPromptMixes(filteredMixes);
             string prompt = BuildPrompt(
                 question,
-                filteredMixes,
+                promptMixes,
                 maxResults,
                 isBpmQuery ? detectedBpm : null,
                 detectedGenre,
@@ -215,7 +216,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 new UserChatMessage(prompt),
             };
 
-            var byId = filteredMixes.ToDictionary(m => m.Id, StringComparer.Ordinal);
+            var byId = promptMixes.ToDictionary(m => m.Id, StringComparer.Ordinal);
 
             Exception? lastException = null;
             string rawContent = string.Empty;
@@ -235,7 +236,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                         : string.Empty;
 
                     string content = NormalizeAiJson(rawContent);
-                    AiResponse parsed = ParseAndValidate(content, filteredMixes, maxResults);
+                    AiResponse parsed = ParseAndValidate(content, promptMixes, maxResults);
 
                     MixAiRecommendation[] results = parsed.Results
                         .Select(r =>
@@ -243,7 +244,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                             var mix = byId[r.MixId];
                             return new MixAiRecommendation
                             {
-                                MixId = r.MixId,
+                                MixId = promptIdToRealId[r.MixId],
                                 Title = mix.Title,
                                 Url = mix.Url,
                                 Reason = r.Reason,
@@ -441,6 +442,36 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             }
 
             return sb.ToString().Trim();
+        }
+
+        internal static (Mix[] PromptMixes, Dictionary<string, string> PromptIdToRealId) BuildPromptMixes(IReadOnlyList<Mix> mixes)
+        {
+            var promptMixes = new Mix[mixes.Count];
+            var promptIdToRealId = new Dictionary<string, string>(mixes.Count, StringComparer.Ordinal);
+
+            for (int i = 0; i < mixes.Count; i++)
+            {
+                Mix mix = mixes[i];
+                string promptId = "m" + (i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                promptIdToRealId[promptId] = mix.Id;
+
+                promptMixes[i] = new Mix
+                {
+                    Id = promptId,
+                    Title = mix.Title,
+                    Url = mix.Url,
+                    Description = mix.Description,
+                    Tracklist = mix.Tracklist,
+                    Genre = mix.Genre,
+                    Energy = mix.Energy,
+                    BpmMin = mix.BpmMin,
+                    BpmMax = mix.BpmMax,
+                    Moods = mix.Moods,
+                    PublishedAt = mix.PublishedAt,
+                };
+            }
+
+            return (promptMixes, promptIdToRealId);
         }
 
         private static string FormatBpmAnchor(int? min, int? max)

@@ -313,6 +313,31 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
             Assert.That(artists, Is.EqualTo(new[] { "Calibre", "Noisia" }));
         }
 
+        [Test]
+        public void BuildPromptMixes_AssignsShortPromptIds_AndPreservesRealIdMapping()
+        {
+            var mixes = new[]
+            {
+                DefaultMix,
+                new Mix
+                {
+                    Id = "mix-2",
+                    Title = "Second Mix",
+                    Url = "https://soundcloud.com/test/mix-2",
+                    Genre = "house",
+                    Energy = "mid",
+                    Tracklist = Array.Empty<Track>(),
+                },
+            };
+
+            (Mix[] promptMixes, Dictionary<string, string> promptIdToRealId) = OpenAiMixRecommender.BuildPromptMixes(mixes);
+
+            Assert.That(promptMixes.Select(m => m.Id), Is.EqualTo(new[] { "m1", "m2" }));
+            Assert.That(promptIdToRealId["m1"], Is.EqualTo("mix-1"));
+            Assert.That(promptIdToRealId["m2"], Is.EqualTo("mix-2"));
+            Assert.That(promptMixes[0].Title, Is.EqualTo(DefaultMix.Title));
+        }
+
         [TestCase("deephouse", "deep-house")]
         [TestCase("deep-house", "deep-house")]
         [TestCase("ukbass", "uk-bass")]
