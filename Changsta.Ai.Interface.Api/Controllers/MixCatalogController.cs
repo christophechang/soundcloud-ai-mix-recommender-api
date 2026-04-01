@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
+using Changsta.Ai.Core.Normalization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Changsta.Ai.Interface.Api.Controllers
@@ -19,12 +20,6 @@ namespace Changsta.Ai.Interface.Api.Controllers
         private const int DefaultPageSize = 20;
 
         private const int MaxPageSize = 200;
-
-        private static readonly Dictionary<string, string> GenreNormalisations = new(StringComparer.OrdinalIgnoreCase)
-        {
-            { "deephouse", "deep-house" },
-            { "ukbass", "uk-bass" },
-        };
 
         private readonly IMixCatalogueProvider _catalogueProvider;
 
@@ -288,11 +283,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
             };
         }
 
-        private static string NormalizeGenre(string? genre) =>
-            string.IsNullOrEmpty(genre) ? string.Empty :
-            GenreNormalisations.TryGetValue(genre.Replace("-", string.Empty, StringComparison.Ordinal), out string? canonical)
-                ? canonical
-                : genre;
+        private static string NormalizeGenre(string? genre) => GenreNormalizer.Normalize(genre);
 
         public sealed class GenresResponse
         {

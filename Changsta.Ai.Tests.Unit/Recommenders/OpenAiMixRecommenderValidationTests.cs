@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Changsta.Ai.Core.Domain;
+using Changsta.Ai.Core.Normalization;
 using Changsta.Ai.Infrastructure.Services.Ai.Recommenders;
 using NUnit.Framework;
 
@@ -160,9 +161,8 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
         }
 
         [Test]
-        public void ParseAndValidate_QuotedIntroSubstringAnchor_Succeeds()
+        public void ParseAndValidate_QuotedIntroSubstringAnchor_Throws()
         {
-            // "soulful and rolling" appears verbatim in DefaultMix.Description
             const string json = """
                 {
                   "results": [{
@@ -177,7 +177,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 }
                 """;
 
-            Assert.DoesNotThrow(() =>
+            Assert.Throws<InvalidOperationException>(() =>
                 OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
         }
 
@@ -225,6 +225,72 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
         }
 
         [Test]
+        public void ParseAndValidate_NormalizedGenreAnchor_Succeeds()
+        {
+            var catalogue = new[]
+            {
+                new Mix
+                {
+                    Id = "mix-2",
+                    Title = "Deep Mix",
+                    Url = "https://soundcloud.com/test/deep",
+                    Description = "A deep-house journey.",
+                    Genre = "deep-house",
+                    Energy = "low",
+                    Tracklist = Array.Empty<Track>(),
+                },
+            };
+
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-2",
+                    "reason": "Fits a deep house request.",
+                    "why": ["\"deephouse\""],
+                    "confidence": 0.8
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.DoesNotThrow(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, catalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_NonCanonicalLowAnchor_Throws()
+        {
+            var catalogue = new[]
+            {
+                new Mix
+                {
+                    Id = "mix-3",
+                    Title = "Low Energy Mix",
+                    Url = "https://soundcloud.com/test/low",
+                    Description = "A slowburn deep-house journey.",
+                    Genre = "deep-house",
+                    Energy = "mid",
+                    Tracklist = Array.Empty<Track>(),
+                },
+            };
+
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-3",
+                    "reason": "Fits a low-key request.",
+                    "why": ["\"low\""],
+                    "confidence": 0.8
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.Throws<InvalidOperationException>(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, catalogue, maxResults: 3));
+        }
+
+        [Test]
         public void BuildArtistAnchors_DeduplicatesArtists_PreservingReadableForm()
         {
             var mix = new Mix
@@ -245,6 +311,16 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
             string[] artists = OpenAiMixRecommender.BuildArtistAnchors(mix);
 
             Assert.That(artists, Is.EqualTo(new[] { "Calibre", "Noisia" }));
+        }
+
+        [TestCase("deephouse", "deep-house")]
+        [TestCase("deep-house", "deep-house")]
+        [TestCase("ukbass", "uk-bass")]
+        [TestCase("uk-bass", "uk-bass")]
+        [TestCase("dnb", "dnb")]
+        public void GenreNormalizer_Normalize_ReturnsExpected(string input, string expected)
+        {
+            Assert.That(GenreNormalizer.Normalize(input), Is.EqualTo(expected));
         }
 
         [Test]
@@ -290,6 +366,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
 
             Assert.That(prompt, Does.Contain("artists: Calibre | Noisia"));
             Assert.That(prompt, Does.Not.Contain("tracklist:"));
+            Assert.That(prompt, Does.Not.Contain("intro:"));
         }
 
         [Test]
