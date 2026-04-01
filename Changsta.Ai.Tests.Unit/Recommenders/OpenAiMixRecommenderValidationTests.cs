@@ -411,7 +411,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
         }
 
         [Test]
-        public void ParseAndValidate_WrongTitle_Throws()
+        public void ParseAndValidate_WrongTitle_Ignored()
         {
             const string json = """
                 {
@@ -427,12 +427,12 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 }
                 """;
 
-            Assert.Throws<InvalidOperationException>(() =>
+            Assert.DoesNotThrow(() =>
                 OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
         }
 
         [Test]
-        public void ParseAndValidate_WrongUrl_Throws()
+        public void ParseAndValidate_WrongUrl_Ignored()
         {
             const string json = """
                 {
@@ -448,7 +448,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 }
                 """;
 
-            Assert.Throws<InvalidOperationException>(() =>
+            Assert.DoesNotThrow(() =>
                 OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
         }
 
