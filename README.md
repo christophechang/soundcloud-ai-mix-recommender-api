@@ -1,5 +1,6 @@
 # SoundCloud Mix Recommender API
 
+[![CI Build](https://github.com/christophechang/soundcloud-ai-mix-recommender-api/actions/workflows/ci-build.yml/badge.svg)](https://github.com/christophechang/soundcloud-ai-mix-recommender-api/actions/workflows/ci-build.yml)
 [![GitHub release](https://img.shields.io/github/v/release/christophechang/soundcloud-ai-mix-recommender-api)](https://github.com/christophechang/soundcloud-ai-mix-recommender-api/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
