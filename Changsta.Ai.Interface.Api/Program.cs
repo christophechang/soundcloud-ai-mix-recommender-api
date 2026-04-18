@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Threading.RateLimiting;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
+using Changsta.Ai.Core.BusinessProcesses.Catalogue;
 using Changsta.Ai.Core.BusinessProcesses.Recommendations;
 using Changsta.Ai.Core.Contracts.Ai;
 using Changsta.Ai.Core.Contracts.Catalogue;
@@ -11,6 +12,7 @@ using Changsta.Ai.Infrastructure.Services.Azure;
 using Changsta.Ai.Infrastructure.Services.Azure.Catalogue;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue;
 using Changsta.Ai.Interface.Api.Middleware;
+using Changsta.Ai.Interface.Api.Services;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -106,6 +108,8 @@ builder.Services.Configure<OpenAiOptions>(
 
 builder.Services.AddAzureBlobMixCatalog(builder.Configuration);
 
+builder.Services.AddSingleton<ICatalogCacheInvalidator, CatalogCacheInvalidator>();
+
 // SoundCloudRssMixCatalogueProvider is registered as its concrete type (not as IMixCatalogueProvider)
 // to avoid a circular DI graph: BlobBackedMixCatalogueProvider also implements IMixCatalogueProvider
 // and wraps SoundCloudRssMixCatalogueProvider as its inner provider.
@@ -114,6 +118,7 @@ builder.Services.AddScoped<SoundCloudRssMixCatalogueProvider>(sp =>
     var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
     var configuration = sp.GetRequiredService<IConfiguration>();
     var cache = sp.GetRequiredService<IMemoryCache>();
+    var invalidator = sp.GetRequiredService<ICatalogCacheInvalidator>();
     var logger = sp.GetRequiredService<ILogger<SoundCloudRssMixCatalogueProvider>>();
 
     string rssUrl = configuration["SoundCloud:RssUrl"]
@@ -123,6 +128,7 @@ builder.Services.AddScoped<SoundCloudRssMixCatalogueProvider>(sp =>
         httpClientFactory.CreateClient("SoundCloudRss"),
         rssUrl,
         cache,
+        invalidator,
         logger);
 });
 
@@ -131,13 +137,16 @@ builder.Services.AddScoped<IMixCatalogueProvider>(sp =>
     var inner = sp.GetRequiredService<SoundCloudRssMixCatalogueProvider>();
     var repo = sp.GetRequiredService<IBlobMixCatalogueRepository>();
     var cache = sp.GetRequiredService<IMemoryCache>();
+    var invalidator = sp.GetRequiredService<ICatalogCacheInvalidator>();
     var logger = sp.GetRequiredService<ILogger<BlobBackedMixCatalogueProvider>>();
 
-    return new BlobBackedMixCatalogueProvider(inner, repo, cache, logger);
+    return new BlobBackedMixCatalogueProvider(inner, repo, cache, invalidator, logger);
 });
 
+builder.Services.AddScoped<ICatalogFlushUseCase, CatalogFlushUseCase>();
 builder.Services.AddScoped<IMixRecommendationUseCase, MixRecommendationUseCase>();
 builder.Services.AddScoped<IMixAiRecommender, OpenAiMixRecommender>();
+builder.Services.AddHostedService<CatalogWarmupService>();
 
 var app = builder.Build();
 

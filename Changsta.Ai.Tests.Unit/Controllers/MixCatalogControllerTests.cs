@@ -559,7 +559,10 @@ namespace Changsta.Ai.Tests.Unit.Controllers
 
         private static MixCatalogController BuildSut(IReadOnlyList<Mix> mixes)
         {
-            return new MixCatalogController(new StubMixCatalogueProvider(mixes));
+            return new MixCatalogController(
+                new StubMixCatalogueProvider(mixes),
+                new StubCatalogFlushUseCase(),
+                new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
         }
 
         private static Mix MakeMix(string id, string genre, params (string Artist, string Title)[] tracks)
@@ -575,6 +578,11 @@ namespace Changsta.Ai.Tests.Unit.Controllers
                     .Select(t => new Track { Artist = t.Artist, Title = t.Title })
                     .ToArray(),
             };
+        }
+
+        private sealed class StubCatalogFlushUseCase : ICatalogFlushUseCase
+        {
+            public Task FlushAsync(CancellationToken cancellationToken) => Task.CompletedTask;
         }
 
         private sealed class StubMixCatalogueProvider : IMixCatalogueProvider

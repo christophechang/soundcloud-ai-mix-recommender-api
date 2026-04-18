@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Parsing;
 using Changsta.Ai.Tests.Unit.Helpers;
@@ -32,7 +33,7 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
                 body: rss,
                 expectedRequestUri: RssUrl);
 
-            var sut = new SoundCloudRssMixCatalogueProvider(httpClient, RssUrl, new MemoryCache(new MemoryCacheOptions()), Microsoft.Extensions.Logging.Abstractions.NullLogger<SoundCloudRssMixCatalogueProvider>.Instance);
+            var sut = new SoundCloudRssMixCatalogueProvider(httpClient, RssUrl, new MemoryCache(new MemoryCacheOptions()), new StubCatalogCacheInvalidator(), Microsoft.Extensions.Logging.Abstractions.NullLogger<SoundCloudRssMixCatalogueProvider>.Instance);
 
             // Act
             var result = await sut.GetLatestAsync(
@@ -65,7 +66,7 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
                 body: rss,
                 expectedRequestUri: RssUrl);
 
-            var sut = new SoundCloudRssMixCatalogueProvider(httpClient, RssUrl, new MemoryCache(new MemoryCacheOptions()), Microsoft.Extensions.Logging.Abstractions.NullLogger<SoundCloudRssMixCatalogueProvider>.Instance);
+            var sut = new SoundCloudRssMixCatalogueProvider(httpClient, RssUrl, new MemoryCache(new MemoryCacheOptions()), new StubCatalogCacheInvalidator(), Microsoft.Extensions.Logging.Abstractions.NullLogger<SoundCloudRssMixCatalogueProvider>.Instance);
 
             // Act
             var result = await sut.GetLatestAsync(
@@ -86,7 +87,7 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
                 body: "oops",
                 expectedRequestUri: RssUrl);
 
-            var sut = new SoundCloudRssMixCatalogueProvider(httpClient, RssUrl, new MemoryCache(new MemoryCacheOptions()), Microsoft.Extensions.Logging.Abstractions.NullLogger<SoundCloudRssMixCatalogueProvider>.Instance);
+            var sut = new SoundCloudRssMixCatalogueProvider(httpClient, RssUrl, new MemoryCache(new MemoryCacheOptions()), new StubCatalogCacheInvalidator(), Microsoft.Extensions.Logging.Abstractions.NullLogger<SoundCloudRssMixCatalogueProvider>.Instance);
 
             // Act + Assert
             Assert.ThrowsAsync<HttpRequestException>(async () =>
@@ -123,7 +124,7 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
                 """;
 
             using var httpClient = CreateHttpClient(HttpStatusCode.OK, rss, RssUrl);
-            var sut = new SoundCloudRssMixCatalogueProvider(httpClient, RssUrl, new MemoryCache(new MemoryCacheOptions()), Microsoft.Extensions.Logging.Abstractions.NullLogger<SoundCloudRssMixCatalogueProvider>.Instance);
+            var sut = new SoundCloudRssMixCatalogueProvider(httpClient, RssUrl, new MemoryCache(new MemoryCacheOptions()), new StubCatalogCacheInvalidator(), Microsoft.Extensions.Logging.Abstractions.NullLogger<SoundCloudRssMixCatalogueProvider>.Instance);
 
             // Act
             var result = await sut.GetLatestAsync(maxItems: 50, cancellationToken: CancellationToken.None);
@@ -253,6 +254,15 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             int? bpmMin,
             int? bpmMax,
             IReadOnlyList<string> moods);
+
+        private sealed class StubCatalogCacheInvalidator : ICatalogCacheInvalidator
+        {
+            public int Version => 0;
+
+            public void Invalidate()
+            {
+            }
+        }
 
         private static HttpClient CreateHttpClient(
             HttpStatusCode statusCode,

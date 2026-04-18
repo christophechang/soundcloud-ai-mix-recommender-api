@@ -12,30 +12,35 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
 {
     public sealed class BlobBackedMixCatalogueProvider : IMixCatalogueProvider
     {
-        private const string CacheKey = "blob_catalog_";
-        private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(1);
+        private const string CacheKeyPrefix = "blob_catalog_v";
+        private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(24);
         private static readonly SemaphoreSlim LoadSemaphore = new SemaphoreSlim(1, 1);
 
         private readonly IMixCatalogueProvider _innerProvider;
         private readonly IBlobMixCatalogueRepository _repository;
         private readonly IMemoryCache _cache;
+        private readonly ICatalogCacheInvalidator _invalidator;
         private readonly ILogger<BlobBackedMixCatalogueProvider> _logger;
 
         public BlobBackedMixCatalogueProvider(
             IMixCatalogueProvider innerProvider,
             IBlobMixCatalogueRepository repository,
             IMemoryCache cache,
+            ICatalogCacheInvalidator invalidator,
             ILogger<BlobBackedMixCatalogueProvider> logger)
         {
             _innerProvider = innerProvider ?? throw new ArgumentNullException(nameof(innerProvider));
             _repository = repository ?? throw new ArgumentNullException(nameof(repository));
             _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+            _invalidator = invalidator ?? throw new ArgumentNullException(nameof(invalidator));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         public async Task<IReadOnlyList<Mix>> GetLatestAsync(int maxItems, CancellationToken cancellationToken)
         {
-            if (_cache.TryGetValue(CacheKey, out IReadOnlyList<Mix>? cached) && cached is not null)
+            string cacheKey = CacheKeyPrefix + _invalidator.Version;
+
+            if (_cache.TryGetValue(cacheKey, out IReadOnlyList<Mix>? cached) && cached is not null)
             {
                 return cached.Count > maxItems ? cached.Take(maxItems).ToArray() : cached;
             }
@@ -45,7 +50,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             try
             {
                 // Re-check after acquiring the semaphore — a concurrent request may have already loaded.
-                if (_cache.TryGetValue(CacheKey, out cached) && cached is not null)
+                if (_cache.TryGetValue(cacheKey, out cached) && cached is not null)
                 {
                     return cached.Count > maxItems ? cached.Take(maxItems).ToArray() : cached;
                 }
@@ -82,7 +87,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                     await _repository.WriteAsync(merged, cancellationToken).ConfigureAwait(false);
                 }
 
-                _cache.Set(CacheKey, merged, new MemoryCacheEntryOptions
+                _cache.Set(cacheKey, merged, new MemoryCacheEntryOptions
                 {
                     AbsoluteExpirationRelativeToNow = CacheTtl,
                 });

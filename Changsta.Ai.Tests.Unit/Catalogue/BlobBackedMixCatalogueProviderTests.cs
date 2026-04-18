@@ -203,6 +203,7 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
                 rssProvider,
                 repo,
                 new MemoryCache(new MemoryCacheOptions()),
+                new StubCatalogCacheInvalidator(),
                 NullLogger<BlobBackedMixCatalogueProvider>.Instance);
         }
 
@@ -246,6 +247,15 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             public Task<IReadOnlyList<Mix>> GetLatestAsync(int maxItems, CancellationToken cancellationToken)
             {
                 throw _exception;
+            }
+        }
+
+        private sealed class StubCatalogCacheInvalidator : ICatalogCacheInvalidator
+        {
+            public int Version => 0;
+
+            public void Invalidate()
+            {
             }
         }
 

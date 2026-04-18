@@ -42,6 +42,15 @@ Swagger UI: `http://localhost:<port>/swagger` (port shown in terminal output). S
 
 ---
 
+## What's new in v1.6
+
+- **Permanent catalog cache.** All catalog endpoints are now served from an in-memory cache with no fixed TTL — data is always fast, never stale from a user's perspective.
+- **Push-based cache invalidation.** A new `POST /api/catalog/flush` endpoint (Bearer token protected) lets an external cron job invalidate and immediately re-warm the cache the moment a new mix is uploaded to SoundCloud. Changsta.com always sees fresh data without paying the RSS + blob fetch cost on user requests.
+- **Cache warm-up on startup.** The catalog is pre-loaded when the API process starts, so the first request after a deploy or restart is served instantly rather than cold.
+- **24-hour fallback TTL.** If the flush endpoint is never called, the cache self-refreshes after 24 hours as a safety net.
+
+---
+
 ## What's new in v1.5
 
 - **Model switched to `gpt-4.1-mini`.** Default OpenAI model updated for better cost/quality balance on recommendation generation.

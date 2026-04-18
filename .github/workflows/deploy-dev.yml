@@ -39,8 +39,9 @@ jobs:
           app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
           app-settings-json: |
             [
-              { "name": "OpenAI__ApiKey", "value": "${{ secrets.OPENAI_API_KEY }}", "slotSetting": false },
-              { "name": "OpenAI__Model",  "value": "gpt-4o-mini", "slotSetting": false }
+              { "name": "OpenAI__ApiKey",          "value": "${{ secrets.OPENAI_API_KEY }}",          "slotSetting": false },
+              { "name": "OpenAI__Model",            "value": "gpt-4o-mini",                             "slotSetting": false },
+              { "name": "Catalog__FlushSecret",     "value": "${{ secrets.CATALOG_FLUSH_SECRET }}",     "slotSetting": false }
             ]
 
       - name: Deploy to Azure Web App (dev)

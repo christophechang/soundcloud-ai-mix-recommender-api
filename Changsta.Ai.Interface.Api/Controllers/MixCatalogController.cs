@@ -7,6 +7,7 @@ using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Core.Normalization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
 
 namespace Changsta.Ai.Interface.Api.Controllers
 {
@@ -22,10 +23,34 @@ namespace Changsta.Ai.Interface.Api.Controllers
         private const int MaxPageSize = 200;
 
         private readonly IMixCatalogueProvider _catalogueProvider;
+        private readonly ICatalogFlushUseCase _flushUseCase;
+        private readonly IConfiguration _configuration;
 
-        public MixCatalogController(IMixCatalogueProvider catalogueProvider)
+        public MixCatalogController(
+            IMixCatalogueProvider catalogueProvider,
+            ICatalogFlushUseCase flushUseCase,
+            IConfiguration configuration)
         {
             _catalogueProvider = catalogueProvider;
+            _flushUseCase = flushUseCase;
+            _configuration = configuration;
+        }
+
+        [HttpPost("flush")]
+        public async Task<IActionResult> FlushCatalogAsync(CancellationToken cancellationToken)
+        {
+            string? expectedSecret = _configuration["Catalog:FlushSecret"];
+            if (!string.IsNullOrEmpty(expectedSecret))
+            {
+                if (!Request.Headers.TryGetValue("Authorization", out var authHeader)
+                    || !string.Equals(authHeader.ToString(), $"Bearer {expectedSecret}", StringComparison.Ordinal))
+                {
+                    return Unauthorized(new { error = "Invalid or missing authorization." });
+                }
+            }
+
+            await _flushUseCase.FlushAsync(cancellationToken).ConfigureAwait(false);
+            return Ok(new { flushed = true });
         }
 
         [HttpGet]

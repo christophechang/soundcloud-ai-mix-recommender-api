@@ -11,25 +11,27 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
 {
     public sealed class SoundCloudRssMixCatalogueProvider : IMixCatalogueProvider
     {
-        private const string CacheKeyPrefix = "soundcloud_rss_";
-        private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(1);
+        private const string CacheKeyPrefix = "soundcloud_rss_v";
+        private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(24);
 
         private readonly HttpClient _httpClient;
         private readonly string _rssUrl;
         private readonly IMemoryCache _cache;
+        private readonly ICatalogCacheInvalidator _invalidator;
         private readonly ILogger<SoundCloudRssMixCatalogueProvider> _logger;
 
-        public SoundCloudRssMixCatalogueProvider(HttpClient httpClient, string rssUrl, IMemoryCache cache, ILogger<SoundCloudRssMixCatalogueProvider> logger)
+        public SoundCloudRssMixCatalogueProvider(HttpClient httpClient, string rssUrl, IMemoryCache cache, ICatalogCacheInvalidator invalidator, ILogger<SoundCloudRssMixCatalogueProvider> logger)
         {
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
             _rssUrl = rssUrl ?? throw new ArgumentNullException(nameof(rssUrl));
             _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+            _invalidator = invalidator ?? throw new ArgumentNullException(nameof(invalidator));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         public async Task<IReadOnlyList<Mix>> GetLatestAsync(int maxItems, CancellationToken cancellationToken)
         {
-            string cacheKey = CacheKeyPrefix + maxItems;
+            string cacheKey = $"{CacheKeyPrefix}{_invalidator.Version}_{maxItems}";
 
             if (_cache.TryGetValue(cacheKey, out IReadOnlyList<Mix>? cached) && cached is not null)
             {
