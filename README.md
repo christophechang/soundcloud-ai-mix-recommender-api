@@ -1,5 +1,8 @@
 # SoundCloud Mix Recommender API
 
+[![GitHub release](https://img.shields.io/github/v/release/christophechang/soundcloud-ai-mix-recommender-api)](https://github.com/christophechang/soundcloud-ai-mix-recommender-api/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A production-ready **.NET 10 Web API** that recommends SoundCloud DJ mixes using AI, balancing creative relevance with strict server-side validation to prevent hallucination.
 
 The guiding principle: **`reason` is creative; `why` is evidence. Both are required. Only `why` is verified against catalogue data.**
@@ -24,6 +27,7 @@ azurite --silent --location /tmp/azurite --debug /tmp/azurite-debug.log
 
 # 2. Set secrets
 dotnet user-secrets set "OpenAI:ApiKey" "your-key-here" --project Changsta.Ai.Interface.Api
+dotnet user-secrets set "OpenAI:Model" "gpt-4.1-mini" --project Changsta.Ai.Interface.Api
 dotnet user-secrets set "Azure:BlobCatalog:ConnectionString" "UseDevelopmentStorage=true" --project Changsta.Ai.Interface.Api
 dotnet user-secrets set "SoundCloud:RssUrl" "https://feeds.soundcloud.com/users/soundcloud:users:YOUR_USER_ID/sounds.rss" --project Changsta.Ai.Interface.Api
 
@@ -34,6 +38,24 @@ dotnet run --project Changsta.Ai.Interface.Api
 ```
 
 Swagger UI: `http://localhost:<port>/swagger` (port shown in terminal output). Swagger is only mounted when `ASPNETCORE_ENVIRONMENT=Development` — this is the default for `dotnet run` via the `launchSettings.json` profile.
+
+---
+
+## What's new in v1.5
+
+- **Model switched to `gpt-4.1-mini`.** Default OpenAI model updated for better cost/quality balance on recommendation generation.
+- **Simplified AI response contract.** `promptId` removed from the AI response — the server controls prompt versioning internally, reducing token overhead and ambiguity in the model output.
+- **Tighter evidence matching.** Anchor validation is now stricter, reducing false-positive `why` matches where a quoted string appeared in an unrelated field.
+- **Reduced prompt payload.** Per-mix metadata sent to the model is trimmed to evidence-relevant fields only, lowering token count per request.
+- **Faster retries.** Exponential backoff delays tuned down — failed AI calls now recover noticeably faster on the second and third attempt.
+
+---
+
+## What's new in v1.4
+
+- **Genre filter on `GET /api/catalog/mixes`.** Pass `?genre=dnb` (or any genre slug) to filter the mixes list to a single genre.
+- **New `GET /api/catalog/genres` endpoint.** Returns a sorted, deduplicated, normalised list of all genres in the catalogue. Genre aliases (`deephouse → deep-house`) are applied consistently.
+- **Larger catalog page sizes.** Maximum `pageSize` increased across all catalog endpoints, letting consumers retrieve more results per request.
 
 ---
 
@@ -56,9 +78,9 @@ Finding the right mix for a specific mood, tempo, or artist often requires manua
 
 The goal of the system is to allow natural language queries such as:
 
-"dark rolling dnb around 174 bpm"
-"something with Calibre or atmospheric liquid"
-"breakbeat with a rave vibe"
+- `"dark rolling dnb around 174 bpm"`
+- `"something with Calibre or atmospheric liquid"`
+- `"breakbeat with a rave vibe"`
 
 The API interprets these queries, filters a catalog of mixes sourced from SoundCloud RSS feeds, and then uses a combination of deterministic ranking and AI reasoning to recommend the best matches.
 
@@ -73,7 +95,7 @@ Rather than relying purely on AI, the system combines deterministic filtering wi
 
 ## How It Works
 
-The API feeds up to 100 mixes from a persistent Azure Blob Storage catalog (supplemented by the live SoundCloud RSS feed) into a single OpenAI ChatCompletion call, with a structured prompt that:
+The API feeds up to 50 mixes from a persistent Azure Blob Storage catalog (supplemented by the live SoundCloud RSS feed) into a single OpenAI ChatCompletion call, with a structured prompt that:
 
 1. **Decomposes the query** into signals — genre, artist/track, mood, or tempo — and prioritises the right metadata fields accordingly
 2. **Generates a `reason`** per result: a free-text 1-2 sentence explanation written by the AI (creative, not validated)
@@ -179,7 +201,7 @@ Before any result is returned:
 
 Returns a paginated `CatalogPage<GenreEntry>` of the merged catalog (blob + RSS, up to 200 mixes), grouped by genre with artists and tracks nested inside. Useful for verifying which mixes the AI can see.
 
-**Query parameters:** `?genre=dnb` (optional filter), `?page=1`, `?pageSize=20` (max 100)
+**Query parameters:** `?genre=dnb` (optional filter), `?page=1`, `?pageSize=20` (max 200)
 
 ---
 
@@ -187,7 +209,13 @@ Returns a paginated `CatalogPage<GenreEntry>` of the merged catalog (blob + RSS,
 
 Returns a paginated `CatalogPage<Mix>` of all mixes ordered by publish date descending.
 
-**Query parameters:** `?page=1`, `?pageSize=20` (max 100)
+**Query parameters:** `?genre=dnb` (optional filter), `?page=1`, `?pageSize=20` (max 200)
+
+---
+
+### `GET /api/catalog/genres`
+
+Returns a sorted, deduplicated, normalised list of all genre slugs present in the catalogue (e.g. `dnb`, `ukg`, `deep-house`). Genre aliases are resolved before deduplication.
 
 ---
 
@@ -195,7 +223,7 @@ Returns a paginated `CatalogPage<Mix>` of all mixes ordered by publish date desc
 
 Returns a paginated `CatalogPage<ArtistSummary>` of all artists ordered by track recurrence count descending.
 
-**Query parameters:** `?page=1`, `?pageSize=20` (max 100)
+**Query parameters:** `?page=1`, `?pageSize=20` (max 200)
 
 ---
 
@@ -203,7 +231,7 @@ Returns a paginated `CatalogPage<ArtistSummary>` of all artists ordered by track
 
 Returns a paginated `CatalogPage<TrackSummary>` of all tracks, deduplicated, with recurrence count and genres seen. Used by TuneFinder for crate-digging exclusion and artist affinity scoring.
 
-**Query parameters:** `?page=1`, `?pageSize=20` (max 100)
+**Query parameters:** `?page=1`, `?pageSize=20` (max 200)
 
 ---
 
@@ -211,7 +239,7 @@ Returns a paginated `CatalogPage<TrackSummary>` of all tracks, deduplicated, wit
 
 Returns a paginated `CatalogPage<Mix>` of all mixes containing a track by the named artist.
 
-**Query parameters:** `?page=1`, `?pageSize=20` (max 100)
+**Query parameters:** `?page=1`, `?pageSize=20` (max 200)
 
 ---
 
@@ -228,7 +256,7 @@ Returns `Healthy` when the process is running. Used by Azure App Service for hea
 - System.ServiceModel.Syndication (RSS parsing)
 - Azure Blob Storage (persistent mix catalog — Azure.Storage.Blobs 12.24)
 - Azure Managed Identity (DefaultAzureCredential in production)
-- Application Insights (workspace-based, per environment)
+- OpenTelemetry / Azure Monitor (workspace-based Application Insights per environment)
 - IMemoryCache (1-hour merged catalog TTL)
 - ASP.NET Core rate limiting (10 req/min per IP)
 - System.Text.Json
@@ -419,7 +447,7 @@ Use user secrets (recommended — keeps secrets out of source control):
 
 ```bash
 dotnet user-secrets set "OpenAI:ApiKey" "your-key-here" --project Changsta.Ai.Interface.Api
-dotnet user-secrets set "OpenAI:Model" "gpt-4o-mini" --project Changsta.Ai.Interface.Api
+dotnet user-secrets set "OpenAI:Model" "gpt-4.1-mini" --project Changsta.Ai.Interface.Api
 dotnet user-secrets set "SoundCloud:RssUrl" "https://feeds.soundcloud.com/users/soundcloud:users:YOUR_NUMERIC_ID/sounds.rss" --project Changsta.Ai.Interface.Api
 dotnet user-secrets set "Azure:BlobCatalog:ConnectionString" "UseDevelopmentStorage=true" --project Changsta.Ai.Interface.Api
 ```
@@ -441,6 +469,22 @@ On first request the app fetches the RSS feed and writes the initial `catalog.js
 Once running, the Swagger UI is available at `http://localhost:<port>/swagger` (port shown in terminal output).
 
 To inspect or edit the blob directly, use [Azure Storage Explorer](https://azure.microsoft.com/en-us/products/storage/storage-explorer/) and connect to `http://127.0.0.1:10000` with the Azurite account key (`devstoreaccount1` / `Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==`).
+
+---
+
+## Repo Layout
+
+```
+Changsta.Ai.Interface.Api/          # Controllers, middleware, DI, app config
+Changsta.Ai.Core/                   # Domain models and DTOs
+Changsta.Ai.Core.Contracts/         # Layer boundary interfaces
+Changsta.Ai.Core.BusinessProcesses/ # Orchestration and use case logic
+Changsta.Ai.Infrastructure.Services.Ai/          # OpenAI integration, prompt building, retry
+Changsta.Ai.Infrastructure.Services.SoundCloud/  # RSS ingestion and parsing
+Changsta.Ai.Infrastructure.Services.Azure/       # Blob persistence and Azure wiring
+Changsta.Ai.Tests.Unit/             # NUnit + FluentAssertions
+infra/                              # Bicep IaC templates
+```
 
 ---
 

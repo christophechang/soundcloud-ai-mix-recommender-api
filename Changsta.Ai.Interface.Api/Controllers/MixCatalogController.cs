@@ -37,7 +37,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
         {
             if (page < 1 || pageSize < 1 || pageSize > MaxPageSize)
             {
-                return BadRequest(new { error = "page must be >= 1 and pageSize must be between 1 and 100." });
+                return BadRequest(new { error = $"page must be >= 1 and pageSize must be between 1 and {MaxPageSize}." });
             }
 
             IReadOnlyList<Mix> mixes = await _catalogueProvider
@@ -154,7 +154,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
         {
             if (page < 1 || pageSize < 1 || pageSize > MaxPageSize)
             {
-                return BadRequest(new { error = "page must be >= 1 and pageSize must be between 1 and 100." });
+                return BadRequest(new { error = $"page must be >= 1 and pageSize must be between 1 and {MaxPageSize}." });
             }
 
             IReadOnlyList<Mix> mixes = await _catalogueProvider
@@ -199,7 +199,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
         {
             if (page < 1 || pageSize < 1 || pageSize > MaxPageSize)
             {
-                return BadRequest(new { error = "page must be >= 1 and pageSize must be between 1 and 100." });
+                return BadRequest(new { error = $"page must be >= 1 and pageSize must be between 1 and {MaxPageSize}." });
             }
 
             IReadOnlyList<Mix> mixes = await _catalogueProvider
@@ -243,7 +243,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
         {
             if (page < 1 || pageSize < 1 || pageSize > MaxPageSize)
             {
-                return BadRequest(new { error = "page must be >= 1 and pageSize must be between 1 and 100." });
+                return BadRequest(new { error = $"page must be >= 1 and pageSize must be between 1 and {MaxPageSize}." });
             }
 
             IReadOnlyList<Mix> mixes = await _catalogueProvider
