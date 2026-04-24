@@ -13,6 +13,10 @@ namespace Changsta.Ai.Core.Dtos
 
         required public string Url { get; init; }
 
+        public string? Duration { get; init; }
+
+        public string? ImageUrl { get; init; }
+
         required public string Reason { get; init; }
 
         required public IReadOnlyList<string> Why { get; init; }

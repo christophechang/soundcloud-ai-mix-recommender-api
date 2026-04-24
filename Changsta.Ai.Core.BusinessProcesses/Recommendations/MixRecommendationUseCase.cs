@@ -62,6 +62,8 @@ namespace Changsta.Ai.Core.BusinessProcesses.Recommendations
                         MixId = mix.Id,
                         Title = mix.Title,
                         Url = mix.Url,
+                        Duration = mix.Duration,
+                        ImageUrl = mix.ImageUrl,
                         Reason = r.Reason,
                         Why = r.Why,
                         Confidence = r.Confidence,

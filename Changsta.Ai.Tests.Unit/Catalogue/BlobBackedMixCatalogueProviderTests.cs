@@ -129,6 +129,35 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
         }
 
         [Test]
+        public async Task GetLatestAsync_updated_rss_duration_and_image_refreshes_blob_metadata()
+        {
+            var blobMix = MakeMix(
+                "1",
+                "https://sc.test/mix-1",
+                duration: "00:30:00",
+                imageUrl: "https://img.test/old.png");
+            var rssMix = MakeMix(
+                "1",
+                "https://sc.test/mix-1",
+                duration: "00:34:55",
+                imageUrl: "https://img.test/new.png");
+            var blobRepo = new StubBlobRepository { BlobMixes = new[] { blobMix } };
+
+            var sut = BuildSut(
+                blobRepo: blobRepo,
+                blobMixes: new[] { blobMix },
+                rssMixes: new[] { rssMix });
+
+            var result = await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(result[0].Duration, Is.EqualTo("00:34:55"));
+            Assert.That(result[0].ImageUrl, Is.EqualTo("https://img.test/new.png"));
+            Assert.That(blobRepo.WriteCallCount, Is.EqualTo(1));
+            Assert.That(blobRepo.WrittenMixes![0].Duration, Is.EqualTo("00:34:55"));
+            Assert.That(blobRepo.WrittenMixes![0].ImageUrl, Is.EqualTo("https://img.test/new.png"));
+        }
+
+        [Test]
         public async Task GetLatestAsync_caches_result_on_second_call()
         {
             var mix = MakeMix("1", "https://sc.test/mix-1");
@@ -207,7 +236,13 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
                 NullLogger<BlobBackedMixCatalogueProvider>.Instance);
         }
 
-        private static Mix MakeMix(string id, string url, string title = "Test Mix", string? description = null)
+        private static Mix MakeMix(
+            string id,
+            string url,
+            string title = "Test Mix",
+            string? description = null,
+            string? duration = null,
+            string? imageUrl = null)
         {
             return new Mix
             {
@@ -217,6 +252,8 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
                 Genre = "dnb",
                 Energy = "peak",
                 Description = description,
+                Duration = duration,
+                ImageUrl = imageUrl,
             };
         }
 

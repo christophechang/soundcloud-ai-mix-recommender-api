@@ -49,6 +49,8 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             Assert.That(first.Id, Is.EqualTo("tag:soundcloud,2010:tracks/2272564208"));
             Assert.That(first.Title, Is.EqualTo("Murda Classics D&B Mix"));
             Assert.That(first.Url, Is.EqualTo("https://soundcloud.com/changsta/murda-classics-d-b-mix"));
+            Assert.That(first.Duration, Is.EqualTo("00:34:55"));
+            Assert.That(first.ImageUrl, Is.EqualTo("https://i1.sndcdn.com/artworks-6VTwnMUEppH0ocm7-zFosWg-t3000x3000.png"));
             Assert.That(first.Tracklist, Is.EqualTo(TracklistExtractor.Extract(first.Description)));
 
             AssertMixSchemaMapped(first);

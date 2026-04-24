@@ -1,5 +1,6 @@
 using System.ServiceModel.Syndication;
 using System.Xml;
+using System.Xml.Linq;
 using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Models;
@@ -12,6 +13,7 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
     public sealed class SoundCloudRssMixCatalogueProvider : IMixCatalogueProvider
     {
         private const string CacheKeyPrefix = "soundcloud_rss_v";
+        private const string ItunesNamespace = "http://www.itunes.com/dtds/podcast-1.0.dtd";
         private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(24);
 
         private readonly HttpClient _httpClient;
@@ -96,6 +98,8 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
                 Title = item.Title?.Text ?? "Untitled",
                 Url = item.Links.FirstOrDefault()?.Uri.ToString() ?? string.Empty,
                 Description = description,
+                Duration = GetItunesElementValue(item, "duration"),
+                ImageUrl = GetItunesImageUrl(item),
                 Tracklist = TracklistExtractor.Extract(description),
 
                 Genre = mixSchema.Genre ?? string.Empty,
@@ -107,6 +111,32 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
             };
 
             return mix;
+        }
+
+        private static string? GetItunesElementValue(SyndicationItem item, string elementName)
+        {
+            string? value = item.ElementExtensions
+                .ReadElementExtensions<string>(elementName, ItunesNamespace)
+                .FirstOrDefault();
+
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+        }
+
+        private static string? GetItunesImageUrl(SyndicationItem item)
+        {
+            SyndicationElementExtension? extension = item.ElementExtensions
+                .FirstOrDefault(e => string.Equals(e.OuterName, "image", StringComparison.Ordinal)
+                    && string.Equals(e.OuterNamespace, ItunesNamespace, StringComparison.Ordinal));
+
+            if (extension is null)
+            {
+                return null;
+            }
+
+            XElement element = extension.GetObject<XElement>();
+            string? href = element.Attribute("href")?.Value;
+
+            return string.IsNullOrWhiteSpace(href) ? null : href.Trim();
         }
     }
 }

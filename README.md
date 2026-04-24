@@ -42,6 +42,14 @@ Swagger UI: `http://localhost:<port>/swagger` (port shown in terminal output). S
 
 ---
 
+## What's new in v1.7
+
+- **RSS duration and artwork ingestion.** SoundCloud RSS processing now captures `itunes:duration` and `itunes:image` for each mix and stores them in the blob-backed catalogue cache as `duration` and `imageUrl`.
+- **Blob cache metadata refresh.** Existing cached mixes are refreshed with live RSS title, description, publish date, duration, and artwork metadata while preserving curated genre, energy, BPM, moods, and tracklist data.
+- **Hydrated mix responses.** Mix catalogue responses and recommendation results now include `duration` and `imageUrl`, so consumers can render richer mix cards and detail views without extra lookups.
+
+---
+
 ## What's new in v1.6
 
 - **Permanent catalog cache.** All catalog endpoints are now served from an in-memory cache with no fixed TTL — data is always fast, never stale from a user's perspective.
@@ -197,6 +205,8 @@ Before any result is returned:
 | `results[].mixId` | string | Stable SoundCloud track ID |
 | `results[].title` | string | Mix title, verbatim from catalogue |
 | `results[].url` | string | SoundCloud URL, verbatim from catalogue |
+| `results[].duration` | string\|null | Mix duration from catalogue RSS metadata |
+| `results[].imageUrl` | string\|null | Mix artwork URL from catalogue RSS metadata |
 | `results[].reason` | string | AI-written explanation of the match |
 | `results[].why` | string[] | 1–4 evidence anchors, each verified against mix metadata |
 | `results[].confidence` | float | 0.0–1.0 |

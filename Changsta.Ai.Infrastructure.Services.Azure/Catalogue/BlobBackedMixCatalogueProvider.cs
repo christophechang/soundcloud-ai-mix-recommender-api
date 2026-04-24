@@ -123,6 +123,8 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                         Title = mix.Title,
                         Url = existing.Url,
                         Description = mix.Description,
+                        Duration = mix.Duration ?? existing.Duration,
+                        ImageUrl = mix.ImageUrl ?? existing.ImageUrl,
                         Tracklist = existing.Tracklist,
                         Genre = existing.Genre,
                         Energy = existing.Energy,
@@ -207,6 +209,16 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
 
                 if (!string.Equals(rssMix.Description, blobMix.Description, StringComparison.Ordinal)
                     || !string.Equals(rssMix.Title, blobMix.Title, StringComparison.Ordinal))
+                {
+                    count++;
+                    continue;
+                }
+
+                string? effectiveDuration = rssMix.Duration ?? blobMix.Duration;
+                string? effectiveImageUrl = rssMix.ImageUrl ?? blobMix.ImageUrl;
+
+                if (!string.Equals(effectiveDuration, blobMix.Duration, StringComparison.Ordinal)
+                    || !string.Equals(effectiveImageUrl, blobMix.ImageUrl, StringComparison.Ordinal))
                 {
                     count++;
                 }
