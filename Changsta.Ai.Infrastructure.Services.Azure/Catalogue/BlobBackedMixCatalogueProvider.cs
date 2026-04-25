@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
+using Changsta.Ai.Core.Normalization;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
@@ -69,20 +70,27 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                     blobReadSucceeded = false;
                 }
 
+                bool blobGenresChanged;
+                blobMixes = NormalizeGenres(blobMixes, out blobGenresChanged);
+
                 IReadOnlyList<Mix> rssMixes = await FetchRssSafeAsync(cancellationToken)
                     .ConfigureAwait(false);
+                rssMixes = NormalizeGenres(rssMixes, out _);
+
+                LogUnknownGenres(_logger, blobMixes, rssMixes);
 
                 IReadOnlyList<Mix> merged = MergeCatalogs(blobMixes, rssMixes);
 
                 int newDiscoveries = CountNewDiscoveries(blobMixes, rssMixes);
                 int updatedEntries = CountUpdatedEntries(blobMixes, rssMixes);
 
-                if (blobReadSucceeded && (newDiscoveries > 0 || updatedEntries > 0))
+                if (blobReadSucceeded && (newDiscoveries > 0 || updatedEntries > 0 || blobGenresChanged))
                 {
                     _logger.LogInformation(
-                        "Writing blob catalog — {NewCount} new mixes, {UpdateCount} updated entries.",
+                        "Writing blob catalog — {NewCount} new mixes, {UpdateCount} updated entries, genreNormalizationChanged={GenreNormalizationChanged}.",
                         newDiscoveries,
-                        updatedEntries);
+                        updatedEntries,
+                        blobGenresChanged);
 
                     await _repository.WriteAsync(merged, cancellationToken).ConfigureAwait(false);
                 }
@@ -98,6 +106,69 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             {
                 LoadSemaphore.Release();
             }
+        }
+
+        private static void LogUnknownGenres(
+            ILogger<BlobBackedMixCatalogueProvider> logger,
+            params IReadOnlyList<Mix>[] catalogues)
+        {
+            var unknownGenres = catalogues
+                .SelectMany(c => c)
+                .Select(m => m.Genre)
+                .Where(g => !string.IsNullOrWhiteSpace(g) && !GenreNormalizer.IsKnownGenre(g))
+                .Select(g => GenreNormalizer.Normalize(g))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(g => g, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            foreach (string genre in unknownGenres)
+            {
+                logger.LogWarning("Unknown genre value found during catalog sync: {Genre}", genre);
+            }
+        }
+
+        private static IReadOnlyList<Mix> NormalizeGenres(IReadOnlyList<Mix> mixes, out bool changed)
+        {
+            changed = false;
+            var normalized = new Mix[mixes.Count];
+
+            for (int i = 0; i < mixes.Count; i++)
+            {
+                Mix mix = mixes[i];
+                string genre = GenreNormalizer.Normalize(mix.Genre);
+
+                if (!string.Equals(mix.Genre, genre, StringComparison.Ordinal))
+                {
+                    changed = true;
+                    normalized[i] = WithGenre(mix, genre);
+                }
+                else
+                {
+                    normalized[i] = mix;
+                }
+            }
+
+            return normalized;
+        }
+
+        private static Mix WithGenre(Mix mix, string genre)
+        {
+            return new Mix
+            {
+                Id = mix.Id,
+                Title = mix.Title,
+                Url = mix.Url,
+                Description = mix.Description,
+                Duration = mix.Duration,
+                ImageUrl = mix.ImageUrl,
+                Tracklist = mix.Tracklist,
+                Genre = genre,
+                Energy = mix.Energy,
+                BpmMin = mix.BpmMin,
+                BpmMax = mix.BpmMax,
+                Moods = mix.Moods,
+                PublishedAt = mix.PublishedAt,
+            };
         }
 
         private static IReadOnlyList<Mix> MergeCatalogs(

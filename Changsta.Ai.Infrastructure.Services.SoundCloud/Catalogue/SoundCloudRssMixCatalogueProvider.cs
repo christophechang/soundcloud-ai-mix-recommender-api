@@ -3,6 +3,7 @@ using System.Xml;
 using System.Xml.Linq;
 using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
+using Changsta.Ai.Core.Normalization;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Models;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Parsing;
 using Microsoft.Extensions.Caching.Memory;
@@ -110,7 +111,7 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
                 ImageUrl = GetItunesImageUrl(item),
                 Tracklist = mixSchema is null ? Array.Empty<Track>() : TracklistExtractor.Extract(description),
 
-                Genre = mixSchema?.Genre ?? string.Empty,
+                Genre = GenreNormalizer.Normalize(mixSchema?.Genre),
                 Energy = mixSchema?.Energy ?? string.Empty,
                 BpmMin = mixSchema?.BpmMin,
                 BpmMax = mixSchema?.BpmMax,

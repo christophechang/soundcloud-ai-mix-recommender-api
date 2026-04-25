@@ -42,6 +42,14 @@ Swagger UI: `http://localhost:<port>/swagger` (port shown in terminal output). S
 
 ---
 
+## What's new in v1.10
+
+- **Canonical genre normalization.** Catalogue sync now normalizes overlapping genre aliases such as `breaks`, `uk-bass`, `ukbass`, `deep house`, `drum and bass`, and `garage` into one canonical genre value before mixes are cached, stored, indexed, or returned.
+- **Cleaner genre endpoints and filters.** `GET /api/catalog/genres`, catalogue grouping, mix filtering, track summaries, and recommendation genre filtering now use the same reusable normalizer, so aliases resolve consistently across API responses.
+- **Legacy catalogue cleanup on sync.** Existing blob-backed catalogue entries are normalized during sync and written back when needed, while unknown genres are preserved in lowercase form and logged once per sync run for future mapping updates.
+
+---
+
 ## What's new in v1.9
 
 - **Legacy RSS metadata hydration.** SoundCloud RSS items without a `[changsta:mix:v1 ...]` schema block are now still read for metadata, allowing older mixes to pick up live title, description, duration, artwork, and publish-date updates.

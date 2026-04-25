@@ -7,6 +7,7 @@ using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Infrastructure.Services.Azure.Catalogue;
 using FluentAssertions;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 
@@ -92,6 +93,45 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             await sut.GetLatestAsync(10, CancellationToken.None);
 
             Assert.That(blobRepo.WriteCallCount, Is.EqualTo(0));
+        }
+
+        [Test]
+        public async Task GetLatestAsync_normalizes_existing_blob_genres_and_writes_blob()
+        {
+            var blobMix = MakeMix("1", "https://sc.test/mix-1", genre: "breaks");
+            var blobRepo = new StubBlobRepository { BlobMixes = new[] { blobMix } };
+
+            var sut = BuildSut(
+                blobRepo: blobRepo,
+                blobMixes: new[] { blobMix },
+                rssMixes: Array.Empty<Mix>());
+
+            var result = await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(result[0].Genre, Is.EqualTo("breakbeat"));
+            Assert.That(blobRepo.WriteCallCount, Is.EqualTo(1));
+            Assert.That(blobRepo.WrittenMixes![0].Genre, Is.EqualTo("breakbeat"));
+        }
+
+        [Test]
+        public async Task GetLatestAsync_logs_unknown_genres_once_per_sync()
+        {
+            var blobMix = MakeMix("1", "https://sc.test/mix-1", genre: "Nu Jazz");
+            var rssMix = MakeMix("2", "https://sc.test/mix-2", genre: " nu   jazz ");
+            var logger = new ListLogger<BlobBackedMixCatalogueProvider>();
+
+            var sut = BuildSut(
+                blobMixes: new[] { blobMix },
+                rssMixes: new[] { rssMix },
+                logger: logger);
+
+            await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(
+                logger.Entries.Count(e => e.Level == LogLevel.Warning
+                    && e.Message.Contains("Unknown genre value found during catalog sync", StringComparison.Ordinal)
+                    && e.Message.Contains("nu jazz", StringComparison.Ordinal)),
+                Is.EqualTo(1));
         }
 
         [Test]
@@ -243,7 +283,8 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             StubBlobRepository? blobRepo = null,
             IReadOnlyList<Mix>? blobMixes = null,
             IReadOnlyList<Mix>? rssMixes = null,
-            Exception? rssException = null)
+            Exception? rssException = null,
+            ILogger<BlobBackedMixCatalogueProvider>? logger = null)
         {
             var repo = blobRepo ?? new StubBlobRepository
             {
@@ -264,7 +305,7 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
                 repo,
                 new MemoryCache(new MemoryCacheOptions()),
                 new StubCatalogCacheInvalidator(),
-                NullLogger<BlobBackedMixCatalogueProvider>.Instance);
+                logger ?? NullLogger<BlobBackedMixCatalogueProvider>.Instance);
         }
 
         private static Mix MakeMix(
@@ -273,14 +314,15 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             string title = "Test Mix",
             string? description = null,
             string? duration = null,
-            string? imageUrl = null)
+            string? imageUrl = null,
+            string genre = "dnb")
         {
             return new Mix
             {
                 Id = id,
                 Title = title,
                 Url = url,
-                Genre = "dnb",
+                Genre = genre,
                 Energy = "peak",
                 Description = description,
                 Duration = duration,
@@ -365,6 +407,54 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
                 WriteCallCount++;
                 WrittenMixes = mixes;
                 return Task.CompletedTask;
+            }
+        }
+
+        private sealed class ListLogger<T> : ILogger<T>
+        {
+            public List<LogEntry> Entries { get; } = new();
+
+            public IDisposable BeginScope<TState>(TState state)
+                where TState : notnull
+            {
+                return NullScope.Instance;
+            }
+
+            public bool IsEnabled(LogLevel logLevel)
+            {
+                return true;
+            }
+
+            public void Log<TState>(
+                LogLevel logLevel,
+                EventId eventId,
+                TState state,
+                Exception? exception,
+                Func<TState, Exception?, string> formatter)
+            {
+                Entries.Add(new LogEntry(logLevel, formatter(state, exception)));
+            }
+
+            public sealed class LogEntry
+            {
+                public LogEntry(LogLevel level, string message)
+                {
+                    Level = level;
+                    Message = message;
+                }
+
+                public LogLevel Level { get; }
+
+                public string Message { get; }
+            }
+
+            private sealed class NullScope : IDisposable
+            {
+                public static readonly NullScope Instance = new();
+
+                public void Dispose()
+                {
+                }
             }
         }
     }

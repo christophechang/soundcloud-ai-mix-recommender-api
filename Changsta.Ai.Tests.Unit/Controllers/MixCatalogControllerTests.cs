@@ -27,7 +27,7 @@ namespace Changsta.Ai.Tests.Unit.Controllers
             var page = await InvokeCatalogAsync(BuildSut(mixes), null, 1, 20);
 
             Assert.That(page.Items, Has.Length.EqualTo(2));
-            Assert.That(page.Items[0].Genre, Is.EqualTo("breaks"));
+            Assert.That(page.Items[0].Genre, Is.EqualTo("breakbeat"));
             Assert.That(page.Items[0].Artists.Select(a => a.Name), Is.EqualTo(new[] { "Anu", "Shy One" }));
             Assert.That(page.Items[1].Genre, Is.EqualTo("dnb"));
         }
@@ -45,7 +45,7 @@ namespace Changsta.Ai.Tests.Unit.Controllers
             var page = await InvokeCatalogAsync(BuildSut(mixes), "Breaks", 1, 20);
 
             Assert.That(page.Total, Is.EqualTo(1));
-            Assert.That(page.Items[0].Genre, Is.EqualTo("breaks"));
+            Assert.That(page.Items[0].Genre, Is.EqualTo("breakbeat"));
             Assert.That(page.Items[0].Artists, Has.Length.EqualTo(2));
         }
 
@@ -199,7 +199,7 @@ namespace Changsta.Ai.Tests.Unit.Controllers
 
             string[] genres = await InvokeGenresAsync(BuildSut(mixes));
 
-            Assert.That(genres, Is.EqualTo(new[] { "breaks", "dnb", "house" }));
+            Assert.That(genres, Is.EqualTo(new[] { "breakbeat", "dnb", "house" }));
         }
 
         [Test]
@@ -235,7 +235,7 @@ namespace Changsta.Ai.Tests.Unit.Controllers
 
             string[] genres = await InvokeGenresAsync(BuildSut(mixes));
 
-            Assert.That(genres, Is.EqualTo(new[] { "breaks" }));
+            Assert.That(genres, Is.EqualTo(new[] { "breakbeat" }));
         }
 
         [Test]
