@@ -42,6 +42,12 @@ Swagger UI: `http://localhost:<port>/swagger` (port shown in terminal output). S
 
 ---
 
+## What's new in v1.8
+
+- **Lightweight artist name endpoint.** `GET /api/catalog/artists` now returns a single unpaginated response with all artist names sorted alphabetically — `{ "artists": ["Anu", "Bicep", ...] }`. No track data, no pagination params. Optimised for autocomplete use cases.
+
+---
+
 ## What's new in v1.7
 
 - **RSS duration and artwork ingestion.** SoundCloud RSS processing now captures `itunes:duration` and `itunes:image` for each mix and stores them in the blob-backed catalogue cache as `duration` and `imageUrl`.
@@ -241,9 +247,9 @@ Returns a sorted, deduplicated, normalised list of all genre slugs present in th
 
 ### `GET /api/catalog/artists`
 
-Returns a paginated `CatalogPage<ArtistSummary>` of all artists ordered by track recurrence count descending.
+Returns all artist names in a single unpaginated response, sorted alphabetically. No query parameters.
 
-**Query parameters:** `?page=1`, `?pageSize=20` (max 200)
+**Response:** `{ "artists": ["Anu", "Bicep", "Break", "Calibre", ...] }`
 
 ---
 
