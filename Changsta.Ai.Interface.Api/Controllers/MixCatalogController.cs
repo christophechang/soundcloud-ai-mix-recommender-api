@@ -172,48 +172,20 @@ namespace Changsta.Ai.Interface.Api.Controllers
         }
 
         [HttpGet("artists")]
-        public async Task<IActionResult> GetArtistsAsync(
-            [FromQuery] int page = 1,
-            [FromQuery] int pageSize = DefaultPageSize,
-            CancellationToken cancellationToken = default)
+        public async Task<IActionResult> GetArtistsAsync(CancellationToken cancellationToken = default)
         {
-            if (page < 1 || pageSize < 1 || pageSize > MaxPageSize)
-            {
-                return BadRequest(new { error = $"page must be >= 1 and pageSize must be between 1 and {MaxPageSize}." });
-            }
-
             IReadOnlyList<Mix> mixes = await _catalogueProvider
                 .GetLatestAsync(CatalogMaxItems, cancellationToken)
                 .ConfigureAwait(false);
 
-            var byArtist = new Dictionary<string, SortedSet<string>>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (Mix mix in mixes)
-            {
-                foreach (Track track in mix.Tracklist)
-                {
-                    if (!byArtist.TryGetValue(track.Artist, out SortedSet<string>? titles))
-                    {
-                        titles = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-                        byArtist[track.Artist] = titles;
-                    }
-
-                    titles.Add(track.Title);
-                }
-            }
-
-            ArtistSummary[] allEntries = byArtist
-                .Select(a => new ArtistSummary
-                {
-                    Name = a.Key,
-                    TrackCount = a.Value.Count,
-                    Tracks = a.Value.ToArray(),
-                })
-                .OrderByDescending(a => a.TrackCount)
-                .ThenBy(a => a.Name, StringComparer.OrdinalIgnoreCase)
+            string[] artists = mixes
+                .SelectMany(m => m.Tracklist)
+                .Select(t => t.Artist)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(a => a, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
-            return Ok(BuildPage(allEntries, page, pageSize));
+            return Ok(new ArtistNamesResponse { Artists = artists });
         }
 
         [HttpGet("tracks")]
@@ -322,13 +294,9 @@ namespace Changsta.Ai.Interface.Api.Controllers
             required public string[] Tracks { get; init; }
         }
 
-        public sealed class ArtistSummary
+        public sealed class ArtistNamesResponse
         {
-            required public string Name { get; init; }
-
-            required public int TrackCount { get; init; }
-
-            required public string[] Tracks { get; init; }
+            required public string[] Artists { get; init; }
         }
 
         public sealed class CatalogPage<T>
