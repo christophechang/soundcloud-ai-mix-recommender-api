@@ -90,7 +90,15 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
 
             string id = item.Id ?? item.Links.FirstOrDefault()?.Uri.ToString() ?? Guid.NewGuid().ToString();
 
-            var mixSchema = MixSchemaExtractor.ExtractOrThrow(description, id);
+            MixSchema? mixSchema;
+            try
+            {
+                mixSchema = MixSchemaExtractor.ExtractOrThrow(description, id);
+            }
+            catch (InvalidOperationException)
+            {
+                mixSchema = null;
+            }
 
             var mix = new Mix
             {
@@ -100,13 +108,13 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
                 Description = description,
                 Duration = GetItunesElementValue(item, "duration"),
                 ImageUrl = GetItunesImageUrl(item),
-                Tracklist = TracklistExtractor.Extract(description),
+                Tracklist = mixSchema is null ? Array.Empty<Track>() : TracklistExtractor.Extract(description),
 
-                Genre = mixSchema.Genre ?? string.Empty,
-                Energy = mixSchema.Energy ?? string.Empty,
-                BpmMin = mixSchema.BpmMin,
-                BpmMax = mixSchema.BpmMax,
-                Moods = mixSchema.Moods,
+                Genre = mixSchema?.Genre ?? string.Empty,
+                Energy = mixSchema?.Energy ?? string.Empty,
+                BpmMin = mixSchema?.BpmMin,
+                BpmMax = mixSchema?.BpmMax,
+                Moods = mixSchema?.Moods ?? Array.Empty<string>(),
                 PublishedAt = item.PublishDate == default ? null : item.PublishDate,
             };
 

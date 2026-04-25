@@ -42,6 +42,14 @@ Swagger UI: `http://localhost:<port>/swagger` (port shown in terminal output). S
 
 ---
 
+## What's new in v1.9
+
+- **Legacy RSS metadata hydration.** SoundCloud RSS items without a `[changsta:mix:v1 ...]` schema block are now still read for metadata, allowing older mixes to pick up live title, description, duration, artwork, and publish-date updates.
+- **Safe cover-art backfill.** Metadata-only RSS rows can refresh matching existing blob catalogue entries without being added as new uncurated catalogue mixes.
+- **Cache flush improvements.** Flushing the catalogue cache now backfills cover URLs for legacy mixes that pre-date structured JSON metadata, while preserving curated genre, energy, BPM, moods, and tracklist data.
+
+---
+
 ## What's new in v1.8
 
 - **Lightweight artist name endpoint.** `GET /api/catalog/artists` now returns a single unpaginated response with all artist names sorted alphabetically — `{ "artists": ["Anu", "Bicep", ...] }`. No track data, no pagination params. Optimised for autocomplete use cases.

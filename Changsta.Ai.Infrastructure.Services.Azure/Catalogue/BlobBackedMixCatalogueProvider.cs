@@ -149,7 +149,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             // New RSS discoveries (not in blob) go first — newest at front
             foreach (var mix in rssMixes)
             {
-                if (!blobUrls.Contains(mix.Url))
+                if (!blobUrls.Contains(mix.Url) && !IsMetadataOnlyRssMix(mix))
                 {
                     result.Add(mix);
                 }
@@ -162,6 +162,16 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             }
 
             return result;
+        }
+
+        private static bool IsMetadataOnlyRssMix(Mix mix)
+        {
+            return string.IsNullOrWhiteSpace(mix.Genre)
+                && string.IsNullOrWhiteSpace(mix.Energy)
+                && mix.Tracklist.Count == 0
+                && mix.Moods.Count == 0
+                && mix.BpmMin is null
+                && mix.BpmMax is null;
         }
 
         private static int CountNewDiscoveries(
@@ -177,7 +187,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 blobMixes.Select(m => m.Url),
                 StringComparer.OrdinalIgnoreCase);
 
-            return rssMixes.Count(m => !blobUrls.Contains(m.Url));
+            return rssMixes.Count(m => !blobUrls.Contains(m.Url) && !IsMetadataOnlyRssMix(m));
         }
 
         private static int CountUpdatedEntries(

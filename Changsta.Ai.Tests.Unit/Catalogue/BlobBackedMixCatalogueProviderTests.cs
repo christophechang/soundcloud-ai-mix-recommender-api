@@ -158,6 +158,37 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
         }
 
         [Test]
+        public async Task GetLatestAsync_metadata_only_rss_refreshes_existing_blob_mix_without_adding_new_discoveries()
+        {
+            var blobMix = MakeMix("1", "https://sc.test/legacy-mix", "Legacy Mix");
+            var existingRssMix = MakeMetadataOnlyMix(
+                "tag:soundcloud,2010:tracks/1",
+                "https://sc.test/legacy-mix",
+                "Legacy Mix",
+                "https://img.test/legacy.png");
+            var newMetadataOnlyRssMix = MakeMetadataOnlyMix(
+                "tag:soundcloud,2010:tracks/2",
+                "https://sc.test/new-legacy-mix",
+                "New Legacy Mix",
+                "https://img.test/new-legacy.png");
+            var blobRepo = new StubBlobRepository { BlobMixes = new[] { blobMix } };
+
+            var sut = BuildSut(
+                blobRepo: blobRepo,
+                blobMixes: new[] { blobMix },
+                rssMixes: new[] { existingRssMix, newMetadataOnlyRssMix });
+
+            var result = await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(result, Has.Count.EqualTo(1));
+            Assert.That(result[0].ImageUrl, Is.EqualTo("https://img.test/legacy.png"));
+            Assert.That(result[0].Genre, Is.EqualTo("dnb"));
+            Assert.That(result[0].Energy, Is.EqualTo("peak"));
+            Assert.That(blobRepo.WriteCallCount, Is.EqualTo(1));
+            Assert.That(blobRepo.WrittenMixes, Has.Count.EqualTo(1));
+        }
+
+        [Test]
         public async Task GetLatestAsync_caches_result_on_second_call()
         {
             var mix = MakeMix("1", "https://sc.test/mix-1");
@@ -253,6 +284,23 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
                 Energy = "peak",
                 Description = description,
                 Duration = duration,
+                ImageUrl = imageUrl,
+            };
+        }
+
+        private static Mix MakeMetadataOnlyMix(
+            string id,
+            string url,
+            string title,
+            string imageUrl)
+        {
+            return new Mix
+            {
+                Id = id,
+                Title = title,
+                Url = url,
+                Genre = string.Empty,
+                Energy = string.Empty,
                 ImageUrl = imageUrl,
             };
         }

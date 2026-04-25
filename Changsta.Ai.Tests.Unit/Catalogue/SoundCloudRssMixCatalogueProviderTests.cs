@@ -99,12 +99,12 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
         }
 
         [Test]
-        public async Task GetLatestAsync_skips_items_that_fail_schema_extraction()
+        public async Task GetLatestAsync_maps_legacy_items_without_schema_as_metadata_only()
         {
-            // Arrange — first item has a valid schema block, second has none.
+            // Arrange — first item has a valid schema block, second is a legacy item with metadata only.
             const string rss = """
                 <?xml version="1.0" encoding="utf-8"?>
-                <rss version="2.0">
+                <rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
                   <channel>
                     <title>Test Feed</title>
                     <link>https://example.test</link>
@@ -116,10 +116,12 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
                       <description>Intro [changsta:mix:v1 {"genre":"dnb","energy":"peak","bpm":[172,174],"moods":["dark"]}]</description>
                     </item>
                     <item>
-                      <guid>https://soundcloud.com/test/bad-mix</guid>
-                      <title>Bad Mix</title>
-                      <link>https://soundcloud.com/test/bad-mix</link>
+                      <guid>https://soundcloud.com/test/legacy-mix</guid>
+                      <title>Legacy Mix</title>
+                      <link>https://soundcloud.com/test/legacy-mix</link>
                       <description>No schema block here</description>
+                      <itunes:duration>00:30:00</itunes:duration>
+                      <itunes:image href="https://img.test/legacy.png"/>
                     </item>
                   </channel>
                 </rss>
@@ -131,9 +133,16 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             // Act
             var result = await sut.GetLatestAsync(maxItems: 50, cancellationToken: CancellationToken.None);
 
-            // Assert — only the valid item is returned; no exception is thrown.
-            Assert.That(result, Has.Count.EqualTo(1));
+            // Assert
+            Assert.That(result, Has.Count.EqualTo(2));
             Assert.That(result[0].Title, Is.EqualTo("Good Mix"));
+            Assert.That(result[1].Title, Is.EqualTo("Legacy Mix"));
+            Assert.That(result[1].Url, Is.EqualTo("https://soundcloud.com/test/legacy-mix"));
+            Assert.That(result[1].Duration, Is.EqualTo("00:30:00"));
+            Assert.That(result[1].ImageUrl, Is.EqualTo("https://img.test/legacy.png"));
+            Assert.That(result[1].Genre, Is.Empty);
+            Assert.That(result[1].Energy, Is.Empty);
+            Assert.That(result[1].Tracklist, Is.Empty);
         }
 
         private static void AssertMixSchemaMapped(Changsta.Ai.Core.Domain.Mix mix)
