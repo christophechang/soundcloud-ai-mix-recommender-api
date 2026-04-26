@@ -42,6 +42,16 @@ Swagger UI: `http://localhost:<port>/swagger` (port shown in terminal output). S
 
 ---
 
+## What's new in v1.11
+
+- **Live schema sync on cache flush.** Editing the `[changsta:mix:v1 {...}]` JSON block in a SoundCloud mix description and calling `POST /api/catalog/flush` now propagates the updated genre, energy, BPM, moods, and tracklist into the blob-backed catalog. Sync only fires when the description has changed and the updated description contains a valid schema block — mixes without the schema tag are unaffected.
+- **Recommendation catalog expanded to 200 mixes.** The AI recommender now receives up to 200 catalog mixes (was 50), consistent with all other catalog endpoints. The recommender's own 100-mix prompt cap still applies, so token count is unchanged.
+- **Tech house genre aliases added.** `tech house` and `tech-house` now normalise to `techno` in the genre normaliser, matching the existing alias table used in recommendation filtering.
+- **AI response contract tightened.** `title` and `url` fields removed from the allowed AI response schema — the server always resolves these from the catalog. Any AI response containing these fields is now rejected rather than silently ignored, eliminating wasted tokens.
+- **CORS fix for catalog flush.** Browser clients can now send `Authorization: Bearer` headers to `POST /api/catalog/flush` without hitting a CORS preflight failure.
+
+---
+
 ## What's new in v1.10
 
 - **Canonical genre normalization.** Catalogue sync now normalizes overlapping genre aliases such as `breaks`, `uk-bass`, `ukbass`, `deep house`, `drum and bass`, and `garage` into one canonical genre value before mixes are cached, stored, indexed, or returned.
@@ -135,7 +145,7 @@ Rather than relying purely on AI, the system combines deterministic filtering wi
 
 ## How It Works
 
-The API feeds up to 50 mixes from a persistent Azure Blob Storage catalog (supplemented by the live SoundCloud RSS feed) into a single OpenAI ChatCompletion call, with a structured prompt that:
+The API feeds up to 200 mixes from a persistent Azure Blob Storage catalog (supplemented by the live SoundCloud RSS feed) into a single OpenAI ChatCompletion call, with a structured prompt that:
 
 1. **Decomposes the query** into signals — genre, artist/track, mood, or tempo — and prioritises the right metadata fields accordingly
 2. **Generates a `reason`** per result: a free-text 1-2 sentence explanation written by the AI (creative, not validated)
@@ -200,9 +210,8 @@ Every `why` anchor exists verbatim in that mix's own genre, energy, mood, BPM, i
 
 Before any result is returned:
 
-- Only allowed JSON properties are accepted (strict allowlist)
+- Only allowed JSON properties are accepted (strict allowlist — `title` and `url` are rejected if present)
 - `mixId` must exist in the server-side catalogue
-- `title` and `url` must match canonical catalogue values exactly
 - `reason` must be present and ≤ 300 characters
 - `why` must contain 1–4 strings, each a quoted anchor verified against the mix's own metadata
 - Each anchor must appear verbatim in: intro text, genre, energy, a mood token, BPM range, or a tracklist line
