@@ -81,8 +81,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 {
                   "results": [{
                     "mixId": "mix-1",
-                    "title": "Test Mix",
-                    "url": "https://soundcloud.com/test/mix",
+
                     "reason": "This mix features dnb at peak energy, perfect for your request.",
                     "why": ["\"dnb\"", "\"peak\""],
                     "confidence": 0.9
@@ -102,8 +101,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 {
                   "results": [{
                     "mixId": "mix-1",
-                    "title": "Test Mix",
-                    "url": "https://soundcloud.com/test/mix",
+
                     "reason": "A driving and dark mix that matches your mood preference.",
                     "why": ["\"driving\"", "\"dark\""],
                     "confidence": 0.8
@@ -124,8 +122,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 {
                   "results": [{
                     "mixId": "mix-1",
-                    "title": "Test Mix",
-                    "url": "https://soundcloud.com/test/mix",
+
                     "reason": "Fast dnb mix at 172-174 BPM matching your tempo request.",
                     "why": ["\"dnb\"", "\"172-174\""],
                     "confidence": 0.85
@@ -146,8 +143,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 {
                   "results": [{
                     "mixId": "mix-1",
-                    "title": "Test Mix",
-                    "url": "https://soundcloud.com/test/mix",
+
                     "reason": "Matches your tempo preference with BPM in the 172-174 range.",
                     "why": ["\"dnb\"", "\"bpm: 172-174\""],
                     "confidence": 0.85
@@ -167,8 +163,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 {
                   "results": [{
                     "mixId": "mix-1",
-                    "title": "Test Mix",
-                    "url": "https://soundcloud.com/test/mix",
+
                     "reason": "A soulful rolling journey through deep sub-bass territory.",
                     "why": ["\"dnb\"", "\"soulful and rolling\""],
                     "confidence": 0.8
@@ -188,8 +183,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 {
                   "results": [{
                     "mixId": "mix-1",
-                    "title": "Test Mix",
-                    "url": "https://soundcloud.com/test/mix",
+
                     "reason": "Features Calibre which matches your artist search.",
                     "why": ["\"dnb\"", "\"Calibre\""],
                     "confidence": 0.75
@@ -210,8 +204,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 {
                   "results": [{
                     "mixId": "mix-1",
-                    "title": "Test Mix",
-                    "url": "https://soundcloud.com/test/mix",
+
                     "reason": "Features Calibre which matches your artist search.",
                     "why": ["\"dnb\"", "\"Calibre - Pillow Dub\""],
                     "confidence": 0.75
@@ -414,8 +407,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 {
                   "results": [{
                     "mixId": "mix-1",
-                    "title": "Test Mix",
-                    "url": "https://soundcloud.com/test/mix",
+
                     "reason": "Peak energy dnb mix for your listening.",
                     "why": ["\"dnb\".", "\"peak\""],
                     "confidence": 0.8
@@ -436,8 +428,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 {
                   "results": [{
                     "mixId": "mix-1",
-                    "title": "Test Mix",
-                    "url": "https://soundcloud.com/test/mix",
+
                     "reason": "Driving peak energy mix.",
                     "why": ["driving", "\"peak\""],
                     "confidence": 0.7
@@ -457,8 +448,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 {
                   "results": [{
                     "mixId": "mix-1",
-                    "title": "Test Mix",
-                    "url": "https://soundcloud.com/test/mix",
+
                     "reason": "A dark driving dnb mix at peak energy.",
                     "why": ["\"dnb\"", "\"peak\"", "\"driving\"", "\"dark\""],
                     "confidence": 0.9
@@ -479,8 +469,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 {
                   "results": [{
                     "mixId": "mix-1",
-                    "title": "Test Mix",
-                    "url": "https://soundcloud.com/test/mix",
+
                     "reason": "Features classic dnb production.",
                     "why": ["\"dnb\""],
                     "confidence": 0.9
@@ -500,7 +489,46 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 {
                   "results": [{
                     "mixId": "does-not-exist",
+
+                    "reason": "Great dnb mix.",
+                    "why": ["\"dnb\"", "\"peak\""],
+                    "confidence": 0.9
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.Throws<InvalidOperationException>(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_TitleInResponse_Throws()
+        {
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
                     "title": "Test Mix",
+                    "reason": "Great dnb mix.",
+                    "why": ["\"dnb\"", "\"peak\""],
+                    "confidence": 0.9
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.Throws<InvalidOperationException>(() =>
+                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_UrlInResponse_Throws()
+        {
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
                     "url": "https://soundcloud.com/test/mix",
                     "reason": "Great dnb mix.",
                     "why": ["\"dnb\"", "\"peak\""],
@@ -515,56 +543,13 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
         }
 
         [Test]
-        public void ParseAndValidate_WrongTitle_Ignored()
-        {
-            const string json = """
-                {
-                  "results": [{
-                    "mixId": "mix-1",
-                    "title": "Wrong Title",
-                    "url": "https://soundcloud.com/test/mix",
-                    "reason": "Great dnb mix.",
-                    "why": ["\"dnb\"", "\"peak\""],
-                    "confidence": 0.9
-                  }],
-                  "clarifyingQuestion": null
-                }
-                """;
-
-            Assert.DoesNotThrow(() =>
-                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
-        }
-
-        [Test]
-        public void ParseAndValidate_WrongUrl_Ignored()
-        {
-            const string json = """
-                {
-                  "results": [{
-                    "mixId": "mix-1",
-                    "title": "Test Mix",
-                    "url": "https://soundcloud.com/wrong/url",
-                    "reason": "Great dnb mix.",
-                    "why": ["\"dnb\"", "\"peak\""],
-                    "confidence": 0.9
-                  }],
-                  "clarifyingQuestion": null
-                }
-                """;
-
-            Assert.DoesNotThrow(() =>
-                OpenAiMixRecommender.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
-        }
-
-        [Test]
         public void ParseAndValidate_ZeroWhyItems_Throws()
         {
             const string json = """
                 {
                   "results": [{
                     "mixId": "mix-1",
-                    "title": "Test Mix",
-                    "url": "https://soundcloud.com/test/mix",
+
                     "reason": "A great dnb mix.",
                     "why": [],
                     "confidence": 0.9
@@ -584,8 +569,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 {
                   "results": [{
                     "mixId": "mix-1",
-                    "title": "Test Mix",
-                    "url": "https://soundcloud.com/test/mix",
+
                     "reason": "Great dnb mix.",
                     "why": ["\"dnb\"", "\"peak\"", "\"driving\"", "\"dark\"", "\"rolling\""],
                     "confidence": 0.9
@@ -605,8 +589,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 {
                   "results": [{
                     "mixId": "mix-1",
-                    "title": "Test Mix",
-                    "url": "https://soundcloud.com/test/mix",
+
                     "reason": "Great dnb mix.",
                     "why": ["\"dnb\"", "\"peak\""],
                     "confidence": 1.5
@@ -626,8 +609,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 {
                   "results": [{
                     "mixId": "mix-1",
-                    "title": "Test Mix",
-                    "url": "https://soundcloud.com/test/mix",
+
                     "reason": "Great dnb mix.",
                     "why": ["\"dnb\"", "\"peak\""],
                     "confidence": -0.1
@@ -647,8 +629,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 {
                   "results": [{
                     "mixId": "mix-1",
-                    "title": "Test Mix",
-                    "url": "https://soundcloud.com/test/mix",
+
                     "reason": "Great dnb mix.",
                     "why": ["\"dnb\"", "\"invented-phrase-xyz\""],
                     "confidence": 0.9
@@ -683,8 +664,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 {
                   "results": [{
                     "mixId": "mix-1",
-                    "title": "Test Mix",
-                    "url": "https://soundcloud.com/test/mix",
+
                     "reason": "Great dnb mix.",
                     "why": ["\"dnb\"", "\"peak\""],
                     "confidence": 0.9,
@@ -721,16 +701,14 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                   "results": [
                     {
                       "mixId": "mix-1",
-                      "title": "Test Mix",
-                      "url": "https://soundcloud.com/test/mix",
+
                       "reason": "Great dnb mix.",
                       "why": ["\"dnb\"", "\"peak\""],
                       "confidence": 0.9
                     },
                     {
                       "mixId": "mix-1",
-                      "title": "Test Mix",
-                      "url": "https://soundcloud.com/test/mix",
+
                       "reason": "Another great dnb mix.",
                       "why": ["\"dnb\"", "\"peak\""],
                       "confidence": 0.8
@@ -759,8 +737,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 {
                   "results": [{
                     "mixId": "mix-1",
-                    "title": "Test Mix",
-                    "url": "https://soundcloud.com/test/mix",
+
                     "why": ["\"dnb\"", "\"peak\""],
                     "confidence": 0.9
                   }],
@@ -779,8 +756,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 {
                   "results": [{
                     "mixId": "mix-1",
-                    "title": "Test Mix",
-                    "url": "https://soundcloud.com/test/mix",
+
                     "reason": "",
                     "why": ["\"dnb\"", "\"peak\""],
                     "confidence": 0.9
@@ -800,8 +776,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 {
                   "results": [{
                     "mixId": "mix-1",
-                    "title": "Test Mix",
-                    "url": "https://soundcloud.com/test/mix",
+
                     "reason": "   ",
                     "why": ["\"dnb\"", "\"peak\""],
                     "confidence": 0.9
@@ -822,8 +797,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 {
                   "results": [{
                     "mixId": "mix-1",
-                    "title": "Test Mix",
-                    "url": "https://soundcloud.com/test/mix",
+
                     "reason": "{{longReason}}",
                     "why": ["\"dnb\"", "\"peak\""],
                     "confidence": 0.9
@@ -843,8 +817,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 {
                   "results": [{
                     "mixId": "mix-1",
-                    "title": "Test Mix",
-                    "url": "https://soundcloud.com/test/mix",
+
                     "reason": "This rolling dnb mix features Calibre, matching your artist search.",
                     "why": ["\"Calibre - Pillow Dub\""],
                     "confidence": 0.85
@@ -866,16 +839,14 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                   "results": [
                     {
                       "mixId": "mix-1",
-                      "title": "Test Mix",
-                      "url": "https://soundcloud.com/test/mix",
+
                       "reason": "Great dnb mix.",
                       "why": ["\"dnb\""],
                       "confidence": 0.9
                     },
                     {
                       "mixId": "mix-1",
-                      "title": "Test Mix",
-                      "url": "https://soundcloud.com/test/mix",
+
                       "reason": "Great dnb mix again.",
                       "why": ["\"peak\""],
                       "confidence": 0.8

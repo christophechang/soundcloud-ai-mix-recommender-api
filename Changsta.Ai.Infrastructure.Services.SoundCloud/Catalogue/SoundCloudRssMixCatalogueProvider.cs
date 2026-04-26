@@ -34,11 +34,11 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
 
         public async Task<IReadOnlyList<Mix>> GetLatestAsync(int maxItems, CancellationToken cancellationToken)
         {
-            string cacheKey = $"{CacheKeyPrefix}{_invalidator.Version}_{maxItems}";
+            string cacheKey = $"{CacheKeyPrefix}{_invalidator.Version}";
 
             if (_cache.TryGetValue(cacheKey, out IReadOnlyList<Mix>? cached) && cached is not null)
             {
-                return cached;
+                return cached.Count > maxItems ? cached.Take(maxItems).ToArray() : cached;
             }
 
             using var response = await _httpClient.GetAsync(_rssUrl, cancellationToken).ConfigureAwait(false);
@@ -61,7 +61,7 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
 
             var mixList = new List<Mix>();
 
-            foreach (var item in feed.Items.Take(maxItems))
+            foreach (var item in feed.Items)
             {
                 try
                 {
@@ -82,7 +82,7 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
                 AbsoluteExpirationRelativeToNow = CacheTtl,
             });
 
-            return mixes;
+            return mixes.Count > maxItems ? mixes.Take(maxItems).ToArray() : mixes;
         }
 
         private static Mix MapItem(SyndicationItem item)

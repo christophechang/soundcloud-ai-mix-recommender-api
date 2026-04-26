@@ -6,7 +6,7 @@ namespace Changsta.Ai.Core.Normalization
 {
     public static class GenreNormalizer
     {
-        private static readonly Dictionary<string, string> GenreNormalisations = new(StringComparer.Ordinal)
+        private static readonly Dictionary<string, string> GenreNormalisations = new(StringComparer.OrdinalIgnoreCase)
         {
             { "2 step", "ukg" },
             { "2-step", "ukg" },
@@ -37,6 +37,8 @@ namespace Changsta.Ai.Core.Normalization
             { "house", "house" },
             { "jungle", "jungle" },
             { "rap", "hip-hop" },
+            { "tech house", "techno" },
+            { "tech-house", "techno" },
             { "techno", "techno" },
             { "two-step", "ukg" },
             { "twostep", "ukg" },

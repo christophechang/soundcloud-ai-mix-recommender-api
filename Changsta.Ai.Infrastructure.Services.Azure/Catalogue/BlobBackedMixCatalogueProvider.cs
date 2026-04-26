@@ -15,6 +15,9 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
     {
         private const string CacheKeyPrefix = "blob_catalog_v";
         private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(24);
+
+        // Intentionally static: guards a process-wide blob load and must be shared across all
+        // per-request instances. The scoped lifetime of this class is for DI composition only.
         private static readonly SemaphoreSlim LoadSemaphore = new SemaphoreSlim(1, 1);
 
         private readonly IMixCatalogueProvider _innerProvider;

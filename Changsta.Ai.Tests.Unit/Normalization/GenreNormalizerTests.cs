@@ -16,6 +16,8 @@ namespace Changsta.Ai.Tests.Unit.Normalization
         [TestCase("dnb", "dnb")]
         [TestCase("deep house", "deep-house")]
         [TestCase("hip hop", "hip-hop")]
+        [TestCase("tech house", "techno")]
+        [TestCase("tech-house", "techno")]
         [TestCase("uk garage", "ukg")]
         [TestCase("garage", "ukg")]
         [TestCase("  UK__Bass   Music  ", "uk bass")]

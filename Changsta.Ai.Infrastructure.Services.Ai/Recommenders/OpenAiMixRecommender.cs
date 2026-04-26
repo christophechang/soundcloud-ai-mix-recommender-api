@@ -24,7 +24,6 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
         private const int MixesUpperBound = 100;
         private const int TracklistUpperBound = 30;
         private const int ArtistsUpperBound = 12;
-        private const int IntroTextUpperBound = 140;
         private const int MoodsUpperBound = 20;
         private const int MaxRetryAttempts = 2;
         private const int BpmQueryMin = 100;
@@ -42,8 +41,6 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
         private static readonly HashSet<string> ResultAllowed = new(StringComparer.Ordinal)
         {
             "mixId",
-            "title",
-            "url",
             "reason",
             "why",
             "confidence",
@@ -636,13 +633,6 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 .ToArray();
         }
 
-        private static string TakePrefix(string? text, int maxChars)
-        {
-            if (string.IsNullOrWhiteSpace(text)) return string.Empty;
-            string trimmed = text.Trim();
-            return trimmed.Length <= maxChars ? trimmed : trimmed.Substring(0, maxChars);
-        }
-
         internal static AiResponse ParseAndValidate(string json, IReadOnlyList<Mix> mixes, int maxResults)
         {
             json = NormalizeAiJson(json);
@@ -687,7 +677,9 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 if (r.Why is null || r.Why.Count < 1 || r.Why.Count > 4) throw new InvalidOperationException("AI returned invalid why list.");
                 if (r.Why.Any(string.IsNullOrWhiteSpace)) throw new InvalidOperationException("AI returned an empty why string.");
 
-                ValidateWhyAnchors(r.Why, mix);
+                List<string> normalizedWhy = ValidateWhyAnchors(r.Why, mix);
+                r.Why.Clear();
+                r.Why.AddRange(normalizedWhy);
 
                 if (r.Confidence < 0 || r.Confidence > 1) throw new InvalidOperationException("AI returned invalid confidence.");
             }
@@ -695,7 +687,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             return response;
         }
 
-        private static void ValidateWhyAnchors(List<string> why, Mix mix)
+        private static List<string> ValidateWhyAnchors(List<string> why, Mix mix)
         {
             string genre = (mix.Genre ?? string.Empty).Trim();
             string energy = (mix.Energy ?? string.Empty).Trim();
@@ -717,6 +709,8 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 .Where(x => !string.IsNullOrWhiteSpace(x))
                 .ToArray();
 
+            var normalized = new List<string>(why.Count);
+
             for (int i = 0; i < why.Count; i++)
             {
                 string original = why[i];
@@ -724,6 +718,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 if (TryExtractQuotedAnchor(original, out var anchor))
                 {
                     EnsureAnchorIsValid(anchor, genre, energy, bpmAnchor, moodTokens, artists, trackLines, mix.Id);
+                    normalized.Add(original);
                     continue;
                 }
 
@@ -733,13 +728,15 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
                 if (IsAllowedUnquotedAnchor(candidate, genre, energy, bpmAnchor, moodTokens))
                 {
-                    why[i] = "\"" + candidate + "\"";
                     EnsureAnchorIsValid(candidate, genre, energy, bpmAnchor, moodTokens, artists, trackLines, mix.Id);
+                    normalized.Add("\"" + candidate + "\"");
                     continue;
                 }
 
                 throw new InvalidOperationException("AI returned a why string that is not a quoted anchor.");
             }
+
+            return normalized;
         }
 
         private static bool IsAllowedUnquotedAnchor(

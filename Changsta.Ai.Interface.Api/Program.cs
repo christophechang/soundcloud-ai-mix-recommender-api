@@ -40,7 +40,7 @@ builder.Services.AddCors(options =>
         policy
             .WithOrigins(allowedOrigins)
             .WithMethods("GET", "POST", "OPTIONS")
-            .WithHeaders("Content-Type")
+            .WithHeaders("Content-Type", "Authorization")
             .SetPreflightMaxAge(TimeSpan.FromHours(12));
     });
 });
