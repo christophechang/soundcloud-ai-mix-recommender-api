@@ -279,6 +279,65 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             Assert.That(result[1].Title, Is.EqualTo("Blob Mix"));
         }
 
+        [Test]
+        public async Task GetLatestAsync_description_changed_with_schema_syncs_schema_fields_from_rss()
+        {
+            var blobMix = MakeMix("1", "https://sc.test/mix-1", description: "old desc", genre: "dnb");
+            var rssMix = MakeMix("1", "https://sc.test/mix-1", description: "new desc", genre: "hip-hop");
+            var blobRepo = new StubBlobRepository { BlobMixes = new[] { blobMix } };
+
+            var sut = BuildSut(
+                blobRepo: blobRepo,
+                blobMixes: new[] { blobMix },
+                rssMixes: new[] { rssMix });
+
+            var result = await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(result[0].Genre, Is.EqualTo("hip-hop"));
+            Assert.That(blobRepo.WrittenMixes![0].Genre, Is.EqualTo("hip-hop"));
+        }
+
+        [Test]
+        public async Task GetLatestAsync_description_unchanged_preserves_blob_schema()
+        {
+            const string sharedDescription = "same desc";
+            var blobMix = MakeMix("1", "https://sc.test/mix-1", description: sharedDescription, genre: "dnb");
+            var rssMix = MakeMix("1", "https://sc.test/mix-1", description: sharedDescription, genre: "house");
+
+            var sut = BuildSut(
+                blobMixes: new[] { blobMix },
+                rssMixes: new[] { rssMix });
+
+            var result = await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(result[0].Genre, Is.EqualTo("dnb"));
+        }
+
+        [Test]
+        public async Task GetLatestAsync_description_changed_without_schema_preserves_blob_schema()
+        {
+            var blobMix = MakeMix("1", "https://sc.test/mix-1", description: "old desc", genre: "dnb");
+
+            // RSS mix has no schema (empty genre) — simulates a legacy/metadata-only item
+            var rssMix = new Mix
+            {
+                Id = "1",
+                Title = "Test Mix",
+                Url = "https://sc.test/mix-1",
+                Description = "new desc without schema",
+                Genre = string.Empty,
+                Energy = string.Empty,
+            };
+
+            var sut = BuildSut(
+                blobMixes: new[] { blobMix },
+                rssMixes: new[] { rssMix });
+
+            var result = await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(result[0].Genre, Is.EqualTo("dnb"));
+        }
+
         private static BlobBackedMixCatalogueProvider BuildSut(
             StubBlobRepository? blobRepo = null,
             IReadOnlyList<Mix>? blobMixes = null,

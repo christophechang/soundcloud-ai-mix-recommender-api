@@ -189,8 +189,15 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             {
                 if (byUrl.TryGetValue(mix.Url, out Mix? existing))
                 {
-                    // Preserve curated blob metadata (genre, energy, BPM, moods, tracklist).
-                    // Only update title and description, which reflect live RSS changes.
+                    // When description changes and the RSS mix has a valid changsta schema block
+                    // (indicated by a non-empty Genre), sync all schema fields from RSS so that
+                    // edits to the SoundCloud description are reflected on the next cache flush.
+                    // Without a schema block the blob metadata is preserved unchanged.
+                    bool descriptionChanged = !string.Equals(
+                        mix.Description, existing.Description, StringComparison.Ordinal);
+                    bool rssHasSchema = !string.IsNullOrEmpty(mix.Genre);
+                    bool syncSchema = descriptionChanged && rssHasSchema;
+
                     byUrl[mix.Url] = new Mix
                     {
                         Id = existing.Id,
@@ -199,12 +206,12 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                         Description = mix.Description,
                         Duration = mix.Duration ?? existing.Duration,
                         ImageUrl = mix.ImageUrl ?? existing.ImageUrl,
-                        Tracklist = existing.Tracklist,
-                        Genre = existing.Genre,
-                        Energy = existing.Energy,
-                        BpmMin = existing.BpmMin,
-                        BpmMax = existing.BpmMax,
-                        Moods = existing.Moods,
+                        Tracklist = syncSchema ? mix.Tracklist : existing.Tracklist,
+                        Genre = syncSchema ? mix.Genre : existing.Genre,
+                        Energy = syncSchema ? mix.Energy : existing.Energy,
+                        BpmMin = syncSchema ? mix.BpmMin : existing.BpmMin,
+                        BpmMax = syncSchema ? mix.BpmMax : existing.BpmMax,
+                        Moods = syncSchema ? mix.Moods : existing.Moods,
                         PublishedAt = mix.PublishedAt ?? existing.PublishedAt,
                     };
                 }
