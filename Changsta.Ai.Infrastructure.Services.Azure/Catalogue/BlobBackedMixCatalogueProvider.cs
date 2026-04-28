@@ -88,10 +88,13 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 bool introHydrationChanged;
                 merged = HydrateIntros(merged, out introHydrationChanged);
 
+                bool relatedMixesChanged;
+                merged = RelatedMixScorer.ComputeRelatedMixes(merged, out relatedMixesChanged);
+
                 int newDiscoveries = CountNewDiscoveries(blobMixes, rssMixes);
                 int updatedEntries = CountUpdatedEntries(blobMixes, rssMixes);
 
-                if (blobReadSucceeded && (newDiscoveries > 0 || updatedEntries > 0 || blobGenresChanged || introHydrationChanged))
+                if (blobReadSucceeded && (newDiscoveries > 0 || updatedEntries > 0 || blobGenresChanged || introHydrationChanged || relatedMixesChanged))
                 {
                     _logger.LogInformation(
                         "Writing blob catalog — {NewCount} new mixes, {UpdateCount} updated entries, genreNormalizationChanged={GenreNormalizationChanged}.",

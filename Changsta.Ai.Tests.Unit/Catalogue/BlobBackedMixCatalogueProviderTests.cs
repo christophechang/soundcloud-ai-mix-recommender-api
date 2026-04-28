@@ -394,6 +394,111 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             Assert.That(result[0].Genre, Is.EqualTo("dnb"));
         }
 
+        [Test]
+        public async Task GetLatestAsync_related_mixes_computed_and_written_to_blob_on_first_run()
+        {
+            var mix1 = MakeMix("1", "https://sc.test/mix-1", genre: "dnb");
+            var mix2 = MakeMix("2", "https://sc.test/mix-2", genre: "dnb");
+
+            var blobRepo = new StubBlobRepository();
+
+            var sut = BuildSut(
+                blobRepo: blobRepo,
+                blobMixes: Array.Empty<Mix>(),
+                rssMixes: new[] { mix1, mix2 });
+
+            var result = await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(result[0].RelatedMixes, Has.Count.EqualTo(1));
+            Assert.That(result[0].RelatedMixes[0].Url, Is.EqualTo("https://sc.test/mix-2"));
+            Assert.That(blobRepo.WrittenMixes![0].RelatedMixes, Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public async Task GetLatestAsync_related_mixes_stable_no_extra_write()
+        {
+            var ref2 = new RelatedMixRef { Title = "Mix 2", Url = "https://sc.test/mix-2", ArtworkUrl = null };
+            var ref1 = new RelatedMixRef { Title = "Mix 1", Url = "https://sc.test/mix-1", ArtworkUrl = null };
+
+            var mix1 = new Mix
+            {
+                Id = "1",
+                Title = "Mix 1",
+                Url = "https://sc.test/mix-1",
+                Genre = "dnb",
+                Energy = "peak",
+                RelatedMixes = new[] { ref2 },
+            };
+
+            var mix2 = new Mix
+            {
+                Id = "2",
+                Title = "Mix 2",
+                Url = "https://sc.test/mix-2",
+                Genre = "dnb",
+                Energy = "peak",
+                RelatedMixes = new[] { ref1 },
+            };
+
+            var blobRepo = new StubBlobRepository { BlobMixes = new[] { mix1, mix2 } };
+
+            var sut = BuildSut(
+                blobRepo: blobRepo,
+                blobMixes: new[] { mix1, mix2 },
+                rssMixes: Array.Empty<Mix>());
+
+            await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(blobRepo.WriteCallCount, Is.EqualTo(0));
+        }
+
+        [Test]
+        public async Task GetLatestAsync_related_mixes_recomputed_when_new_mix_added()
+        {
+            var existingRef = new RelatedMixRef
+            {
+                Title = "Mix 2",
+                Url = "https://sc.test/mix-2",
+                ArtworkUrl = null,
+            };
+
+            var blobMix1 = new Mix
+            {
+                Id = "1",
+                Title = "Mix 1",
+                Url = "https://sc.test/mix-1",
+                Genre = "dnb",
+                Energy = "peak",
+                RelatedMixes = new[] { existingRef },
+            };
+
+            var blobMix2 = new Mix
+            {
+                Id = "2",
+                Title = "Mix 2",
+                Url = "https://sc.test/mix-2",
+                Genre = "dnb",
+                Energy = "peak",
+                RelatedMixes = Array.Empty<RelatedMixRef>(),
+            };
+
+            var newRssMix = MakeMix("3", "https://sc.test/mix-3", genre: "dnb");
+
+            var blobRepo = new StubBlobRepository { BlobMixes = new[] { blobMix1, blobMix2 } };
+
+            var sut = BuildSut(
+                blobRepo: blobRepo,
+                blobMixes: new[] { blobMix1, blobMix2 },
+                rssMixes: new[] { newRssMix });
+
+            var result = await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(
+                result.Any(m => m.RelatedMixes.Any(r => r.Url == "https://sc.test/mix-3")),
+                Is.True);
+            Assert.That(blobRepo.WriteCallCount, Is.EqualTo(1));
+        }
+
         private static BlobBackedMixCatalogueProvider BuildSut(
             StubBlobRepository? blobRepo = null,
             IReadOnlyList<Mix>? blobMixes = null,
