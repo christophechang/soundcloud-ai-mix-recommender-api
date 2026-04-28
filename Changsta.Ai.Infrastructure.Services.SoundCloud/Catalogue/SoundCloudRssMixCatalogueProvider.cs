@@ -4,6 +4,7 @@ using System.Xml.Linq;
 using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Core.Normalization;
+using Changsta.Ai.Core.Parsing;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Models;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Parsing;
 using Microsoft.Extensions.Caching.Memory;
@@ -107,6 +108,7 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
                 Title = item.Title?.Text ?? "Untitled",
                 Url = item.Links.FirstOrDefault()?.Uri.ToString() ?? string.Empty,
                 Description = description,
+                Intro = MixDescriptionParser.ExtractIntro(description),
                 Duration = GetItunesElementValue(item, "duration"),
                 ImageUrl = GetItunesImageUrl(item),
                 Tracklist = mixSchema is null ? Array.Empty<Track>() : TracklistExtractor.Extract(description),

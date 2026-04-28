@@ -13,6 +13,8 @@ namespace Changsta.Ai.Core.Domain
 
         public string? Description { get; init; }
 
+        public string? Intro { get; init; }
+
         public string? Duration { get; init; }
 
         public string? ImageUrl { get; init; }

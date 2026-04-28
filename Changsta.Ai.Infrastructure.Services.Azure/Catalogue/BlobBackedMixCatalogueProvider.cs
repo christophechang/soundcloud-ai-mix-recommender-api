@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Core.Normalization;
+using Changsta.Ai.Core.Parsing;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
@@ -84,10 +85,13 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
 
                 IReadOnlyList<Mix> merged = MergeCatalogs(blobMixes, rssMixes);
 
+                bool introHydrationChanged;
+                merged = HydrateIntros(merged, out introHydrationChanged);
+
                 int newDiscoveries = CountNewDiscoveries(blobMixes, rssMixes);
                 int updatedEntries = CountUpdatedEntries(blobMixes, rssMixes);
 
-                if (blobReadSucceeded && (newDiscoveries > 0 || updatedEntries > 0 || blobGenresChanged))
+                if (blobReadSucceeded && (newDiscoveries > 0 || updatedEntries > 0 || blobGenresChanged || introHydrationChanged))
                 {
                     _logger.LogInformation(
                         "Writing blob catalog — {NewCount} new mixes, {UpdateCount} updated entries, genreNormalizationChanged={GenreNormalizationChanged}.",
@@ -154,6 +158,36 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             return normalized;
         }
 
+        private static IReadOnlyList<Mix> HydrateIntros(IReadOnlyList<Mix> mixes, out bool changed)
+        {
+            changed = false;
+            var result = new Mix[mixes.Count];
+
+            for (int i = 0; i < mixes.Count; i++)
+            {
+                Mix mix = mixes[i];
+
+                if (mix.Intro is not null)
+                {
+                    result[i] = mix;
+                    continue;
+                }
+
+                string? intro = MixDescriptionParser.ExtractIntro(mix.Description);
+
+                if (intro is null)
+                {
+                    result[i] = mix;
+                    continue;
+                }
+
+                changed = true;
+                result[i] = WithIntro(mix, intro);
+            }
+
+            return result;
+        }
+
         private static Mix WithGenre(Mix mix, string genre)
         {
             return new Mix
@@ -162,10 +196,32 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 Title = mix.Title,
                 Url = mix.Url,
                 Description = mix.Description,
+                Intro = mix.Intro,
                 Duration = mix.Duration,
                 ImageUrl = mix.ImageUrl,
                 Tracklist = mix.Tracklist,
                 Genre = genre,
+                Energy = mix.Energy,
+                BpmMin = mix.BpmMin,
+                BpmMax = mix.BpmMax,
+                Moods = mix.Moods,
+                PublishedAt = mix.PublishedAt,
+            };
+        }
+
+        private static Mix WithIntro(Mix mix, string? intro)
+        {
+            return new Mix
+            {
+                Id = mix.Id,
+                Title = mix.Title,
+                Url = mix.Url,
+                Description = mix.Description,
+                Intro = intro,
+                Duration = mix.Duration,
+                ImageUrl = mix.ImageUrl,
+                Tracklist = mix.Tracklist,
+                Genre = mix.Genre,
                 Energy = mix.Energy,
                 BpmMin = mix.BpmMin,
                 BpmMax = mix.BpmMax,
@@ -204,6 +260,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                         Title = mix.Title,
                         Url = existing.Url,
                         Description = mix.Description,
+                        Intro = mix.Intro,
                         Duration = mix.Duration ?? existing.Duration,
                         ImageUrl = mix.ImageUrl ?? existing.ImageUrl,
                         Tracklist = syncSchema ? mix.Tracklist : existing.Tracklist,

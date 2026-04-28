@@ -314,6 +314,62 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
         }
 
         [Test]
+        public async Task GetLatestAsync_blob_mix_with_intro_bearing_description_hydrates_intro_and_writes_blob()
+        {
+            const string description =
+                "Dark UK Bass session.\n" +
+                "\n" +
+                "Tracklist\n" +
+                "Artist A - Track One\n";
+
+            var blobMix = MakeMix("1", "https://sc.test/mix-1", description: description);
+            var blobRepo = new StubBlobRepository { BlobMixes = new[] { blobMix } };
+
+            var sut = BuildSut(
+                blobRepo: blobRepo,
+                blobMixes: new[] { blobMix },
+                rssMixes: Array.Empty<Mix>());
+
+            var result = await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(result[0].Intro, Is.EqualTo("Dark UK Bass session."));
+            Assert.That(blobRepo.WriteCallCount, Is.EqualTo(1));
+            Assert.That(blobRepo.WrittenMixes![0].Intro, Is.EqualTo("Dark UK Bass session."));
+        }
+
+        [Test]
+        public async Task GetLatestAsync_blob_mix_with_intro_already_set_skips_hydration_and_skips_write()
+        {
+            const string description =
+                "Dark UK Bass session.\n" +
+                "\n" +
+                "Tracklist\n" +
+                "Artist A - Track One\n";
+
+            var blobMix = new Mix
+            {
+                Id = "1",
+                Title = "Test Mix",
+                Url = "https://sc.test/mix-1",
+                Genre = "dnb",
+                Energy = "peak",
+                Description = description,
+                Intro = "Dark UK Bass session.",
+            };
+
+            var blobRepo = new StubBlobRepository { BlobMixes = new[] { blobMix } };
+
+            var sut = BuildSut(
+                blobRepo: blobRepo,
+                blobMixes: new[] { blobMix },
+                rssMixes: Array.Empty<Mix>());
+
+            await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(blobRepo.WriteCallCount, Is.EqualTo(0));
+        }
+
+        [Test]
         public async Task GetLatestAsync_description_changed_without_schema_preserves_blob_schema()
         {
             var blobMix = MakeMix("1", "https://sc.test/mix-1", description: "old desc", genre: "dnb");
