@@ -19,3 +19,16 @@ Tests must be deterministic — no live OpenAI, SoundCloud, or Azure calls. Run 
 
 dotnet build soundcloud-ai-mix-recommender-api.sln --no-incremental
 dotnet test soundcloud-ai-mix-recommender-api.sln --no-build
+
+## Deploying to QA / Prod
+
+When asked to deploy to QA, Prod, or both:
+
+1. Get the latest successful CI Build run SHA:
+   `gh run list --workflow="CI Build (publish artifact)" --repo christophechang/soundcloud-ai-mix-recommender-api --limit 1`
+
+2. Trigger the relevant workflow(s) with that short SHA:
+   `gh workflow run "Deploy QA (manual)" --repo christophechang/soundcloud-ai-mix-recommender-api --field ref=<sha>`
+   `gh workflow run "Deploy Prod (manual)" --repo christophechang/soundcloud-ai-mix-recommender-api --field ref=<sha>`
+
+Trigger both in a single command if asked to deploy to QA and Prod together.
