@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Core.Normalization;
+using Changsta.Ai.Interface.Api.ViewModels;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 
@@ -281,53 +282,5 @@ namespace Changsta.Ai.Interface.Api.Controllers
         }
 
         private static string NormalizeGenre(string? genre) => GenreNormalizer.Normalize(genre);
-
-        public sealed class GenresResponse
-        {
-            required public string[] Genres { get; init; }
-        }
-
-        public sealed class ArtistEntry
-        {
-            required public string Name { get; init; }
-
-            required public string[] Tracks { get; init; }
-        }
-
-        public sealed class ArtistNamesResponse
-        {
-            required public string[] Artists { get; init; }
-        }
-
-        public sealed class CatalogPage<T>
-        {
-            required public T[] Items { get; init; }
-
-            required public int Total { get; init; }
-
-            required public int Page { get; init; }
-
-            required public int PageSize { get; init; }
-
-            required public int TotalPages { get; init; }
-        }
-
-        public sealed class GenreEntry
-        {
-            required public string Genre { get; init; }
-
-            required public ArtistEntry[] Artists { get; init; }
-        }
-
-        public sealed class TrackSummary
-        {
-            required public string Artist { get; init; }
-
-            required public string[] GenresSeen { get; init; }
-
-            required public int RecurrenceCount { get; init; }
-
-            required public string Title { get; init; }
-        }
     }
 }

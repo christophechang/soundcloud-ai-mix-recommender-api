@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Interface.Api.Controllers;
+using Changsta.Ai.Interface.Api.ViewModels;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Changsta.Ai.Tests.Unit.Controllers
@@ -457,44 +458,44 @@ namespace Changsta.Ai.Tests.Unit.Controllers
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────
-        private static async Task<MixCatalogController.CatalogPage<MixCatalogController.GenreEntry>> InvokeCatalogAsync(
+        private static async Task<CatalogPage<GenreEntry>> InvokeCatalogAsync(
             MixCatalogController sut,
             string? genre,
             int page,
             int pageSize)
         {
             IActionResult result = await sut.GetCatalogAsync(genre, page, pageSize, CancellationToken.None);
-            return (MixCatalogController.CatalogPage<MixCatalogController.GenreEntry>)((OkObjectResult)result).Value!;
+            return (CatalogPage<GenreEntry>)((OkObjectResult)result).Value!;
         }
 
         private static async Task<string[]> InvokeGenresAsync(MixCatalogController sut)
         {
             IActionResult result = await sut.GetGenresAsync(CancellationToken.None);
-            var value = (MixCatalogController.GenresResponse)((OkObjectResult)result).Value!;
+            var value = (GenresResponse)((OkObjectResult)result).Value!;
             return value.Genres;
         }
 
-        private static async Task<MixCatalogController.CatalogPage<Mix>> InvokeMixesAsync(
+        private static async Task<CatalogPage<Mix>> InvokeMixesAsync(
             MixCatalogController sut,
             string? genre,
             int page,
             int pageSize)
         {
             IActionResult result = await sut.GetMixesAsync(genre, page, pageSize, CancellationToken.None);
-            return (MixCatalogController.CatalogPage<Mix>)((OkObjectResult)result).Value!;
+            return (CatalogPage<Mix>)((OkObjectResult)result).Value!;
         }
 
         private static async Task<string[]> InvokeArtistsAsync(MixCatalogController sut)
         {
             IActionResult result = await sut.GetArtistsAsync(CancellationToken.None);
-            var value = (MixCatalogController.ArtistNamesResponse)((OkObjectResult)result).Value!;
+            var value = (ArtistNamesResponse)((OkObjectResult)result).Value!;
             return value.Artists;
         }
 
-        private static async Task<MixCatalogController.CatalogPage<Mix>> InvokeMixesByArtistAsync(MixCatalogController sut, string name)
+        private static async Task<CatalogPage<Mix>> InvokeMixesByArtistAsync(MixCatalogController sut, string name)
         {
             IActionResult result = await sut.GetMixesByArtistAsync(name, 1, 20, CancellationToken.None);
-            return (MixCatalogController.CatalogPage<Mix>)((OkObjectResult)result).Value!;
+            return (CatalogPage<Mix>)((OkObjectResult)result).Value!;
         }
 
         private static MixCatalogController BuildSut(IReadOnlyList<Mix> mixes)
