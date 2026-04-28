@@ -42,6 +42,12 @@ Swagger UI: `http://localhost:<port>/swagger` (port shown in terminal output). S
 
 ---
 
+## What's new in v1.12
+
+- **Related mixes on every catalog item.** Each mix returned by `GET /api/catalog/mixes` and `GET /api/catalog/artists/{name}/mixes` now includes a `relatedMixes` array of up to 6 slim references (title, URL, artwork URL), pre-computed and ranked by relevance. Scoring uses shared exact tracks (+15 each), shared tracklist artists (+8 each), same genre (+6), same energy (+3), shared moods (+2 each), and BPM range overlap (+1). Ties are broken by most recently published. Results are computed once at cache flush time, persisted to the blob catalog, and served from the 24-hour memory cache at zero read cost.
+
+---
+
 ## What's new in v1.11
 
 - **Live schema sync on cache flush.** Editing the `[changsta:mix:v1 {...}]` JSON block in a SoundCloud mix description and calling `POST /api/catalog/flush` now propagates the updated genre, energy, BPM, moods, and tracklist into the blob-backed catalog. Sync only fires when the description has changed and the updated description contains a valid schema block — mixes without the schema tag are unaffected.
