@@ -205,6 +205,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 BpmMin = mix.BpmMin,
                 BpmMax = mix.BpmMax,
                 Moods = mix.Moods,
+                RelatedMixes = mix.RelatedMixes,
                 PublishedAt = mix.PublishedAt,
             };
         }
@@ -226,6 +227,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 BpmMin = mix.BpmMin,
                 BpmMax = mix.BpmMax,
                 Moods = mix.Moods,
+                RelatedMixes = mix.RelatedMixes,
                 PublishedAt = mix.PublishedAt,
             };
         }
@@ -269,6 +271,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                         BpmMin = syncSchema ? mix.BpmMin : existing.BpmMin,
                         BpmMax = syncSchema ? mix.BpmMax : existing.BpmMax,
                         Moods = syncSchema ? mix.Moods : existing.Moods,
+                        RelatedMixes = existing.RelatedMixes,
                         PublishedAt = mix.PublishedAt ?? existing.PublishedAt,
                     };
                 }
