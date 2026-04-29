@@ -286,7 +286,7 @@ Returns all artist names in a single unpaginated response, sorted alphabetically
 
 ### `GET /api/catalog/tracks`
 
-Returns a paginated `CatalogPage<TrackSummary>` of all tracks, deduplicated, with recurrence count and genres seen. Used by TuneFinder for crate-digging exclusion and artist affinity scoring.
+Returns a paginated `CatalogPage<TrackSummary>` of all tracks, deduplicated, with recurrence count and genres seen.
 
 **Query parameters:** `?page=1`, `?pageSize=20` (max 200)
 
@@ -433,37 +433,6 @@ Hirobbie - Taste (Original Mix)
 ### Seeding the Catalog
 
 For mixes that fall outside the RSS window, prepare a JSON document matching the `MixCatalogDocument` schema and upload it as `catalog.json` to the `mix-catalog` container in Azure Blob Storage. Once uploaded, the API will merge blob and RSS data on the next cache refresh and persist any new RSS discoveries back to blob automatically.
-
----
-
-## TuneFinder Integration
-
-This API is one half of a larger music discovery system called **[TuneFinder](https://www.soltechconsulting.co.uk/case-studies/tunefinder)**.
-
-### What TuneFinder Does
-
-TuneFinder automates DJ crate-digging. It aggregates ~2,000 new release candidates each week across Beatport, Juno Download, Bandcamp, Traxsource, Resident Advisor, and Subsurface Selections, then scores and ranks them to surface 15–20 relevant tracks — reducing what was several hours of manual discovery down to a five-minute weekly read.
-
-### Role of This API
-
-This API provides the **taste layer** that TuneFinder's scoring engine runs against. Specifically, it exposes:
-
-- **A deduplicated track catalog** — every track that has appeared across all published mixes, sourced from the blob-backed catalog described above. TuneFinder uses this to build a known-track exclusion set, preventing recommendations for music already owned.
-- **Artist affinity data** — artists appearing across multiple mixes carry higher recurrence weight (3× multiplier) in TuneFinder's scoring signals. The more frequently an artist appears in the mix catalog, the stronger their influence on new release rankings.
-
-The `GET /api/catalog/tracks` endpoint serves this data directly.
-
-### Discovery → Taste → Report
-
-TuneFinder's weekly pipeline works in three stages:
-
-1. **Discovery** — Six parallel source fetchers scrape new releases and deduplicate cross-source candidates
-2. **Scoring** — Seven weighted signals are applied, with artist affinity (derived from this API's catalog) being the strongest predictor
-3. **Report generation** — A two-stage LLM pipeline writes per-track reasoning (MiniMax M2.5 / Groq fallback) then formats the full Discord report in Claude Sonnet's voice
-
-This API's role is entirely in stage 2 — it is the source of truth for what has already been played and who the trusted artists are.
-
----
 
 ## Running Locally
 
