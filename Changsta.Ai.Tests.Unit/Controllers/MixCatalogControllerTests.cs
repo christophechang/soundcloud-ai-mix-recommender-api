@@ -434,6 +434,48 @@ namespace Changsta.Ai.Tests.Unit.Controllers
             Assert.That(page.Items, Has.Length.EqualTo(1));
         }
 
+        // ── GET /api/catalog/mixes/{slug} ────────────────────────────────────
+        [Test]
+        public async Task GetMixBySlugAsync_returns_mix_matching_url_slug()
+        {
+            var mixes = new[]
+            {
+                MakeMixWithUrl("1", "https://soundcloud.com/changsta/fault-lines", "breaks", ("Artist A", "Track 1")),
+                MakeMixWithUrl("2", "https://soundcloud.com/changsta/deep-dive", "dnb", ("Artist B", "Track 2")),
+            };
+
+            IActionResult result = await BuildSut(mixes).GetMixBySlugAsync("fault-lines", CancellationToken.None);
+
+            var mix = (Mix)((OkObjectResult)result).Value!;
+            Assert.That(mix.Id, Is.EqualTo("1"));
+        }
+
+        [Test]
+        public async Task GetMixBySlugAsync_returns_404_when_no_match()
+        {
+            var mixes = new[]
+            {
+                MakeMixWithUrl("1", "https://soundcloud.com/changsta/fault-lines", "breaks", ("Artist A", "Track 1")),
+            };
+
+            IActionResult result = await BuildSut(mixes).GetMixBySlugAsync("unknown-mix", CancellationToken.None);
+
+            Assert.That(result, Is.InstanceOf<NotFoundObjectResult>());
+        }
+
+        [Test]
+        public async Task GetMixBySlugAsync_slug_matching_is_case_insensitive()
+        {
+            var mixes = new[]
+            {
+                MakeMixWithUrl("1", "https://soundcloud.com/changsta/fault-lines", "breaks", ("Artist A", "Track 1")),
+            };
+
+            IActionResult result = await BuildSut(mixes).GetMixBySlugAsync("FAULT-LINES", CancellationToken.None);
+
+            Assert.That(result, Is.InstanceOf<OkObjectResult>());
+        }
+
         // ── NormalizeGenre null safety ────────────────────────────────────────
         [Test]
         public async Task GetCatalogAsync_mix_with_null_genre_does_not_throw()
@@ -513,6 +555,21 @@ namespace Changsta.Ai.Tests.Unit.Controllers
                 Id = id,
                 Title = $"Mix {id}",
                 Url = $"https://sc.test/mix-{id}",
+                Genre = genre,
+                Energy = "high",
+                Tracklist = tracks
+                    .Select(t => new Track { Artist = t.Artist, Title = t.Title })
+                    .ToArray(),
+            };
+        }
+
+        private static Mix MakeMixWithUrl(string id, string url, string genre, params (string Artist, string Title)[] tracks)
+        {
+            return new Mix
+            {
+                Id = id,
+                Title = $"Mix {id}",
+                Url = url,
                 Genre = genre,
                 Energy = "high",
                 Tracklist = tracks

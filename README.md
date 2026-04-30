@@ -42,6 +42,12 @@ Swagger UI: `http://localhost:<port>/swagger` (port shown in terminal output). S
 
 ---
 
+## What's new in v1.13
+
+- **Mix detail by slug.** New endpoint `GET /api/catalog/mixes/{slug}` returns the full mix object for a given SoundCloud URL slug (e.g. `GET /api/catalog/mixes/fault-lines`). The slug is the last path segment of the mix's SoundCloud permalink — no transformation needed. Returns 404 if no matching mix is found. Served from the same 24-hour memory cache as all other catalog endpoints.
+
+---
+
 ## What's new in v1.12
 
 - **Related mixes on every catalog item.** Each mix returned by `GET /api/catalog/mixes` and `GET /api/catalog/artists/{name}/mixes` now includes a `relatedMixes` array of up to 6 slim references (title, URL, artwork URL), pre-computed and ranked by relevance. Scoring uses shared exact tracks (+15 each), shared tracklist artists (+8 each), same genre (+6), same energy (+3), shared moods (+2 each), and BPM range overlap (+1). Ties are broken by most recently published. Results are computed once at cache flush time, persisted to the blob catalog, and served from the 24-hour memory cache at zero read cost.

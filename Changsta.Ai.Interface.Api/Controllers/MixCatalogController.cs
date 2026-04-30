@@ -232,6 +232,26 @@ namespace Changsta.Ai.Interface.Api.Controllers
             return Ok(BuildPage(allEntries, page, pageSize));
         }
 
+        [HttpGet("mixes/{slug}")]
+        public async Task<IActionResult> GetMixBySlugAsync(
+            [FromRoute] string slug,
+            CancellationToken cancellationToken = default)
+        {
+            IReadOnlyList<Mix> mixes = await _catalogueProvider
+                .GetLatestAsync(CatalogMaxItems, cancellationToken)
+                .ConfigureAwait(false);
+
+            Mix? match = mixes.FirstOrDefault(m =>
+                string.Equals(MixSlugHelper.ExtractSlug(m.Url), slug, StringComparison.OrdinalIgnoreCase));
+
+            if (match is null)
+            {
+                return NotFound(new { error = $"No mix found with slug '{slug}'." });
+            }
+
+            return Ok(match);
+        }
+
         [HttpGet("artists/{name}/mixes")]
         public async Task<IActionResult> GetMixesByArtistAsync(
             [FromRoute] string name,
