@@ -15,6 +15,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
     public sealed class BlobBackedMixCatalogueProvider : IMixCatalogueProvider
     {
         private const string CacheKeyPrefix = "blob_catalog_v";
+        private const int MinTracksForNearEquivalentLegacyMatch = 8;
         private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(24);
 
         // Intentionally static: guards a process-wide blob load and must be shared across all
@@ -285,6 +286,11 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                         RelatedMixes = existing.RelatedMixes,
                         PublishedAt = mix.PublishedAt ?? existing.PublishedAt,
                     };
+
+                    if (TryFindLegacyMovedEntry(mix, blobMixes, out Mix? legacyEntry))
+                    {
+                        movedOldToNew[legacyEntry.Url] = mix.Url;
+                    }
                 }
                 else if (!string.IsNullOrEmpty(mix.Id)
                     && byId.TryGetValue(mix.Id, out Mix? priorEntry))
@@ -377,7 +383,10 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             {
                 if (movedOldToNew.TryGetValue(mix.Url, out string? newUrl))
                 {
-                    result.Add(byUrl[newUrl]);
+                    if (!blobUrlSet.Contains(newUrl))
+                    {
+                        result.Add(byUrl[newUrl]);
+                    }
                 }
                 else
                 {
@@ -458,15 +467,18 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 return false;
             }
 
+            int matched = 0;
+
             for (int i = 0; i < a.Count; i++)
             {
-                if (!SameTrack(a[i], b[i]) && !SameTrackWithArtistTitleSwapped(a[i], b[i]))
+                if (SameTrack(a[i], b[i]) || SameTrackWithArtistTitleSwapped(a[i], b[i]))
                 {
-                    return false;
+                    matched++;
                 }
             }
 
-            return true;
+            return matched == a.Count
+                || (a.Count >= MinTracksForNearEquivalentLegacyMatch && matched >= a.Count - 1);
         }
 
         private static bool SameTrack(Track a, Track b)

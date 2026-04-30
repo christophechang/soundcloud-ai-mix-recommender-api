@@ -623,6 +623,119 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             Assert.That(blobRepo.WriteCallCount, Is.EqualTo(1));
         }
 
+        [Test]
+        public async Task GetLatestAsync_url_changed_for_legacy_url_id_allows_one_tracklist_mismatch()
+        {
+            var publishedAt = new DateTimeOffset(2022, 10, 19, 10, 17, 52, TimeSpan.Zero);
+            var tracklist = new[]
+            {
+                new Track { Artist = "Hooverian Blur", Title = "Sirens" },
+                new Track { Artist = "Bailey Ibbs", Title = "We Run" },
+                new Track { Artist = "Interplanetary Criminal", Title = "Supreme Level" },
+                new Track { Artist = "Frankel & Harper", Title = "Taz (Bakey Remix)" },
+                new Track { Artist = "Thought Trails", Title = "Energy Crew" },
+                new Track { Artist = "Tamoshi", Title = "Five" },
+                new Track { Artist = "Shadow Child", Title = "O Yeah" },
+                new Track { Artist = "Shadow Child, Mr Time", Title = "Empire" },
+            };
+            var rssTracklist = new[]
+            {
+                new Track { Artist = "Sirens", Title = "Hooverian Blur" },
+                new Track { Artist = "We Run", Title = "Bailey Ibbs" },
+                new Track { Artist = "Supreme Level", Title = "Interplanetary Criminal" },
+                new Track { Artist = "Taz & (Bakey Remix)", Title = "Frankel & Harper" },
+                new Track { Artist = "Energy Crew", Title = "Thought Trails" },
+                new Track { Artist = "Five", Title = "Tamoshi" },
+                new Track { Artist = "O Yeah", Title = "Shadow Child" },
+                new Track { Artist = "Empire", Title = "Shadow Child, Mr Time" },
+            };
+            var blobMix = MakeMix(
+                "https://sc.test/dirty-streets-mix",
+                "https://sc.test/dirty-streets-mix",
+                "Dirty Streets",
+                publishedAt: publishedAt,
+                tracklist: tracklist);
+            var rssMix = MakeMix(
+                "tag:soundcloud,2010:tracks/1365971977",
+                "https://sc.test/dirty-streets",
+                "Dirty Streets",
+                description: "Updated description",
+                publishedAt: publishedAt,
+                tracklist: rssTracklist);
+            var blobRepo = new StubBlobRepository { BlobMixes = new[] { blobMix } };
+
+            var sut = BuildSut(
+                blobRepo: blobRepo,
+                blobMixes: new[] { blobMix },
+                rssMixes: new[] { rssMix });
+
+            var result = await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(result, Has.Count.EqualTo(1));
+            Assert.That(result[0].Id, Is.EqualTo("tag:soundcloud,2010:tracks/1365971977"));
+            Assert.That(result[0].Url, Is.EqualTo("https://sc.test/dirty-streets"));
+            Assert.That(result[0].Tracklist, Is.EqualTo(tracklist));
+        }
+
+        [Test]
+        public async Task GetLatestAsync_existing_new_url_removes_matching_legacy_url_duplicate()
+        {
+            var publishedAt = new DateTimeOffset(2022, 10, 19, 10, 17, 52, TimeSpan.Zero);
+            var rssTracklist = new[]
+            {
+                new Track { Artist = "Sirens", Title = "Hooverian Blur" },
+                new Track { Artist = "We Run", Title = "Bailey Ibbs" },
+                new Track { Artist = "Supreme Level", Title = "Interplanetary Criminal" },
+                new Track { Artist = "Taz & (Bakey Remix)", Title = "Frankel & Harper" },
+                new Track { Artist = "Energy Crew", Title = "Thought Trails" },
+                new Track { Artist = "Five", Title = "Tamoshi" },
+                new Track { Artist = "O Yeah", Title = "Shadow Child" },
+                new Track { Artist = "Empire", Title = "Shadow Child, Mr Time" },
+            };
+            var legacyTracklist = new[]
+            {
+                new Track { Artist = "Hooverian Blur", Title = "Sirens" },
+                new Track { Artist = "Bailey Ibbs", Title = "We Run" },
+                new Track { Artist = "Interplanetary Criminal", Title = "Supreme Level" },
+                new Track { Artist = "Frankel & Harper", Title = "Taz (Bakey Remix)" },
+                new Track { Artist = "Thought Trails", Title = "Energy Crew" },
+                new Track { Artist = "Tamoshi", Title = "Five" },
+                new Track { Artist = "Shadow Child", Title = "O Yeah" },
+                new Track { Artist = "Shadow Child, Mr Time", Title = "Empire" },
+            };
+            var newBlobMix = MakeMix(
+                "tag:soundcloud,2010:tracks/1365971977",
+                "https://sc.test/dirty-streets",
+                "Dirty Streets",
+                publishedAt: publishedAt,
+                tracklist: rssTracklist);
+            var legacyBlobMix = MakeMix(
+                "https://sc.test/dirty-streets-mix",
+                "https://sc.test/dirty-streets-mix",
+                "Dirty Streets",
+                publishedAt: publishedAt,
+                tracklist: legacyTracklist);
+            var rssMix = MakeMix(
+                "tag:soundcloud,2010:tracks/1365971977",
+                "https://sc.test/dirty-streets",
+                "Dirty Streets",
+                description: "Updated description",
+                publishedAt: publishedAt,
+                tracklist: rssTracklist);
+            var blobRepo = new StubBlobRepository { BlobMixes = new[] { newBlobMix, legacyBlobMix } };
+
+            var sut = BuildSut(
+                blobRepo: blobRepo,
+                blobMixes: new[] { newBlobMix, legacyBlobMix },
+                rssMixes: new[] { rssMix });
+
+            var result = await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(result, Has.Count.EqualTo(1));
+            Assert.That(result[0].Url, Is.EqualTo("https://sc.test/dirty-streets"));
+            Assert.That(result.Any(m => m.Url == "https://sc.test/dirty-streets-mix"), Is.False);
+        }
+
         private static BlobBackedMixCatalogueProvider BuildSut(
             StubBlobRepository? blobRepo = null,
             IReadOnlyList<Mix>? blobMixes = null,
