@@ -499,6 +499,83 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             Assert.That(blobRepo.WriteCallCount, Is.EqualTo(1));
         }
 
+        [Test]
+        public async Task GetLatestAsync_url_changed_transfers_computed_data_to_new_url()
+        {
+            var blobMix = MakeMix("1", "https://sc.test/old-slug", genre: "dnb");
+            var rssMix = MakeMix("1", "https://sc.test/new-slug", genre: "dnb");
+            var blobRepo = new StubBlobRepository { BlobMixes = new[] { blobMix } };
+
+            var sut = BuildSut(
+                blobRepo: blobRepo,
+                blobMixes: new[] { blobMix },
+                rssMixes: new[] { rssMix });
+
+            var result = await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(result, Has.Count.EqualTo(1));
+            Assert.That(result[0].Url, Is.EqualTo("https://sc.test/new-slug"));
+            Assert.That(result[0].Genre, Is.EqualTo("dnb"));
+            Assert.That(result[0].Energy, Is.EqualTo("peak"));
+        }
+
+        [Test]
+        public async Task GetLatestAsync_url_changed_removes_orphaned_old_url()
+        {
+            var blobMix = MakeMix("1", "https://sc.test/old-slug");
+            var rssMix = MakeMix("1", "https://sc.test/new-slug");
+            var blobRepo = new StubBlobRepository { BlobMixes = new[] { blobMix } };
+
+            var sut = BuildSut(
+                blobRepo: blobRepo,
+                blobMixes: new[] { blobMix },
+                rssMixes: new[] { rssMix });
+
+            var result = await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(result, Has.Count.EqualTo(1));
+            Assert.That(result.Any(m => m.Url.Contains("old-slug", StringComparison.Ordinal)), Is.False);
+        }
+
+        [Test]
+        public async Task GetLatestAsync_url_changed_preserves_blob_ordering()
+        {
+            var blobMix1 = MakeMix("1", "https://sc.test/old-slug", "Mix One");
+            var blobMix2 = MakeMix("2", "https://sc.test/mix-2", "Mix Two");
+            var rssMix1 = MakeMix("1", "https://sc.test/new-slug", "Mix One");
+            var rssMix2 = MakeMix("2", "https://sc.test/mix-2", "Mix Two");
+            var blobRepo = new StubBlobRepository { BlobMixes = new[] { blobMix1, blobMix2 } };
+
+            var sut = BuildSut(
+                blobRepo: blobRepo,
+                blobMixes: new[] { blobMix1, blobMix2 },
+                rssMixes: new[] { rssMix1, rssMix2 });
+
+            var result = await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(result, Has.Count.EqualTo(2));
+            Assert.That(result[0].Url, Is.EqualTo("https://sc.test/new-slug"));
+            Assert.That(result[1].Url, Is.EqualTo("https://sc.test/mix-2"));
+        }
+
+        [Test]
+        public async Task GetLatestAsync_url_changed_triggers_blob_write()
+        {
+            var blobMix = MakeMix("1", "https://sc.test/old-slug");
+            var rssMix = MakeMix("1", "https://sc.test/new-slug");
+            var blobRepo = new StubBlobRepository { BlobMixes = new[] { blobMix } };
+
+            var sut = BuildSut(
+                blobRepo: blobRepo,
+                blobMixes: new[] { blobMix },
+                rssMixes: new[] { rssMix });
+
+            await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(blobRepo.WriteCallCount, Is.EqualTo(1));
+            Assert.That(blobRepo.WrittenMixes![0].Url, Is.EqualTo("https://sc.test/new-slug"));
+        }
+
         private static BlobBackedMixCatalogueProvider BuildSut(
             StubBlobRepository? blobRepo = null,
             IReadOnlyList<Mix>? blobMixes = null,

@@ -240,11 +240,19 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             IReadOnlyList<Mix> rssMixes)
         {
             var byUrl = new Dictionary<string, Mix>(StringComparer.OrdinalIgnoreCase);
+            var byId = new Dictionary<string, Mix>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var mix in blobMixes)
             {
                 byUrl[mix.Url] = mix;
+                if (!string.IsNullOrEmpty(mix.Id))
+                {
+                    byId[mix.Id] = mix;
+                }
             }
+
+            // Maps old blob URL → new RSS URL when a mix's SoundCloud permalink changes.
+            var movedOldToNew = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var mix in rssMixes)
             {
@@ -278,31 +286,71 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                         PublishedAt = mix.PublishedAt ?? existing.PublishedAt,
                     };
                 }
+                else if (!string.IsNullOrEmpty(mix.Id)
+                    && byId.TryGetValue(mix.Id, out Mix? priorEntry))
+                {
+                    // URL changed: same SoundCloud track ID, new permalink — transfer computed
+                    // data to the new URL and retire the old one.
+                    movedOldToNew[priorEntry.Url] = mix.Url;
+
+                    bool descriptionChanged = !string.Equals(
+                        mix.Description, priorEntry.Description, StringComparison.Ordinal);
+                    bool rssHasSchema = !string.IsNullOrEmpty(mix.Genre);
+                    bool syncSchema = descriptionChanged && rssHasSchema;
+
+                    byUrl[mix.Url] = new Mix
+                    {
+                        Id = priorEntry.Id,
+                        Title = mix.Title,
+                        Url = mix.Url,
+                        Description = mix.Description,
+                        Intro = mix.Intro,
+                        Duration = mix.Duration ?? priorEntry.Duration,
+                        ImageUrl = mix.ImageUrl ?? priorEntry.ImageUrl,
+                        Tracklist = syncSchema ? mix.Tracklist : priorEntry.Tracklist,
+                        Genre = syncSchema ? mix.Genre : priorEntry.Genre,
+                        Energy = syncSchema ? mix.Energy : priorEntry.Energy,
+                        BpmMin = syncSchema ? mix.BpmMin : priorEntry.BpmMin,
+                        BpmMax = syncSchema ? mix.BpmMax : priorEntry.BpmMax,
+                        Moods = syncSchema ? mix.Moods : priorEntry.Moods,
+                        RelatedMixes = priorEntry.RelatedMixes,
+                        PublishedAt = mix.PublishedAt ?? priorEntry.PublishedAt,
+                    };
+                }
                 else
                 {
                     byUrl[mix.Url] = mix;
                 }
             }
 
-            var blobUrls = new HashSet<string>(
+            var blobUrlSet = new HashSet<string>(
                 blobMixes.Select(m => m.Url),
                 StringComparer.OrdinalIgnoreCase);
 
+            var movedNewUrls = new HashSet<string>(movedOldToNew.Values, StringComparer.OrdinalIgnoreCase);
+
             var result = new List<Mix>(byUrl.Count);
 
-            // New RSS discoveries (not in blob) go first — newest at front
+            // New RSS discoveries (not in blob, not a URL-moved entry) go first — newest at front
             foreach (var mix in rssMixes)
             {
-                if (!blobUrls.Contains(mix.Url) && !IsMetadataOnlyRssMix(mix))
+                if (!blobUrlSet.Contains(mix.Url) && !movedNewUrls.Contains(mix.Url) && !IsMetadataOnlyRssMix(mix))
                 {
                     result.Add(mix);
                 }
             }
 
-            // Blob entries follow in their original order, updated with RSS data where applicable
+            // Blob entries follow in their original order; moved entries use the new URL, orphaned old URLs are dropped
             foreach (var mix in blobMixes)
             {
-                result.Add(byUrl[mix.Url]);
+                if (movedOldToNew.TryGetValue(mix.Url, out string? newUrl))
+                {
+                    result.Add(byUrl[newUrl]);
+                }
+                else
+                {
+                    result.Add(byUrl[mix.Url]);
+                }
             }
 
             return result;
