@@ -145,6 +145,47 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             Assert.That(result[1].Tracklist, Is.Empty);
         }
 
+        [Test]
+        public async Task GetLatestAsync_maps_schema_with_smart_quotes()
+        {
+            const string rss = """
+                <?xml version="1.0" encoding="utf-8"?>
+                <rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+                  <channel>
+                    <title>Test Feed</title>
+                    <link>https://example.test</link>
+                    <description>Test</description>
+                    <item>
+                      <guid isPermaLink="false">tag:soundcloud,2010:tracks/1827070278</guid>
+                      <title>Man Like FLEA</title>
+                      <link>https://soundcloud.com/changsta/man-like-flea</link>
+                      <description>Intro
+
+                Tracklist
+                Dismantle, Gardna - Regional Banger (Dismantle Remix)
+
+                [changsta:mix:v1 {“genre”:“uk bass”,“energy”:“high”,“bpm”:[132,138],“moods”:[“rave”,“rolling”]}]</description>
+                    </item>
+                  </channel>
+                </rss>
+                """;
+
+            using var httpClient = CreateHttpClient(HttpStatusCode.OK, rss, RssUrl);
+            var sut = new SoundCloudRssMixCatalogueProvider(httpClient, RssUrl, new MemoryCache(new MemoryCacheOptions()), new StubCatalogCacheInvalidator(), Microsoft.Extensions.Logging.Abstractions.NullLogger<SoundCloudRssMixCatalogueProvider>.Instance);
+
+            var result = await sut.GetLatestAsync(maxItems: 50, cancellationToken: CancellationToken.None);
+
+            Assert.That(result, Has.Count.EqualTo(1));
+            Assert.That(result[0].Id, Is.EqualTo("tag:soundcloud,2010:tracks/1827070278"));
+            Assert.That(result[0].Url, Is.EqualTo("https://soundcloud.com/changsta/man-like-flea"));
+            Assert.That(result[0].Genre, Is.EqualTo("uk bass"));
+            Assert.That(result[0].Energy, Is.EqualTo("high"));
+            Assert.That(result[0].BpmMin, Is.EqualTo(132));
+            Assert.That(result[0].BpmMax, Is.EqualTo(138));
+            Assert.That(result[0].Moods, Is.EqualTo(new[] { "rave", "rolling" }));
+            Assert.That(result[0].Tracklist, Has.Count.EqualTo(1));
+        }
+
         private static void AssertMixSchemaMapped(Changsta.Ai.Core.Domain.Mix mix)
         {
             // Provider now sets required schema fields, validate they match the embedded schema in Description

@@ -269,7 +269,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
 
                     byUrl[mix.Url] = new Mix
                     {
-                        Id = existing.Id,
+                        Id = ResolveStableId(existing.Id, mix.Id),
                         Title = mix.Title,
                         Url = existing.Url,
                         Description = mix.Description,
@@ -300,7 +300,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
 
                     byUrl[mix.Url] = new Mix
                     {
-                        Id = priorEntry.Id,
+                        Id = ResolveStableId(priorEntry.Id, mix.Id),
                         Title = mix.Title,
                         Url = mix.Url,
                         Description = mix.Description,
@@ -315,6 +315,37 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                         Moods = syncSchema ? mix.Moods : priorEntry.Moods,
                         RelatedMixes = priorEntry.RelatedMixes,
                         PublishedAt = mix.PublishedAt ?? priorEntry.PublishedAt,
+                    };
+                }
+                else if (TryFindLegacyMovedEntry(mix, blobMixes, out Mix? legacyEntry))
+                {
+                    // Earlier catalog rows used the SoundCloud URL as Id. If a permalink
+                    // changes before that row has been hydrated with the stable RSS GUID,
+                    // use immutable metadata and tracklist evidence to migrate it once.
+                    movedOldToNew[legacyEntry.Url] = mix.Url;
+
+                    bool descriptionChanged = !string.Equals(
+                        mix.Description, legacyEntry.Description, StringComparison.Ordinal);
+                    bool rssHasSchema = !string.IsNullOrEmpty(mix.Genre);
+                    bool syncSchema = descriptionChanged && rssHasSchema;
+
+                    byUrl[mix.Url] = new Mix
+                    {
+                        Id = ResolveStableId(legacyEntry.Id, mix.Id),
+                        Title = mix.Title,
+                        Url = mix.Url,
+                        Description = mix.Description,
+                        Intro = mix.Intro,
+                        Duration = mix.Duration ?? legacyEntry.Duration,
+                        ImageUrl = mix.ImageUrl ?? legacyEntry.ImageUrl,
+                        Tracklist = syncSchema ? mix.Tracklist : legacyEntry.Tracklist,
+                        Genre = syncSchema ? mix.Genre : legacyEntry.Genre,
+                        Energy = syncSchema ? mix.Energy : legacyEntry.Energy,
+                        BpmMin = syncSchema ? mix.BpmMin : legacyEntry.BpmMin,
+                        BpmMax = syncSchema ? mix.BpmMax : legacyEntry.BpmMax,
+                        Moods = syncSchema ? mix.Moods : legacyEntry.Moods,
+                        RelatedMixes = legacyEntry.RelatedMixes,
+                        PublishedAt = mix.PublishedAt ?? legacyEntry.PublishedAt,
                     };
                 }
                 else
@@ -364,6 +395,76 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 && mix.Moods.Count == 0
                 && mix.BpmMin is null
                 && mix.BpmMax is null;
+        }
+
+        private static bool TryFindLegacyMovedEntry(
+            Mix rssMix,
+            IReadOnlyList<Mix> blobMixes,
+            out Mix legacyEntry)
+        {
+            for (int i = 0; i < blobMixes.Count; i++)
+            {
+                Mix candidate = blobMixes[i];
+
+                if (!IsUrlLikeId(candidate.Id)
+                    || string.Equals(candidate.Url, rssMix.Url, StringComparison.OrdinalIgnoreCase)
+                    || !SamePublishedAt(candidate, rssMix)
+                    || !SameTracklist(candidate.Tracklist, rssMix.Tracklist))
+                {
+                    continue;
+                }
+
+                legacyEntry = candidate;
+                return true;
+            }
+
+            legacyEntry = null!;
+            return false;
+        }
+
+        private static bool SamePublishedAt(Mix a, Mix b)
+        {
+            if (a.PublishedAt is null || b.PublishedAt is null)
+            {
+                return false;
+            }
+
+            return a.PublishedAt.Value.Equals(b.PublishedAt.Value);
+        }
+
+        private static bool SameTracklist(IReadOnlyList<Track> a, IReadOnlyList<Track> b)
+        {
+            if (a.Count == 0 || a.Count != b.Count)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < a.Count; i++)
+            {
+                if (!string.Equals(a[i].Artist, b[i].Artist, StringComparison.OrdinalIgnoreCase)
+                    || !string.Equals(a[i].Title, b[i].Title, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static string ResolveStableId(string existingId, string rssId)
+        {
+            if (IsUrlLikeId(existingId) && !string.IsNullOrWhiteSpace(rssId) && !IsUrlLikeId(rssId))
+            {
+                return rssId;
+            }
+
+            return existingId;
+        }
+
+        private static bool IsUrlLikeId(string id)
+        {
+            return id.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+                || id.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
         }
 
         private static int CountNewDiscoveries(
@@ -418,9 +519,11 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
 
                 string? effectiveDuration = rssMix.Duration ?? blobMix.Duration;
                 string? effectiveImageUrl = rssMix.ImageUrl ?? blobMix.ImageUrl;
+                string effectiveId = ResolveStableId(blobMix.Id, rssMix.Id);
 
                 if (!string.Equals(effectiveDuration, blobMix.Duration, StringComparison.Ordinal)
-                    || !string.Equals(effectiveImageUrl, blobMix.ImageUrl, StringComparison.Ordinal))
+                    || !string.Equals(effectiveImageUrl, blobMix.ImageUrl, StringComparison.Ordinal)
+                    || !string.Equals(effectiveId, blobMix.Id, StringComparison.Ordinal))
                 {
                     count++;
                 }

@@ -57,7 +57,7 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Parsing
                 return false;
             }
 
-            string json = description.Substring(startJson, endJson - startJson + 1);
+            string json = NormalizeJsonQuotes(description.Substring(startJson, endJson - startJson + 1));
 
             try
             {
@@ -90,6 +90,13 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Parsing
             {
                 return false;
             }
+        }
+
+        private static string NormalizeJsonQuotes(string json)
+        {
+            return json
+                .Replace('\u201c', '"')
+                .Replace('\u201d', '"');
         }
 
         private static int FindMatchingBrace(string s, int openBraceIndex)

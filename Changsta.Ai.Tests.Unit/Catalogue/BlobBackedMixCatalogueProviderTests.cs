@@ -576,6 +576,46 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             Assert.That(blobRepo.WrittenMixes![0].Url, Is.EqualTo("https://sc.test/new-slug"));
         }
 
+        [Test]
+        public async Task GetLatestAsync_url_changed_for_legacy_url_id_uses_tracklist_match()
+        {
+            var publishedAt = new DateTimeOffset(2024, 5, 21, 16, 27, 26, TimeSpan.Zero);
+            var tracklist = new[]
+            {
+                new Track { Artist = "Dismantle, Gardna", Title = "Regional Banger (Dismantle Remix)" },
+                new Track { Artist = "Frazer Ray", Title = "You & Me" },
+            };
+            var blobMix = MakeMix(
+                "https://sc.test/old-slug",
+                "https://sc.test/old-slug",
+                "Old Title",
+                genre: "breakbeat",
+                publishedAt: publishedAt,
+                tracklist: tracklist);
+            var rssMix = MakeMix(
+                "tag:soundcloud,2010:tracks/1827070278",
+                "https://sc.test/new-slug",
+                "New Title",
+                genre: "uk-bass",
+                publishedAt: publishedAt,
+                tracklist: tracklist);
+            var blobRepo = new StubBlobRepository { BlobMixes = new[] { blobMix } };
+
+            var sut = BuildSut(
+                blobRepo: blobRepo,
+                blobMixes: new[] { blobMix },
+                rssMixes: new[] { rssMix });
+
+            var result = await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(result, Has.Count.EqualTo(1));
+            Assert.That(result[0].Id, Is.EqualTo("tag:soundcloud,2010:tracks/1827070278"));
+            Assert.That(result[0].Title, Is.EqualTo("New Title"));
+            Assert.That(result[0].Url, Is.EqualTo("https://sc.test/new-slug"));
+            Assert.That(result.Any(m => m.Url == "https://sc.test/old-slug"), Is.False);
+            Assert.That(blobRepo.WriteCallCount, Is.EqualTo(1));
+        }
+
         private static BlobBackedMixCatalogueProvider BuildSut(
             StubBlobRepository? blobRepo = null,
             IReadOnlyList<Mix>? blobMixes = null,
@@ -612,7 +652,9 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             string? description = null,
             string? duration = null,
             string? imageUrl = null,
-            string genre = "dnb")
+            string genre = "dnb",
+            DateTimeOffset? publishedAt = null,
+            IReadOnlyList<Track>? tracklist = null)
         {
             return new Mix
             {
@@ -624,6 +666,8 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
                 Description = description,
                 Duration = duration,
                 ImageUrl = imageUrl,
+                PublishedAt = publishedAt,
+                Tracklist = tracklist ?? Array.Empty<Track>(),
             };
         }
 
