@@ -160,7 +160,9 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
 
             for (int i = 0; i < existing.Count; i++)
             {
-                if (!string.Equals(existing[i].Url, computed[i].Url, StringComparison.OrdinalIgnoreCase))
+                if (!string.Equals(existing[i].Url, computed[i].Url, StringComparison.OrdinalIgnoreCase)
+                    || !string.Equals(existing[i].ArtworkUrl, computed[i].ArtworkUrl, StringComparison.Ordinal)
+                    || !string.Equals(existing[i].Title, computed[i].Title, StringComparison.Ordinal))
                 {
                     return false;
                 }

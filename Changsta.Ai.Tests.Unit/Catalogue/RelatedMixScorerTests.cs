@@ -264,6 +264,38 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             changed.Should().BeTrue();
         }
 
+        [Test]
+        public void ComputeRelatedMixes_changed_true_when_artwork_url_changes()
+        {
+            var target = MakeMix("1", "https://sc.test/mix-1", genre: "dnb");
+            var candidate = MakeMix("2", "https://sc.test/mix-2", genre: "dnb", artworkUrl: "https://i1.sndcdn.com/old.jpg");
+
+            var firstPass = RelatedMixScorer.ComputeRelatedMixes(new[] { target, candidate }, out _);
+
+            var candidateWithNewArtwork = MakeMix("2", "https://sc.test/mix-2", genre: "dnb", artworkUrl: "https://i1.sndcdn.com/new.jpg");
+            var updatedMixes = new[] { firstPass[0], candidateWithNewArtwork };
+
+            RelatedMixScorer.ComputeRelatedMixes(updatedMixes, out bool changed);
+
+            changed.Should().BeTrue();
+        }
+
+        [Test]
+        public void ComputeRelatedMixes_changed_true_when_title_changes()
+        {
+            var target = MakeMix("1", "https://sc.test/mix-1", genre: "dnb");
+            var candidate = MakeMix("2", "https://sc.test/mix-2", genre: "dnb", title: "Original Title");
+
+            var firstPass = RelatedMixScorer.ComputeRelatedMixes(new[] { target, candidate }, out _);
+
+            var candidateWithNewTitle = MakeMix("2", "https://sc.test/mix-2", genre: "dnb", title: "Updated Title");
+            var updatedMixes = new[] { firstPass[0], candidateWithNewTitle };
+
+            RelatedMixScorer.ComputeRelatedMixes(updatedMixes, out bool changed);
+
+            changed.Should().BeTrue();
+        }
+
         private static Mix MakeMix(
             string id,
             string url,
