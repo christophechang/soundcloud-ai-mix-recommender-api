@@ -42,6 +42,12 @@ Swagger UI: `http://localhost:<port>/swagger` (port shown in terminal output). S
 
 ---
 
+## What's new in v1.15
+
+- **Tracklist preserved when RSS artist/title fields are swapped.** Legacy blob entries matched by tracklist during a permalink migration now tolerate artist and title fields appearing in reversed order in the RSS feed. The blob tracklist is also kept when a schema sync would have overwritten it with swapped entries, avoiding silent corruption of track attribution.
+
+---
+
 ## What's new in v1.14
 
 - **Permalink change handling.** When a SoundCloud mix URL changes, the catalog now detects the same track by its stable SoundCloud ID (`tag:soundcloud,2010:tracks/{id}`), transfers all computed metadata (genre, energy, BPM, moods, related mixes) to the new URL, and removes the orphaned old URL from the blob catalog. Previously the old URL would accumulate as dead weight and the new URL would lose all computed data.
