@@ -42,6 +42,13 @@ Swagger UI: `http://localhost:<port>/swagger` (port shown in terminal output). S
 
 ---
 
+## What's new in v1.14
+
+- **Permalink change handling.** When a SoundCloud mix URL changes, the catalog now detects the same track by its stable SoundCloud ID (`tag:soundcloud,2010:tracks/{id}`), transfers all computed metadata (genre, energy, BPM, moods, related mixes) to the new URL, and removes the orphaned old URL from the blob catalog. Previously the old URL would accumulate as dead weight and the new URL would lose all computed data.
+- **Smart quote fix in schema parser.** The `[changsta:mix:v1 {...}]` JSON block parser now normalises Unicode curly quotes (`“`/`”`) to straight quotes before parsing. Fixes schema extraction failures when SoundCloud's description editor auto-converts quotation marks.
+
+---
+
 ## What's new in v1.13
 
 - **Mix detail by slug.** New endpoint `GET /api/catalog/mixes/{slug}` returns the full mix object for a given SoundCloud URL slug (e.g. `GET /api/catalog/mixes/fault-lines`). The slug is the last path segment of the mix's SoundCloud permalink — no transformation needed. Returns 404 if no matching mix is found. Served from the same 24-hour memory cache as all other catalog endpoints.
