@@ -328,6 +328,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                         mix.Description, legacyEntry.Description, StringComparison.Ordinal);
                     bool rssHasSchema = !string.IsNullOrEmpty(mix.Genre);
                     bool syncSchema = descriptionChanged && rssHasSchema;
+                    bool syncTracklist = syncSchema && SameTracklist(legacyEntry.Tracklist, mix.Tracklist);
 
                     byUrl[mix.Url] = new Mix
                     {
@@ -338,7 +339,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                         Intro = mix.Intro,
                         Duration = mix.Duration ?? legacyEntry.Duration,
                         ImageUrl = mix.ImageUrl ?? legacyEntry.ImageUrl,
-                        Tracklist = syncSchema ? mix.Tracklist : legacyEntry.Tracklist,
+                        Tracklist = syncTracklist ? mix.Tracklist : legacyEntry.Tracklist,
                         Genre = syncSchema ? mix.Genre : legacyEntry.Genre,
                         Energy = syncSchema ? mix.Energy : legacyEntry.Energy,
                         BpmMin = syncSchema ? mix.BpmMin : legacyEntry.BpmMin,
@@ -409,7 +410,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 if (!IsUrlLikeId(candidate.Id)
                     || string.Equals(candidate.Url, rssMix.Url, StringComparison.OrdinalIgnoreCase)
                     || !SamePublishedAt(candidate, rssMix)
-                    || !SameTracklist(candidate.Tracklist, rssMix.Tracklist))
+                    || !EquivalentTracklist(candidate.Tracklist, rssMix.Tracklist))
                 {
                     continue;
                 }
@@ -441,14 +442,43 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
 
             for (int i = 0; i < a.Count; i++)
             {
-                if (!string.Equals(a[i].Artist, b[i].Artist, StringComparison.OrdinalIgnoreCase)
-                    || !string.Equals(a[i].Title, b[i].Title, StringComparison.OrdinalIgnoreCase))
+                if (!SameTrack(a[i], b[i]))
                 {
                     return false;
                 }
             }
 
             return true;
+        }
+
+        private static bool EquivalentTracklist(IReadOnlyList<Track> a, IReadOnlyList<Track> b)
+        {
+            if (a.Count == 0 || a.Count != b.Count)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < a.Count; i++)
+            {
+                if (!SameTrack(a[i], b[i]) && !SameTrackWithArtistTitleSwapped(a[i], b[i]))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool SameTrack(Track a, Track b)
+        {
+            return string.Equals(a.Artist, b.Artist, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(a.Title, b.Title, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool SameTrackWithArtistTitleSwapped(Track a, Track b)
+        {
+            return string.Equals(a.Artist, b.Title, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(a.Title, b.Artist, StringComparison.OrdinalIgnoreCase);
         }
 
         private static string ResolveStableId(string existingId, string rssId)

@@ -592,13 +592,19 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
                 genre: "breakbeat",
                 publishedAt: publishedAt,
                 tracklist: tracklist);
+            var rssTracklist = new[]
+            {
+                new Track { Artist = "Dismantle, Gardna", Title = "Regional Banger (Dismantle Remix)" },
+                new Track { Artist = "You & Me", Title = "Frazer Ray" },
+            };
             var rssMix = MakeMix(
                 "tag:soundcloud,2010:tracks/1827070278",
                 "https://sc.test/new-slug",
                 "New Title",
                 genre: "uk-bass",
+                description: "Updated description",
                 publishedAt: publishedAt,
-                tracklist: tracklist);
+                tracklist: rssTracklist);
             var blobRepo = new StubBlobRepository { BlobMixes = new[] { blobMix } };
 
             var sut = BuildSut(
@@ -612,6 +618,7 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             Assert.That(result[0].Id, Is.EqualTo("tag:soundcloud,2010:tracks/1827070278"));
             Assert.That(result[0].Title, Is.EqualTo("New Title"));
             Assert.That(result[0].Url, Is.EqualTo("https://sc.test/new-slug"));
+            Assert.That(result[0].Tracklist, Is.EqualTo(tracklist));
             Assert.That(result.Any(m => m.Url == "https://sc.test/old-slug"), Is.False);
             Assert.That(blobRepo.WriteCallCount, Is.EqualTo(1));
         }
