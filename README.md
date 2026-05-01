@@ -90,7 +90,7 @@ The API feeds up to 200 mixes from a persistent Azure Blob Storage catalog (supp
 2. **Generates a `reason`** per result: a free-text 1-2 sentence explanation written by the AI (creative, not validated)
 3. **Generates `why` anchors** per result: 1-4 quoted strings copied verbatim from the mix's own metadata (deterministic, server-validated)
 
-If validation fails the AI response is retried up to 3 times with exponential backoff before returning a 503.
+If validation fails, the AI response is retried once. If both attempts fail validation, the API returns a `200` response with an empty `results` array.
 
 ---
 
@@ -183,7 +183,7 @@ Before any result is returned:
 | `clarifyingQuestion` | string\|null | Non-null only when `question` is empty or whitespace |
 | `maxResultsApplied` | integer | The effective maxResults used after clamping |
 
-`results` may be an empty array on `200` — this means the AI found no catalogue mixes with sufficient evidence to match the query, or all retry attempts were exhausted. A `503` means the upstream HTTP connection to the AI service failed entirely.
+`results` may be an empty array on `200` — this means the AI found no catalogue mixes with sufficient evidence to match the query, or both AI response validation attempts failed. Upstream AI connection failures are handled by the global error middleware.
 
 ---
 

@@ -2,6 +2,10 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.17
+
+- **Mix deletion endpoint.** New `DELETE /api/catalog/mixes/{id}` endpoint (Bearer-authenticated, same secret as catalog flush) removes a mix from the blob catalog by its stable RSS GUID. On success the cache is invalidated and rewarmed immediately — no separate flush needed. Returns 204 on success, 404 if no mix with that ID exists. Intended for manual curation when a mix is removed from SoundCloud and needs to be purged from the catalog without waiting for a full data migration.
+
 ## v1.16
 
 - **OpenAI recommender responsibilities split.** `OpenAiMixRecommender` now focuses on orchestration, with query analysis, prompt construction, and AI response validation moved into dedicated internal components.

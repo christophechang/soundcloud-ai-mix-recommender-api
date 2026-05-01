@@ -25,15 +25,18 @@ namespace Changsta.Ai.Interface.Api.Controllers
 
         private readonly IMixCatalogueProvider _catalogueProvider;
         private readonly ICatalogFlushUseCase _flushUseCase;
+        private readonly IDeleteMixUseCase _deleteMixUseCase;
         private readonly IConfiguration _configuration;
 
         public MixCatalogController(
             IMixCatalogueProvider catalogueProvider,
             ICatalogFlushUseCase flushUseCase,
+            IDeleteMixUseCase deleteMixUseCase,
             IConfiguration configuration)
         {
             _catalogueProvider = catalogueProvider;
             _flushUseCase = flushUseCase;
+            _deleteMixUseCase = deleteMixUseCase;
             _configuration = configuration;
         }
 
@@ -52,6 +55,36 @@ namespace Changsta.Ai.Interface.Api.Controllers
 
             await _flushUseCase.FlushAsync(cancellationToken).ConfigureAwait(false);
             return Ok(new { flushed = true });
+        }
+
+        [HttpDelete("mixes/{id}")]
+        public async Task<IActionResult> DeleteMixAsync(
+            [FromRoute] string id,
+            CancellationToken cancellationToken)
+        {
+            string? expectedSecret = _configuration["Catalog:FlushSecret"];
+            if (!string.IsNullOrEmpty(expectedSecret))
+            {
+                if (!Request.Headers.TryGetValue("Authorization", out var authHeader)
+                    || !string.Equals(authHeader.ToString(), $"Bearer {expectedSecret}", StringComparison.Ordinal))
+                {
+                    return Unauthorized(new { error = "Invalid or missing authorization." });
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(id))
+            {
+                return BadRequest(new { error = "id is required." });
+            }
+
+            bool deleted = await _deleteMixUseCase.DeleteAsync(id, cancellationToken).ConfigureAwait(false);
+
+            if (!deleted)
+            {
+                return NotFound(new { error = $"No mix found with id '{id}'." });
+            }
+
+            return NoContent();
         }
 
         [HttpGet]

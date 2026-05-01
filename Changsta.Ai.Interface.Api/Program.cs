@@ -144,6 +144,13 @@ builder.Services.AddScoped<IMixCatalogueProvider>(sp =>
 });
 
 builder.Services.AddScoped<ICatalogFlushUseCase, CatalogFlushUseCase>();
+builder.Services.AddScoped<IDeleteMixUseCase>(sp =>
+{
+    var deleter = sp.GetRequiredService<ICatalogMixDeleter>();
+    var invalidator = sp.GetRequiredService<ICatalogCacheInvalidator>();
+    var provider = sp.GetRequiredService<IMixCatalogueProvider>();
+    return new DeleteMixUseCase(deleter, invalidator, provider);
+});
 builder.Services.AddScoped<IMixRecommendationUseCase, MixRecommendationUseCase>();
 builder.Services.AddScoped<IMixAiRecommender, OpenAiMixRecommender>();
 builder.Services.AddHostedService<CatalogWarmupService>();

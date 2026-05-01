@@ -545,6 +545,7 @@ namespace Changsta.Ai.Tests.Unit.Controllers
             return new MixCatalogController(
                 new StubMixCatalogueProvider(mixes),
                 new StubCatalogFlushUseCase(),
+                new StubDeleteMixUseCase(),
                 new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
         }
 
@@ -581,6 +582,11 @@ namespace Changsta.Ai.Tests.Unit.Controllers
         private sealed class StubCatalogFlushUseCase : ICatalogFlushUseCase
         {
             public Task FlushAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        }
+
+        private sealed class StubDeleteMixUseCase : IDeleteMixUseCase
+        {
+            public Task<bool> DeleteAsync(string id, CancellationToken cancellationToken) => Task.FromResult(false);
         }
 
         private sealed class StubMixCatalogueProvider : IMixCatalogueProvider

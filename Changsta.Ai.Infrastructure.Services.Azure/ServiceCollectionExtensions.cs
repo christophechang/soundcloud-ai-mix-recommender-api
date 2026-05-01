@@ -13,6 +13,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure
         {
             services.Configure<BlobCatalogOptions>(configuration.GetSection("Azure:BlobCatalog"));
             services.AddScoped<IBlobMixCatalogueRepository, BlobMixCatalogueRepository>();
+            services.AddScoped<Changsta.Ai.Core.Contracts.Catalogue.ICatalogMixDeleter, BlobCatalogMixDeleter>();
 
             return services;
         }
