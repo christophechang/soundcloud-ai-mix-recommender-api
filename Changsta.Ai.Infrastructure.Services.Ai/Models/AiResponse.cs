@@ -1,11 +1,8 @@
 namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 {
-    public sealed partial class OpenAiMixRecommender
+    internal sealed class AiRecommendationResponse
     {
-        internal sealed class AiResponse
-        {
-            public required List<AiResult> Results { get; init; }
-            public string? ClarifyingQuestion { get; init; }
-        }
+        public required List<AiRecommendationResult> Results { get; init; }
+        public string? ClarifyingQuestion { get; init; }
     }
 }

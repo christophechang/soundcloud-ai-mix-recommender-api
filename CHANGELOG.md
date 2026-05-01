@@ -2,6 +2,12 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.16
+
+- **OpenAI recommender responsibilities split.** `OpenAiMixRecommender` now focuses on orchestration, with query analysis, prompt construction, and AI response validation moved into dedicated internal components.
+- **Release history moved out of the README.** Version notes now live in `CHANGELOG.md`, keeping the README focused on current project usage and behaviour.
+- **Release workflow documented.** `CLAUDE.md` now defines the `release this version` flow for changelog updates, develop/main promotion, tagging, QA/Prod deployment, and GitHub release creation.
+
 ## v1.15
 
 - **Tracklist preserved when RSS artist/title fields are swapped.** Legacy blob entries matched by tracklist during a permalink migration now tolerate artist and title fields appearing in reversed order in the RSS feed. The blob tracklist is also kept when a schema sync would have overwritten it with swapped entries, avoiding silent corruption of track attribution.

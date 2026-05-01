@@ -20,15 +20,40 @@ Tests must be deterministic — no live OpenAI, SoundCloud, or Azure calls. Run 
 dotnet build soundcloud-ai-mix-recommender-api.sln --no-incremental
 dotnet test soundcloud-ai-mix-recommender-api.sln --no-build
 
-## Deploying to QA / Prod
+## Releasing a Version
 
-When asked to deploy to QA, Prod, or both:
+When asked to "release this version":
 
-1. Get the latest successful CI Build run SHA:
-   `gh run list --workflow="CI Build (publish artifact)" --repo christophechang/soundcloud-ai-mix-recommender-api --limit 1`
+1. Update `CHANGELOG.md`
+   - Determine the next version number from the latest changelog entry and existing tags.
+   - Add a new top entry for that version.
+   - Summarise the current changes clearly and briefly.
 
-2. Trigger the relevant workflow(s) with that short SHA:
-   `gh workflow run "Deploy QA (manual)" --repo christophechang/soundcloud-ai-mix-recommender-api --field ref=<sha>`
-   `gh workflow run "Deploy Prod (manual)" --repo christophechang/soundcloud-ai-mix-recommender-api --field ref=<sha>`
+2. Commit and push to `develop`
+   - Run relevant verification first.
+   - Commit with a conventional commit message.
+   - Push `develop`.
 
-Trigger both in a single command if asked to deploy to QA and Prod together.
+3. Wait for CI
+   - Get the successful CI Build run for the pushed `develop` commit.
+   - Use that CI build SHA for deployment.
+
+4. Merge to `main`
+   - Update local `main`.
+   - Merge `develop` into `main`.
+   - Push `main`.
+
+5. Create and push a version tag
+   - Create an annotated tag for the new version.
+   - Push the tag.
+
+6. Deploy to QA and Prod
+   - Trigger both GitHub Actions deploy workflows using the successful CI build SHA:
+     `gh workflow run "Deploy QA (manual)" --repo christophechang/soundcloud-ai-mix-recommender-api --field ref=<sha>`
+     `gh workflow run "Deploy Prod (manual)" --repo christophechang/soundcloud-ai-mix-recommender-api --field ref=<sha>`
+
+7. Create the GitHub release
+   - Create a GitHub release for the pushed tag.
+   - Use the changelog entry for the release notes.
+
+For direct requests to deploy only QA, Prod, or both without saying "release this version", use the latest successful CI Build SHA and trigger only the requested deployment workflow(s).
