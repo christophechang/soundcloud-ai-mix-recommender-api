@@ -2,6 +2,10 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.18
+
+- **Mix deletion by slug.** `DELETE /api/catalog/mixes?slug=<slug>` now matches by the SoundCloud URL slug (e.g. `jungle-session-1`) rather than the full RSS GUID, avoiding URL encoding issues with special characters in route parameters.
+
 ## v1.17
 
 - **Mix deletion endpoint.** New `DELETE /api/catalog/mixes/{id}` endpoint (Bearer-authenticated, same secret as catalog flush) removes a mix from the blob catalog by its stable RSS GUID. On success the cache is invalidated and rewarmed immediately — no separate flush needed. Returns 204 on success, 404 if no mix with that ID exists. Intended for manual curation when a mix is removed from SoundCloud and needs to be purged from the catalog without waiting for a full data migration.

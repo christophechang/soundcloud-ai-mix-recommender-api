@@ -25,7 +25,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.Catalogue
 
         public async Task<bool> DeleteAsync(string id, CancellationToken cancellationToken)
         {
-            bool deleted = await _deleter.DeleteByIdAsync(id, cancellationToken).ConfigureAwait(false);
+            bool deleted = await _deleter.DeleteBySlugAsync(id, cancellationToken).ConfigureAwait(false);
 
             if (deleted)
             {

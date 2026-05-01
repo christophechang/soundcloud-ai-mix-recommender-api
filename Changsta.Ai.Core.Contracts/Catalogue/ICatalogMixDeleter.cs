@@ -5,6 +5,6 @@ namespace Changsta.Ai.Core.Contracts.Catalogue
 {
     public interface ICatalogMixDeleter
     {
-        Task<bool> DeleteByIdAsync(string id, CancellationToken cancellationToken);
+        Task<bool> DeleteBySlugAsync(string slug, CancellationToken cancellationToken);
     }
 }

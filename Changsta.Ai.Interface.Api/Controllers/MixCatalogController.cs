@@ -57,9 +57,9 @@ namespace Changsta.Ai.Interface.Api.Controllers
             return Ok(new { flushed = true });
         }
 
-        [HttpDelete("mixes/{id}")]
+        [HttpDelete("mixes")]
         public async Task<IActionResult> DeleteMixAsync(
-            [FromRoute] string id,
+            [FromQuery] string slug,
             CancellationToken cancellationToken)
         {
             string? expectedSecret = _configuration["Catalog:FlushSecret"];
@@ -72,16 +72,16 @@ namespace Changsta.Ai.Interface.Api.Controllers
                 }
             }
 
-            if (string.IsNullOrWhiteSpace(id))
+            if (string.IsNullOrWhiteSpace(slug))
             {
-                return BadRequest(new { error = "id is required." });
+                return BadRequest(new { error = "slug is required." });
             }
 
-            bool deleted = await _deleteMixUseCase.DeleteAsync(id, cancellationToken).ConfigureAwait(false);
+            bool deleted = await _deleteMixUseCase.DeleteAsync(slug, cancellationToken).ConfigureAwait(false);
 
             if (!deleted)
             {
-                return NotFound(new { error = $"No mix found with id '{id}'." });
+                return NotFound(new { error = $"No mix found with slug '{slug}'." });
             }
 
             return NoContent();

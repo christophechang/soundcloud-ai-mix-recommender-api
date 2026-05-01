@@ -94,7 +94,7 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
 
             public string? LastIdReceived { get; private set; }
 
-            public Task<bool> DeleteByIdAsync(string id, CancellationToken cancellationToken)
+            public Task<bool> DeleteBySlugAsync(string id, CancellationToken cancellationToken)
             {
                 LastIdReceived = id;
                 return Task.FromResult(_returns);
