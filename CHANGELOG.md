@@ -2,6 +2,10 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.19
+
+- **Mix titles autocomplete endpoint.** New read-only `GET /api/catalog/mixes/titles` endpoint returns a flat array of `{ title, slug }` objects for all catalog mixes, sorted newest-first. Intended for lightweight autocomplete and client-side search. No auth required. Response includes `Cache-Control: max-age=3600, public`.
+
 ## v1.18
 
 - **Mix deletion by slug.** `DELETE /api/catalog/mixes?slug=<slug>` now matches by the SoundCloud URL slug (e.g. `jungle-session-1`) rather than the full RSS GUID, avoiding URL encoding issues with special characters in route parameters.

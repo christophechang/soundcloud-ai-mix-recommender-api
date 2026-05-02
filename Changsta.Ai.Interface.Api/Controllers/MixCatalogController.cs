@@ -265,6 +265,27 @@ namespace Changsta.Ai.Interface.Api.Controllers
             return Ok(BuildPage(allEntries, page, pageSize));
         }
 
+        [HttpGet("mixes/titles")]
+        public async Task<IActionResult> GetMixTitlesAsync(CancellationToken cancellationToken = default)
+        {
+            IReadOnlyList<Mix> mixes = await _catalogueProvider
+                .GetLatestAsync(CatalogMaxItems, cancellationToken)
+                .ConfigureAwait(false);
+
+            MixTitleEntry[] titles = mixes
+                .OrderByDescending(m => m.PublishedAt ?? DateTimeOffset.MinValue)
+                .Select(m => new MixTitleEntry
+                {
+                    Title = m.Title,
+                    Slug = MixSlugHelper.ExtractSlug(m.Url),
+                })
+                .ToArray();
+
+            Response.Headers.Append("Cache-Control", "max-age=3600, public");
+
+            return Ok(titles);
+        }
+
         [HttpGet("mixes/{slug}")]
         public async Task<IActionResult> GetMixBySlugAsync(
             [FromRoute] string slug,
