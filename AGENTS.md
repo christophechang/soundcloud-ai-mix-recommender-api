@@ -70,6 +70,13 @@ Repo-level instructions for coding agents working in `soundcloud-ai-mix-recommen
 - When updating docs, prefer concrete commands, file paths, and project names that exist in this repository.
 - If behaviour changes, update README or related docs when user-facing setup, API behaviour, or deployment steps are affected.
 
+## Operational Automation
+- Daily diagnostics triage checks should reuse the same bearer secret source as the catalog flush automation rather than introducing a second secret path.
+- Ignore scanner noise such as bot 404 probes for `/.env`, `/robots.txt`, `/phpinfo.php`, `/actuator/*`, `/admin`, `/login`, `/signup`, `/_layouts/*`, `/web.config`, `/appsettings*.json`, `/config.php`, `/index.php`, and similar PHP, Spring, or WordPress probes.
+- Treat 5xx responses on real `/api/*` routes, repeated 4xx responses on real `/api/*` routes, and repeated `InvalidOperationException`, `NullReferenceException`, or `RequestFailedException` events as actionable triage candidates.
+- Open issue #17 already covers the known `why anchor not found` / mood keyword anchor validation case for `anchor='driving'`; do not open duplicate tickets for that signature.
+- If diagnostics triage finds nothing actionable, stay silent instead of posting a no-op report.
+
 ## Commits
 - Use conventional commit messages.
 - Do not add `Co-Authored-By` trailers.
