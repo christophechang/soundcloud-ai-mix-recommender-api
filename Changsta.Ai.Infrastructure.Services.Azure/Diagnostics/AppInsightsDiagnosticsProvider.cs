@@ -38,18 +38,18 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Diagnostics
             var timeRange = new QueryTimeRange(TimeSpan.FromHours(hours));
 
             string requestsQuery =
-                $"requests" +
-                $" | where timestamp > ago({hours}h)" +
-                $" | where toint(resultCode) >= 400" +
-                $" | project timestamp, name, url, resultCode, duration, operation_Id" +
-                $" | order by timestamp desc" +
+                $"AppRequests" +
+                $" | where TimeGenerated > ago({hours}h)" +
+                $" | where toint(ResultCode) >= 400" +
+                $" | project TimeGenerated, Name, Url, ResultCode, DurationMs, OperationId" +
+                $" | order by TimeGenerated desc" +
                 $" | take {MaxRequests}";
 
             string exceptionsQuery =
-                $"exceptions" +
-                $" | where timestamp > ago({hours}h)" +
-                $" | project timestamp, type, outerMessage, operation_Id" +
-                $" | order by timestamp desc" +
+                $"AppExceptions" +
+                $" | where TimeGenerated > ago({hours}h)" +
+                $" | project TimeGenerated, ExceptionType, OuterMessage, OperationId" +
+                $" | order by TimeGenerated desc" +
                 $" | take {MaxExceptions}";
 
             var requestsTask = client.QueryWorkspaceAsync(
@@ -77,12 +77,12 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Diagnostics
 
             foreach (LogsTableRow row in table.Rows)
             {
-                DateTimeOffset timestamp = row["timestamp"] is DateTimeOffset ts ? ts : DateTimeOffset.UtcNow;
-                string name = row["name"]?.ToString() ?? string.Empty;
-                string? url = row["url"]?.ToString();
-                int statusCode = int.TryParse(row["resultCode"]?.ToString(), out int code) ? code : 0;
-                double durationMs = row["duration"] is double d ? d : 0;
-                string? operationId = row["operation_Id"]?.ToString();
+                DateTimeOffset timestamp = row["TimeGenerated"] is DateTimeOffset ts ? ts : DateTimeOffset.UtcNow;
+                string name = row["Name"]?.ToString() ?? string.Empty;
+                string? url = row["Url"]?.ToString();
+                int statusCode = int.TryParse(row["ResultCode"]?.ToString(), out int code) ? code : 0;
+                double durationMs = row["DurationMs"] is double d ? d : 0;
+                string? operationId = row["OperationId"]?.ToString();
 
                 results.Add(new DiagnosticsRequest
                 {
@@ -104,10 +104,10 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Diagnostics
 
             foreach (LogsTableRow row in table.Rows)
             {
-                DateTimeOffset timestamp = row["timestamp"] is DateTimeOffset ts ? ts : DateTimeOffset.UtcNow;
-                string? type = row["type"]?.ToString();
-                string? message = row["outerMessage"]?.ToString();
-                string? operationId = row["operation_Id"]?.ToString();
+                DateTimeOffset timestamp = row["TimeGenerated"] is DateTimeOffset ts ? ts : DateTimeOffset.UtcNow;
+                string? type = row["ExceptionType"]?.ToString();
+                string? message = row["OuterMessage"]?.ToString();
+                string? operationId = row["OperationId"]?.ToString();
 
                 results.Add(new DiagnosticsException
                 {
