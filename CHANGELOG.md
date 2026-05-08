@@ -2,6 +2,10 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.20
+
+- **Diagnostics error insights endpoint.** New `GET /api/diagnostics/errors?hours={n}` endpoint (Bearer-authenticated, same secret as catalog flush) queries App Insights via Log Analytics and returns recent exception summaries. `hours` accepts 1–168 (default 24). Infra: App Service identity granted Log Analytics Reader role; `Azure__LogAnalytics__WorkspaceId` wired via Bicep.
+
 ## v1.19
 
 - **Mix titles autocomplete endpoint.** New read-only `GET /api/catalog/mixes/titles` endpoint returns a flat array of `{ title, slug }` objects for all catalog mixes, sorted newest-first. Intended for lightweight autocomplete and client-side search. No auth required. Response includes `Cache-Control: max-age=3600, public`.

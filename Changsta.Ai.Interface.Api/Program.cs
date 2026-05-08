@@ -2,9 +2,11 @@ using System.Text.Json;
 using System.Threading.RateLimiting;
 using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Changsta.Ai.Core.BusinessProcesses.Catalogue;
+using Changsta.Ai.Core.BusinessProcesses.Diagnostics;
 using Changsta.Ai.Core.BusinessProcesses.Recommendations;
 using Changsta.Ai.Core.Contracts.Ai;
 using Changsta.Ai.Core.Contracts.Catalogue;
+using Changsta.Ai.Core.Contracts.Diagnostics;
 using Changsta.Ai.Core.Contracts.Recommendations;
 using Changsta.Ai.Infrastructure.Services.Ai.Configuration;
 using Changsta.Ai.Infrastructure.Services.Ai.Recommenders;
@@ -107,6 +109,7 @@ builder.Services.Configure<OpenAiOptions>(
     builder.Configuration.GetSection("OpenAI"));
 
 builder.Services.AddAzureBlobMixCatalog(builder.Configuration);
+builder.Services.AddAzureDiagnostics(builder.Configuration);
 
 builder.Services.AddSingleton<ICatalogCacheInvalidator, CatalogCacheInvalidator>();
 
@@ -152,6 +155,7 @@ builder.Services.AddScoped<IDeleteMixUseCase>(sp =>
     return new DeleteMixUseCase(deleter, invalidator, provider);
 });
 builder.Services.AddScoped<IMixRecommendationUseCase, MixRecommendationUseCase>();
+builder.Services.AddScoped<IGetErrorInsightsUseCase, GetErrorInsightsUseCase>();
 builder.Services.AddScoped<IMixAiRecommender, OpenAiMixRecommender>();
 builder.Services.AddHostedService<CatalogWarmupService>();
 

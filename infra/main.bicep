@@ -134,6 +134,10 @@ module webapp 'modules/webapp.bicep' = {
         name: 'ApplicationInsights__ConnectionString'
         value: appInsights.properties.ConnectionString
       }
+      {
+        name: 'Azure__LogAnalytics__WorkspaceId'
+        value: logAnalyticsWorkspace.properties.customerId
+      }
     ]
   }
 }
@@ -146,6 +150,19 @@ resource blobRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01'
   name: guid(storageAccount.id, webAppName, storageBlobDataContributorRoleId)
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', storageBlobDataContributorRoleId)
+    principalId: webapp.outputs.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+// Grant the App Service's system-assigned identity read access to Log Analytics for diagnostics queries.
+var logAnalyticsReaderRoleId = '73c42c96-874c-492b-b04d-ab87d138a893'
+
+resource logAnalyticsReaderRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: logAnalyticsWorkspace
+  name: guid(logAnalyticsWorkspace.id, webAppName, logAnalyticsReaderRoleId)
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', logAnalyticsReaderRoleId)
     principalId: webapp.outputs.principalId
     principalType: 'ServicePrincipal'
   }
