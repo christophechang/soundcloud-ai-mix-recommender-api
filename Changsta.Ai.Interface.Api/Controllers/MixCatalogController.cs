@@ -286,6 +286,39 @@ namespace Changsta.Ai.Interface.Api.Controllers
             return Ok(titles);
         }
 
+        [HttpGet("compass")]
+        public async Task<IActionResult> GetCompassAsync(CancellationToken cancellationToken = default)
+        {
+            IReadOnlyList<Mix> mixes = await _catalogueProvider
+                .GetLatestAsync(CatalogMaxItems, cancellationToken)
+                .ConfigureAwait(false);
+
+            CompassEntry[] entries = mixes
+                .Where(m => m.Warmth.HasValue)
+                .Select(m => new CompassEntry
+                {
+                    Slug = MixSlugHelper.ExtractSlug(m.Url),
+                    Title = m.Title,
+                    Url = m.Url,
+                    ImageUrl = m.ImageUrl,
+                    Genre = m.Genre,
+                    Energy = m.Energy,
+                    Bpm = m.BpmMin.HasValue && m.BpmMax.HasValue
+                        ? (m.BpmMin.Value + m.BpmMax.Value) / 2
+                        : m.BpmMin ?? m.BpmMax,
+                    BpmMin = m.BpmMin,
+                    BpmMax = m.BpmMax,
+                    Warmth = m.Warmth!.Value,
+                    Moods = m.Moods,
+                    PublishedAt = m.PublishedAt,
+                })
+                .ToArray();
+
+            Response.Headers.Append("Cache-Control", "max-age=3600, public");
+
+            return Ok(entries);
+        }
+
         [HttpGet("mixes/{slug}")]
         public async Task<IActionResult> GetMixBySlugAsync(
             [FromRoute] string slug,

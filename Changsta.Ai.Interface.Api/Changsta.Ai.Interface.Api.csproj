@@ -24,6 +24,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Update="config\mood_weights.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Changsta.Ai.Core.BusinessProcesses\Changsta.Ai.Core.BusinessProcesses.csproj" />
     <ProjectReference Include="..\Changsta.Ai.Infrastructure.Services.Ai\Changsta.Ai.Infrastructure.Services.Ai.csproj" />
     <ProjectReference Include="..\Changsta.Ai.Infrastructure.Services.Azure\Changsta.Ai.Infrastructure.Services.Azure.csproj" />

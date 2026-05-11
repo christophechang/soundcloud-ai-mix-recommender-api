@@ -2,6 +2,11 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.22
+
+- **Warmth scoring.** Each mix now carries a `warmth` score in [-1, 1] computed from mood weights (configurable via `config/mood_weights.json`) plus an energy nudge (high → colder, low → warmer). Scores are persisted to the blob catalog and recomputed on flush when weights or moods change.
+- **Compass endpoint.** New `GET /api/catalog/compass` returns all mixes that have a warmth score as a slim `CompassEntry` array (slug, title, URL, image, genre, energy, BPM, warmth, moods, publishedAt). Response includes `Cache-Control: max-age=3600, public`. Intended for mood-based browsing and visualisation.
+
 ## v1.21
 
 - **Duplicate recommendation mix ID fix.** `AiRecommendationResponseValidator` now deduplicates mix IDs returned by the AI before validation, preventing duplicate entries from surfacing in recommendation results.

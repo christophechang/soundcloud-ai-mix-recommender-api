@@ -27,19 +27,22 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
         private readonly IMemoryCache _cache;
         private readonly ICatalogCacheInvalidator _invalidator;
         private readonly ILogger<BlobBackedMixCatalogueProvider> _logger;
+        private readonly IReadOnlyDictionary<string, double> _moodWeights;
 
         public BlobBackedMixCatalogueProvider(
             IMixCatalogueProvider innerProvider,
             IBlobMixCatalogueRepository repository,
             IMemoryCache cache,
             ICatalogCacheInvalidator invalidator,
-            ILogger<BlobBackedMixCatalogueProvider> logger)
+            ILogger<BlobBackedMixCatalogueProvider> logger,
+            IReadOnlyDictionary<string, double> moodWeights)
         {
             _innerProvider = innerProvider ?? throw new ArgumentNullException(nameof(innerProvider));
             _repository = repository ?? throw new ArgumentNullException(nameof(repository));
             _cache = cache ?? throw new ArgumentNullException(nameof(cache));
             _invalidator = invalidator ?? throw new ArgumentNullException(nameof(invalidator));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _moodWeights = moodWeights ?? throw new ArgumentNullException(nameof(moodWeights));
         }
 
         public async Task<IReadOnlyList<Mix>> GetLatestAsync(int maxItems, CancellationToken cancellationToken)
@@ -92,10 +95,13 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 bool relatedMixesChanged;
                 merged = RelatedMixScorer.ComputeRelatedMixes(merged, out relatedMixesChanged);
 
+                bool warmthChanged;
+                merged = WarmthScorer.ComputeWarmth(merged, _moodWeights, _logger, out warmthChanged);
+
                 int newDiscoveries = CountNewDiscoveries(blobMixes, rssMixes);
                 int updatedEntries = CountUpdatedEntries(blobMixes, rssMixes);
 
-                if (blobReadSucceeded && (newDiscoveries > 0 || updatedEntries > 0 || blobGenresChanged || introHydrationChanged || relatedMixesChanged))
+                if (blobReadSucceeded && (newDiscoveries > 0 || updatedEntries > 0 || blobGenresChanged || introHydrationChanged || relatedMixesChanged || warmthChanged))
                 {
                     _logger.LogInformation(
                         "Writing blob catalog — {NewCount} new mixes, {UpdateCount} updated entries, genreNormalizationChanged={GenreNormalizationChanged}.",
@@ -211,6 +217,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 Moods = mix.Moods,
                 RelatedMixes = mix.RelatedMixes,
                 PublishedAt = mix.PublishedAt,
+                Warmth = mix.Warmth,
             };
         }
 
@@ -233,6 +240,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 Moods = mix.Moods,
                 RelatedMixes = mix.RelatedMixes,
                 PublishedAt = mix.PublishedAt,
+                Warmth = mix.Warmth,
             };
         }
 
@@ -285,6 +293,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                         Moods = syncSchema ? mix.Moods : existing.Moods,
                         RelatedMixes = existing.RelatedMixes,
                         PublishedAt = mix.PublishedAt ?? existing.PublishedAt,
+                        Warmth = existing.Warmth,
                     };
 
                     if (TryFindLegacyMovedEntry(mix, blobMixes, out Mix? legacyEntry))
@@ -321,6 +330,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                         Moods = syncSchema ? mix.Moods : priorEntry.Moods,
                         RelatedMixes = priorEntry.RelatedMixes,
                         PublishedAt = mix.PublishedAt ?? priorEntry.PublishedAt,
+                        Warmth = priorEntry.Warmth,
                     };
                 }
                 else if (TryFindLegacyMovedEntry(mix, blobMixes, out Mix? legacyEntry))
@@ -353,6 +363,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                         Moods = syncSchema ? mix.Moods : legacyEntry.Moods,
                         RelatedMixes = legacyEntry.RelatedMixes,
                         PublishedAt = mix.PublishedAt ?? legacyEntry.PublishedAt,
+                        Warmth = legacyEntry.Warmth,
                     };
                 }
                 else
