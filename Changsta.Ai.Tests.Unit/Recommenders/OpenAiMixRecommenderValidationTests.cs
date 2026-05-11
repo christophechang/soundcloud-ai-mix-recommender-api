@@ -695,7 +695,24 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
         [Test]
         public void ParseAndValidate_ResultsExceedMaxResults_Throws()
         {
-            // Two results returned but maxResults is 1
+            var catalogue = new[]
+            {
+                DefaultMix,
+                new Mix
+                {
+                    Id = "mix-2",
+                    Title = "Second Test Mix",
+                    Url = "https://soundcloud.com/test/mix-2",
+                    Description = "Another rolling dnb session",
+                    Genre = "dnb",
+                    Energy = "peak",
+                    BpmMin = 172,
+                    BpmMax = 174,
+                    Moods = new[] { "driving", "dark" },
+                    Tracklist = new[] { new Track { Artist = "Noisia", Title = "Shellcase" } },
+                },
+            };
+
             const string json = """
                 {
                   "results": [
@@ -707,7 +724,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                       "confidence": 0.9
                     },
                     {
-                      "mixId": "mix-1",
+                      "mixId": "mix-2",
 
                       "reason": "Another great dnb mix.",
                       "why": ["\"dnb\"", "\"peak\""],
@@ -719,7 +736,7 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 """;
 
             Assert.Throws<InvalidOperationException>(() =>
-                AiRecommendationResponseValidator.ParseAndValidate(json, DefaultCatalogue, maxResults: 1));
+                AiRecommendationResponseValidator.ParseAndValidate(json, catalogue, maxResults: 1));
         }
 
         [Test]
@@ -831,9 +848,8 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
         }
 
         [Test]
-        public void ParseAndValidate_DuplicateMixId_Throws()
+        public void ParseAndValidate_DuplicateMixId_KeepsFirstResult()
         {
-            // Two results with the same mixId must be rejected
             const string json = """
                 {
                   "results": [
@@ -856,8 +872,13 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
                 }
                 """;
 
-            Assert.Throws<InvalidOperationException>(() =>
-                AiRecommendationResponseValidator.ParseAndValidate(json, DefaultCatalogue, maxResults: 5));
+            AiRecommendationResponse response =
+                AiRecommendationResponseValidator.ParseAndValidate(json, DefaultCatalogue, maxResults: 5);
+
+            Assert.That(response.Results, Has.Count.EqualTo(1));
+            Assert.That(response.Results[0].MixId, Is.EqualTo("mix-1"));
+            Assert.That(response.Results[0].Reason, Is.EqualTo("Great dnb mix."));
+            Assert.That(response.Results[0].Why, Is.EqualTo(new[] { "\"dnb\"" }));
         }
 
         [TestCase("130", true, 130)]

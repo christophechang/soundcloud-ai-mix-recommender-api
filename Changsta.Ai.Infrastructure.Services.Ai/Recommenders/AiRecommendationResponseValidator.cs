@@ -45,20 +45,13 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
             if (response?.Results == null) throw new InvalidOperationException("AI response missing results.");
             if (response.ClarifyingQuestion is not null) throw new InvalidOperationException("AI response clarifyingQuestion must be null.");
-            if (response.Results.Count > maxResults) throw new InvalidOperationException("AI returned too many results.");
 
-            var seenIds = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var r in response.Results)
-            {
-                if (!string.IsNullOrWhiteSpace(r.MixId) && !seenIds.Add(r.MixId))
-                {
-                    throw new InvalidOperationException($"AI returned duplicate mixId '{r.MixId}'.");
-                }
-            }
+            List<AiRecommendationResult> dedupedResults = RemoveDuplicateResults(response.Results);
+            if (dedupedResults.Count > maxResults) throw new InvalidOperationException("AI returned too many results.");
 
             var allowedById = mixes.ToDictionary(m => m.Id, StringComparer.Ordinal);
 
-            foreach (var r in response.Results)
+            foreach (var r in dedupedResults)
             {
                 if (string.IsNullOrWhiteSpace(r.MixId)) throw new InvalidOperationException("AI returned a result with no mixId.");
                 if (!allowedById.TryGetValue(r.MixId, out var mix)) throw new InvalidOperationException("AI returned an unknown mixId.");
@@ -74,7 +67,29 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 if (r.Confidence < 0 || r.Confidence > 1) throw new InvalidOperationException("AI returned invalid confidence.");
             }
 
-            return response;
+            return new AiRecommendationResponse
+            {
+                Results = dedupedResults,
+                ClarifyingQuestion = response.ClarifyingQuestion,
+            };
+        }
+
+        private static List<AiRecommendationResult> RemoveDuplicateResults(List<AiRecommendationResult> results)
+        {
+            var seenIds = new HashSet<string>(StringComparer.Ordinal);
+            var deduped = new List<AiRecommendationResult>(results.Count);
+
+            foreach (var result in results)
+            {
+                if (!string.IsNullOrWhiteSpace(result.MixId) && !seenIds.Add(result.MixId))
+                {
+                    continue;
+                }
+
+                deduped.Add(result);
+            }
+
+            return deduped;
         }
 
         internal static string NormalizeAiJson(string content)
