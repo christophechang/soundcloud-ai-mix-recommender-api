@@ -2,6 +2,10 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.21
+
+- **Duplicate recommendation mix ID fix.** `AiRecommendationResponseValidator` now deduplicates mix IDs returned by the AI before validation, preventing duplicate entries from surfacing in recommendation results.
+
 ## v1.20
 
 - **Diagnostics error insights endpoint.** New `GET /api/diagnostics/errors?hours={n}` endpoint (Bearer-authenticated, same secret as catalog flush) queries App Insights via Log Analytics and returns recent exception summaries. `hours` accepts 1–168 (default 24). Infra: App Service identity granted Log Analytics Reader role; `Azure__LogAnalytics__WorkspaceId` wired via Bicep.
