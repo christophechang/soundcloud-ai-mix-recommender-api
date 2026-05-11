@@ -34,5 +34,7 @@ namespace Changsta.Ai.Core.Domain
         public IReadOnlyList<RelatedMixRef> RelatedMixes { get; init; } = Array.Empty<RelatedMixRef>();
 
         public DateTimeOffset? PublishedAt { get; init; }
+
+        public double? Warmth { get; init; }
     }
 }

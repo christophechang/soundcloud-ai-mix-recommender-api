@@ -762,7 +762,8 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
                 repo,
                 new MemoryCache(new MemoryCacheOptions()),
                 new StubCatalogCacheInvalidator(),
-                logger ?? NullLogger<BlobBackedMixCatalogueProvider>.Instance);
+                logger ?? NullLogger<BlobBackedMixCatalogueProvider>.Instance,
+                new Dictionary<string, double>());
         }
 
         private static Mix MakeMix(

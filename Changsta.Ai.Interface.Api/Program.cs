@@ -21,6 +21,11 @@ using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Configuration.AddJsonFile(
+    Path.Combine(builder.Environment.ContentRootPath, "config", "mood_weights.json"),
+    optional: true,
+    reloadOnChange: false);
+
 // Add services to the container.
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
@@ -111,6 +116,13 @@ builder.Services.Configure<OpenAiOptions>(
 builder.Services.AddAzureBlobMixCatalog(builder.Configuration);
 builder.Services.AddAzureDiagnostics(builder.Configuration);
 
+var rawMoodWeights = builder.Configuration
+    .GetSection("MoodWeights")
+    .Get<Dictionary<string, double>>() ?? new Dictionary<string, double>();
+IReadOnlyDictionary<string, double> moodWeights =
+    new Dictionary<string, double>(rawMoodWeights, StringComparer.OrdinalIgnoreCase);
+builder.Services.AddSingleton(moodWeights);
+
 builder.Services.AddSingleton<ICatalogCacheInvalidator, CatalogCacheInvalidator>();
 
 // SoundCloudRssMixCatalogueProvider is registered as its concrete type (not as IMixCatalogueProvider)
@@ -142,8 +154,9 @@ builder.Services.AddScoped<IMixCatalogueProvider>(sp =>
     var cache = sp.GetRequiredService<IMemoryCache>();
     var invalidator = sp.GetRequiredService<ICatalogCacheInvalidator>();
     var logger = sp.GetRequiredService<ILogger<BlobBackedMixCatalogueProvider>>();
+    var weights = sp.GetRequiredService<IReadOnlyDictionary<string, double>>();
 
-    return new BlobBackedMixCatalogueProvider(inner, repo, cache, invalidator, logger);
+    return new BlobBackedMixCatalogueProvider(inner, repo, cache, invalidator, logger, weights);
 });
 
 builder.Services.AddScoped<ICatalogFlushUseCase, CatalogFlushUseCase>();
