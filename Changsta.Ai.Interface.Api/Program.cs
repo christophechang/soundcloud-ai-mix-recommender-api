@@ -155,8 +155,10 @@ builder.Services.AddScoped<IMixCatalogueProvider>(sp =>
     var invalidator = sp.GetRequiredService<ICatalogCacheInvalidator>();
     var logger = sp.GetRequiredService<ILogger<BlobBackedMixCatalogueProvider>>();
     var weights = sp.GetRequiredService<IReadOnlyDictionary<string, double>>();
+    var enrichmentRepo = sp.GetRequiredService<IMoodWeightEnrichmentRepository>();
+    var enricher = sp.GetRequiredService<IMoodWeightEnricher>();
 
-    return new BlobBackedMixCatalogueProvider(inner, repo, cache, invalidator, logger, weights);
+    return new BlobBackedMixCatalogueProvider(inner, repo, cache, invalidator, logger, weights, enrichmentRepo, enricher);
 });
 
 builder.Services.AddScoped<ICatalogFlushUseCase, CatalogFlushUseCase>();
@@ -170,6 +172,7 @@ builder.Services.AddScoped<IDeleteMixUseCase>(sp =>
 builder.Services.AddScoped<IMixRecommendationUseCase, MixRecommendationUseCase>();
 builder.Services.AddScoped<IGetErrorInsightsUseCase, GetErrorInsightsUseCase>();
 builder.Services.AddScoped<IMixAiRecommender, OpenAiMixRecommender>();
+builder.Services.AddScoped<IMoodWeightEnricher, AiMoodWeightEnricher>();
 builder.Services.AddHostedService<CatalogWarmupService>();
 
 var app = builder.Build();
