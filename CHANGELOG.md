@@ -2,6 +2,11 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.23
+
+- **AI mood weight enrichment.** After RSS parse and catalog merge, unknown mood tags are automatically scored by AI in a single batch call using all existing weights as context, ensuring scores are relative to the established -2.0 to +2.0 scale. Results are persisted to a blob sidecar (`mood_weights_enriched.json`) and merged at runtime with the human-curated baseline. No AI call is made if all moods are already known.
+- **Expanded mood weight baseline.** 34 new mood tags promoted from AI enrichment into `mood_weights.json`: `abstract`, `bass heavy`, `bassline`, `bouncy`, `breakbeat heritage`, `carnival`, `chaotic`, `cheeky`, `chunky`, `club`, `crate digger`, `emotive`, `ethereal`, `feel good`, `focused`, `future-facing`, `glowing`, `introspective`, `late night`, `minimal`, `moody`, `nostalgic`, `progressive`, `punchy`, `raw`, `rebellious`, `reflective`, `skippy`, `sound system`, `sunlit`, `urban`, `urgent`, `vocal`, `warped`.
+
 ## v1.22
 
 - **Warmth scoring.** Each mix now carries a `warmth` score in [-1, 1] computed from mood weights (configurable via `config/mood_weights.json`) plus an energy nudge (high → colder, low → warmer). Scores are persisted to the blob catalog and recomputed on flush when weights or moods change.
