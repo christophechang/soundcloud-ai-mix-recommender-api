@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Changsta.Ai.Core.Contracts.Ai;
 using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Core.Normalization;
@@ -28,6 +29,8 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
         private readonly ICatalogCacheInvalidator _invalidator;
         private readonly ILogger<BlobBackedMixCatalogueProvider> _logger;
         private readonly IReadOnlyDictionary<string, double> _moodWeights;
+        private readonly IMoodWeightEnrichmentRepository? _enrichmentRepository;
+        private readonly IMoodWeightEnricher? _moodWeightEnricher;
 
         public BlobBackedMixCatalogueProvider(
             IMixCatalogueProvider innerProvider,
@@ -35,7 +38,9 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             IMemoryCache cache,
             ICatalogCacheInvalidator invalidator,
             ILogger<BlobBackedMixCatalogueProvider> logger,
-            IReadOnlyDictionary<string, double> moodWeights)
+            IReadOnlyDictionary<string, double> moodWeights,
+            IMoodWeightEnrichmentRepository? enrichmentRepository = null,
+            IMoodWeightEnricher? moodWeightEnricher = null)
         {
             _innerProvider = innerProvider ?? throw new ArgumentNullException(nameof(innerProvider));
             _repository = repository ?? throw new ArgumentNullException(nameof(repository));
@@ -43,6 +48,8 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             _invalidator = invalidator ?? throw new ArgumentNullException(nameof(invalidator));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _moodWeights = moodWeights ?? throw new ArgumentNullException(nameof(moodWeights));
+            _enrichmentRepository = enrichmentRepository;
+            _moodWeightEnricher = moodWeightEnricher;
         }
 
         public async Task<IReadOnlyList<Mix>> GetLatestAsync(int maxItems, CancellationToken cancellationToken)
@@ -95,8 +102,35 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 bool relatedMixesChanged;
                 merged = RelatedMixScorer.ComputeRelatedMixes(merged, out relatedMixesChanged);
 
+                IReadOnlyDictionary<string, double> enrichedWeights =
+                    await LoadEnrichedWeightsSafeAsync(cancellationToken).ConfigureAwait(false);
+                IReadOnlyDictionary<string, double> effectiveWeights = MergeWeights(_moodWeights, enrichedWeights);
+
+                IReadOnlyList<string> unknownMoods = FindUnknownMoods(merged, effectiveWeights);
+                if (unknownMoods.Count > 0 && _moodWeightEnricher is not null)
+                {
+                    _logger.LogInformation(
+                        "Enriching {Count} unknown mood(s) via AI: {Moods}",
+                        unknownMoods.Count,
+                        string.Join(", ", unknownMoods));
+
+                    IReadOnlyDictionary<string, double> newScores =
+                        await EnrichMoodsSafeAsync(effectiveWeights, unknownMoods, cancellationToken).ConfigureAwait(false);
+
+                    if (newScores.Count > 0)
+                    {
+                        enrichedWeights = MergeWeights(enrichedWeights, newScores);
+                        effectiveWeights = MergeWeights(_moodWeights, enrichedWeights);
+
+                        if (_enrichmentRepository is not null)
+                        {
+                            await _enrichmentRepository.WriteAsync(enrichedWeights, cancellationToken).ConfigureAwait(false);
+                        }
+                    }
+                }
+
                 bool warmthChanged;
-                merged = WarmthScorer.ComputeWarmth(merged, _moodWeights, _logger, out warmthChanged);
+                merged = WarmthScorer.ComputeWarmth(merged, effectiveWeights, _logger, out warmthChanged);
 
                 int newDiscoveries = CountNewDiscoveries(blobMixes, rssMixes);
                 int updatedEntries = CountUpdatedEntries(blobMixes, rssMixes);
@@ -585,6 +619,33 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             return count;
         }
 
+        private static IReadOnlyDictionary<string, double> MergeWeights(
+            IReadOnlyDictionary<string, double> baseWeights,
+            IReadOnlyDictionary<string, double> additions)
+        {
+            var merged = new Dictionary<string, double>(baseWeights, StringComparer.OrdinalIgnoreCase);
+            foreach (var kvp in additions)
+            {
+                merged[kvp.Key] = kvp.Value;
+            }
+
+            return merged;
+        }
+
+        private static IReadOnlyList<string> FindUnknownMoods(
+            IReadOnlyList<Mix> mixes,
+            IReadOnlyDictionary<string, double> weights)
+        {
+            return mixes
+                .SelectMany(m => m.Moods)
+                .Where(m => !string.IsNullOrWhiteSpace(m))
+                .Select(m => m.Trim().ToLowerInvariant())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Where(m => !weights.ContainsKey(m))
+                .OrderBy(m => m, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
         private async Task<IReadOnlyList<Mix>> FetchRssSafeAsync(CancellationToken cancellationToken)
         {
             try
@@ -597,6 +658,43 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             {
                 _logger.LogWarning(ex, "RSS feed fetch failed — proceeding with blob catalog only.");
                 return Array.Empty<Mix>();
+            }
+        }
+
+        private async Task<IReadOnlyDictionary<string, double>> LoadEnrichedWeightsSafeAsync(
+            CancellationToken cancellationToken)
+        {
+            if (_enrichmentRepository is null)
+            {
+                return new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            try
+            {
+                return await _enrichmentRepository.ReadAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to load enriched mood weights — proceeding with base weights only.");
+                return new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+            }
+        }
+
+        private async Task<IReadOnlyDictionary<string, double>> EnrichMoodsSafeAsync(
+            IReadOnlyDictionary<string, double> existingWeights,
+            IReadOnlyList<string> unknownMoods,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                return await _moodWeightEnricher!
+                    .EnrichAsync(existingWeights, unknownMoods, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "AI mood enrichment failed — new moods will have no weight this cycle.");
+                return new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
             }
         }
     }

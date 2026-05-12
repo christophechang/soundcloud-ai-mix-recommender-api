@@ -11,5 +11,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Configuration
         required public string ContainerName { get; init; }
 
         required public string BlobName { get; init; }
+
+        public string EnrichedMoodWeightsBlobName { get; init; } = "mood_weights_enriched.json";
     }
 }

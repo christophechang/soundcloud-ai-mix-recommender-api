@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Changsta.Ai.Core.Contracts.Ai;
 using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Infrastructure.Services.Azure.Catalogue;
@@ -736,12 +738,189 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             Assert.That(result.Any(m => m.Url == "https://sc.test/dirty-streets-mix"), Is.False);
         }
 
+        [Test]
+        public async Task GetLatestAsync_calls_enricher_when_catalog_has_unknown_moods()
+        {
+            var rssMix = MakeMix("1", "https://sc.test/mix-1", moods: new[] { "melancholic" });
+            var enricher = new StubMoodWeightEnricher();
+            var enrichmentRepo = new StubMoodWeightEnrichmentRepository();
+
+            var sut = BuildSut(
+                blobMixes: Array.Empty<Mix>(),
+                rssMixes: new[] { rssMix },
+                enrichmentRepo: enrichmentRepo,
+                enricher: enricher);
+
+            await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(enricher.CallCount, Is.EqualTo(1));
+            Assert.That(enricher.ReceivedNewMoods, Contains.Item("melancholic"));
+        }
+
+        [Test]
+        public async Task GetLatestAsync_skips_enricher_when_all_moods_are_known()
+        {
+            var baseWeights = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase) { ["warm"] = 2.0 };
+            var rssMix = MakeMix("1", "https://sc.test/mix-1", moods: new[] { "warm" });
+            var enricher = new StubMoodWeightEnricher();
+
+            var sut = BuildSut(
+                blobMixes: Array.Empty<Mix>(),
+                rssMixes: new[] { rssMix },
+                moodWeights: baseWeights,
+                enricher: enricher);
+
+            await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(enricher.CallCount, Is.EqualTo(0));
+        }
+
+        [Test]
+        public async Task GetLatestAsync_skips_enricher_when_catalog_has_no_moods()
+        {
+            var rssMix = MakeMix("1", "https://sc.test/mix-1");
+            var enricher = new StubMoodWeightEnricher();
+
+            var sut = BuildSut(
+                blobMixes: Array.Empty<Mix>(),
+                rssMixes: new[] { rssMix },
+                enricher: enricher);
+
+            await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(enricher.CallCount, Is.EqualTo(0));
+        }
+
+        [Test]
+        public async Task GetLatestAsync_passes_all_effective_weights_to_enricher_as_context()
+        {
+            var baseWeights = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase) { ["warm"] = 2.0 };
+            var storedEnriched = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase) { ["funky"] = 1.5 };
+            var rssMix = MakeMix("1", "https://sc.test/mix-1", moods: new[] { "melancholic" });
+
+            var enricher = new StubMoodWeightEnricher();
+            var enrichmentRepo = new StubMoodWeightEnrichmentRepository { StoredWeights = storedEnriched };
+
+            var sut = BuildSut(
+                blobMixes: Array.Empty<Mix>(),
+                rssMixes: new[] { rssMix },
+                moodWeights: baseWeights,
+                enrichmentRepo: enrichmentRepo,
+                enricher: enricher);
+
+            await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(enricher.ReceivedExistingWeights, Contains.Key("warm"));
+            Assert.That(enricher.ReceivedExistingWeights, Contains.Key("funky"));
+        }
+
+        [Test]
+        public async Task GetLatestAsync_writes_sidecar_after_enricher_returns_new_scores()
+        {
+            var rssMix = MakeMix("1", "https://sc.test/mix-1", moods: new[] { "melancholic" });
+            var enricher = new StubMoodWeightEnricher
+            {
+                ReturnValue = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
+                    { ["melancholic"] = -0.5 },
+            };
+            var enrichmentRepo = new StubMoodWeightEnrichmentRepository();
+
+            var sut = BuildSut(
+                blobMixes: Array.Empty<Mix>(),
+                rssMixes: new[] { rssMix },
+                enrichmentRepo: enrichmentRepo,
+                enricher: enricher);
+
+            await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(enrichmentRepo.WriteCallCount, Is.EqualTo(1));
+            Assert.That(enrichmentRepo.WrittenWeights, Contains.Key("melancholic"));
+        }
+
+        [Test]
+        public async Task GetLatestAsync_skips_sidecar_write_when_enricher_returns_empty()
+        {
+            var rssMix = MakeMix("1", "https://sc.test/mix-1", moods: new[] { "melancholic" });
+            var enricher = new StubMoodWeightEnricher();
+            var enrichmentRepo = new StubMoodWeightEnrichmentRepository();
+
+            var sut = BuildSut(
+                blobMixes: Array.Empty<Mix>(),
+                rssMixes: new[] { rssMix },
+                enrichmentRepo: enrichmentRepo,
+                enricher: enricher);
+
+            await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(enrichmentRepo.WriteCallCount, Is.EqualTo(0));
+        }
+
+        [Test]
+        public async Task GetLatestAsync_merges_sidecar_weights_with_enriched_scores_before_writing()
+        {
+            var storedEnriched = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase) { ["funky"] = 1.5 };
+            var rssMix = MakeMix("1", "https://sc.test/mix-1", moods: new[] { "melancholic" });
+            var enricher = new StubMoodWeightEnricher
+            {
+                ReturnValue = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
+                    { ["melancholic"] = -0.5 },
+            };
+            var enrichmentRepo = new StubMoodWeightEnrichmentRepository { StoredWeights = storedEnriched };
+
+            var sut = BuildSut(
+                blobMixes: Array.Empty<Mix>(),
+                rssMixes: new[] { rssMix },
+                enrichmentRepo: enrichmentRepo,
+                enricher: enricher);
+
+            await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(enrichmentRepo.WrittenWeights, Contains.Key("funky"));
+            Assert.That(enrichmentRepo.WrittenWeights, Contains.Key("melancholic"));
+        }
+
+        [Test]
+        public async Task GetLatestAsync_unknown_moods_deduped_before_sending_to_enricher()
+        {
+            var mix1 = MakeMix("1", "https://sc.test/mix-1", moods: new[] { "melancholic" });
+            var mix2 = MakeMix("2", "https://sc.test/mix-2", moods: new[] { "Melancholic" });
+            var enricher = new StubMoodWeightEnricher();
+            var enrichmentRepo = new StubMoodWeightEnrichmentRepository();
+
+            var sut = BuildSut(
+                blobMixes: Array.Empty<Mix>(),
+                rssMixes: new[] { mix1, mix2 },
+                enrichmentRepo: enrichmentRepo,
+                enricher: enricher);
+
+            await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(enricher.ReceivedNewMoods, Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public async Task GetLatestAsync_no_enricher_configured_runs_without_exception()
+        {
+            var rssMix = MakeMix("1", "https://sc.test/mix-1", moods: new[] { "melancholic" });
+
+            var sut = BuildSut(
+                blobMixes: Array.Empty<Mix>(),
+                rssMixes: new[] { rssMix });
+
+            var result = await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(result, Has.Count.EqualTo(1));
+        }
+
         private static BlobBackedMixCatalogueProvider BuildSut(
             StubBlobRepository? blobRepo = null,
             IReadOnlyList<Mix>? blobMixes = null,
             IReadOnlyList<Mix>? rssMixes = null,
             Exception? rssException = null,
-            ILogger<BlobBackedMixCatalogueProvider>? logger = null)
+            ILogger<BlobBackedMixCatalogueProvider>? logger = null,
+            IReadOnlyDictionary<string, double>? moodWeights = null,
+            IMoodWeightEnrichmentRepository? enrichmentRepo = null,
+            IMoodWeightEnricher? enricher = null)
         {
             var repo = blobRepo ?? new StubBlobRepository
             {
@@ -763,7 +942,9 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
                 new MemoryCache(new MemoryCacheOptions()),
                 new StubCatalogCacheInvalidator(),
                 logger ?? NullLogger<BlobBackedMixCatalogueProvider>.Instance,
-                new Dictionary<string, double>());
+                moodWeights ?? new Dictionary<string, double>(),
+                enrichmentRepo,
+                enricher);
         }
 
         private static Mix MakeMix(
@@ -775,7 +956,8 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             string? imageUrl = null,
             string genre = "dnb",
             DateTimeOffset? publishedAt = null,
-            IReadOnlyList<Track>? tracklist = null)
+            IReadOnlyList<Track>? tracklist = null,
+            IReadOnlyList<string>? moods = null)
         {
             return new Mix
             {
@@ -789,6 +971,7 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
                 ImageUrl = imageUrl,
                 PublishedAt = publishedAt,
                 Tracklist = tracklist ?? Array.Empty<Track>(),
+                Moods = moods ?? Array.Empty<string>(),
             };
         }
 
@@ -868,6 +1051,46 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             {
                 WriteCallCount++;
                 WrittenMixes = mixes;
+                return Task.CompletedTask;
+            }
+        }
+
+        private sealed class StubMoodWeightEnricher : IMoodWeightEnricher
+        {
+            public IReadOnlyList<string>? ReceivedNewMoods { get; private set; }
+            public IReadOnlyDictionary<string, double>? ReceivedExistingWeights { get; private set; }
+            public int CallCount { get; private set; }
+            public IReadOnlyDictionary<string, double> ReturnValue { get; set; } =
+                new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+
+            public Task<IReadOnlyDictionary<string, double>> EnrichAsync(
+                IReadOnlyDictionary<string, double> existingWeights,
+                IReadOnlyList<string> newMoods,
+                CancellationToken cancellationToken = default)
+            {
+                CallCount++;
+                ReceivedExistingWeights = existingWeights;
+                ReceivedNewMoods = newMoods;
+                return Task.FromResult(ReturnValue);
+            }
+        }
+
+        private sealed class StubMoodWeightEnrichmentRepository : IMoodWeightEnrichmentRepository
+        {
+            public IReadOnlyDictionary<string, double> StoredWeights { get; set; } =
+                new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+            public IReadOnlyDictionary<string, double>? WrittenWeights { get; private set; }
+            public int WriteCallCount { get; private set; }
+
+            public Task<IReadOnlyDictionary<string, double>> ReadAsync(CancellationToken cancellationToken)
+            {
+                return Task.FromResult(StoredWeights);
+            }
+
+            public Task WriteAsync(IReadOnlyDictionary<string, double> weights, CancellationToken cancellationToken)
+            {
+                WriteCallCount++;
+                WrittenWeights = weights;
                 return Task.CompletedTask;
             }
         }
