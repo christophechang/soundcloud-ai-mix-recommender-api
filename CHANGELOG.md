@@ -2,6 +2,10 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.24
+
+- **Fix: query-word mood anchors no longer drop mixes.** The AI prompt now explicitly forbids copying words from the user query into `why` anchors (rule 10c). Mixes are no longer silently dropped when the model fabricates a mood like `driving` from the user's query text. The validator remains strict — anchors must come verbatim from the MIX block's structured fields. Adds a regression test covering a query-derived anchor absent from the mix's moods list.
+
 ## v1.23
 
 - **AI mood weight enrichment.** After RSS parse and catalog merge, unknown mood tags are automatically scored by AI in a single batch call using all existing weights as context, ensuring scores are relative to the established -2.0 to +2.0 scale. Results are persisted to a blob sidecar (`mood_weights_enriched.json`) and merged at runtime with the human-curated baseline. No AI call is made if all moods are already known.

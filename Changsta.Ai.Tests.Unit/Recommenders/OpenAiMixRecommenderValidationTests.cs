@@ -643,6 +643,44 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
         }
 
         [Test]
+        public void ParseAndValidate_QueryWordUsedAsAnchorNotInMixMoods_Throws()
+        {
+            // "driving" comes from a user query like "something driving for a long run"
+            // but the mix's moods do not include "driving" — the AI must not copy query words as anchors
+            var catalogueWithoutDriving = new[]
+            {
+                new Mix
+                {
+                    Id = "mix-1",
+                    Title = "Test Mix",
+                    Url = "https://soundcloud.com/test/mix",
+                    Description = "Energetic dnb set.",
+                    Genre = "dnb",
+                    Energy = "peak",
+                    BpmMin = 172,
+                    BpmMax = 174,
+                    Moods = new[] { "dark", "rolling" },
+                    Tracklist = new[] { new Track { Artist = "Calibre", Title = "Pillow Dub" } },
+                },
+            };
+
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
+                    "reason": "High-energy dnb for a long run.",
+                    "why": ["\"driving\""],
+                    "confidence": 0.8
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.Throws<InvalidOperationException>(() =>
+                AiRecommendationResponseValidator.ParseAndValidate(json, catalogueWithoutDriving, maxResults: 3));
+        }
+
+        [Test]
         public void ParseAndValidate_ExtraTopLevelProperty_Throws()
         {
             const string json = """

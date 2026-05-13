@@ -92,6 +92,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 : "9) Anchors may be genre, energy, one mood token, one artist name, or bpm.");
             AppendLine("10) Never normalize or rewrite anchors, never output full moods or artists lists, and never use prefixes like \"genre:\".");
             AppendLine("10b) Do not invent adjective phrases like \"classic anthemic\", \"late-night energy\", or \"low-mid\".");
+            AppendLine("10c) Never copy words or phrases from the user question into why anchors. The user question is context only — why anchors must come exclusively from the MIX block fields (genre, energy, bpm, moods, artists, tracklist). For example, if the user says 'something driving' and a MIX block does not have 'driving' in its moods field, do not use 'driving' as an anchor.");
             AppendLine("11) If you cannot produce at least one valid why anchor for a mix, exclude it.");
             AppendLine("12) Return 0 to " + maxResults + " results. why must contain 1 to 4 strings. confidence must be between 0 and 1.");
             AppendLine("13) clarifyingQuestion must be null.");
