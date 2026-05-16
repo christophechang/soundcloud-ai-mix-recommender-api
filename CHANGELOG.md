@@ -2,6 +2,10 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.25
+
+- **Now Spinning endpoint.** New `GET /api/catalog/now-spinning` returns one pre-scored mix for the current time slot plus a configurable schedule of upcoming slots. Scoring assigns every mix to one of 24 pools (6 time slots × 4 day buckets) based on BPM, warmth, and energy. Pick is seeded by UTC hour + skip list so all listeners in the same state hear the same mix. Supports `moodLean` filtering (`darker`, `warmer`, `slower`, `faster`), `skip` exclusions, and `utcOffsetMinutes` for local time resolution. Graceful fallback: ignores skip → ignores lean → adjacent slot → 503.
+
 ## v1.24
 
 - **Fix: query-word mood anchors no longer drop mixes.** The AI prompt now explicitly forbids copying words from the user query into `why` anchors (rule 10c). Mixes are no longer silently dropped when the model fabricates a mood like `driving` from the user's query text. The validator remains strict — anchors must come verbatim from the MIX block's structured fields. Adds a regression test covering a query-derived anchor absent from the mix's moods list.
