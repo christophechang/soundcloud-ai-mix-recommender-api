@@ -157,7 +157,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.NowSpinning
 
             if (filtered.Count > 0)
             {
-                return SeededPick(filtered, utcHour, userSkipIds).Mix;
+                return SeededPick(filtered, utcHour, userSkipIds, moodLean).Mix;
             }
 
             // Step 2: try ignoring user skip (only if skips were actually provided)
@@ -168,7 +168,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.NowSpinning
                 if (filtered.Count > 0)
                 {
                     skipsIgnored = true;
-                    return SeededPick(filtered, utcHour, userSkipIds).Mix;
+                    return SeededPick(filtered, utcHour, userSkipIds, moodLean).Mix;
                 }
             }
 
@@ -182,7 +182,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.NowSpinning
             filtered = ApplyFilters(pool, null, new HashSet<string>(), alreadyUsed);
 
             return filtered.Count > 0
-                ? SeededPick(filtered, utcHour, userSkipIds).Mix
+                ? SeededPick(filtered, utcHour, userSkipIds, moodLean).Mix
                 : null;
         }
 
@@ -220,14 +220,16 @@ namespace Changsta.Ai.Core.BusinessProcesses.NowSpinning
         private static PoolEntry SeededPick(
             List<PoolEntry> pool,
             DateTimeOffset utcHour,
-            IReadOnlyList<string> userSkipIds)
+            IReadOnlyList<string> userSkipIds,
+            MoodLean? moodLean)
         {
             long hourEpochMs = new DateTimeOffset(
                 utcHour.Year, utcHour.Month, utcHour.Day, utcHour.Hour, 0, 0, TimeSpan.Zero)
                 .ToUnixTimeMilliseconds();
 
             int skipHash = ComputeSkipHashFnv(userSkipIds);
-            int seed = unchecked((int)(hourEpochMs + skipHash));
+            int moodHash = moodLean.HasValue ? ((int)moodLean.Value + 1) * 397 : 0;
+            int seed = unchecked((int)(hourEpochMs + skipHash) ^ moodHash);
 
             int index = new Random(seed).Next(pool.Count);
             return pool[index];

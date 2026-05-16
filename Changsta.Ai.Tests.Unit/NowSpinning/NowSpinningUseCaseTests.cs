@@ -71,6 +71,29 @@ namespace Changsta.Ai.Tests.Unit.NowSpinning
         }
 
         [Test]
+        public async Task GetAsync_different_mood_lean_returns_different_mix()
+        {
+            // All mixes satisfy both darker and warmer — pool overlap guaranteed
+            var mixes = new[]
+            {
+                MakeMix("a", bpmMin: 138, bpmMax: 138, warmth: -0.6, energy: "peak"),
+                MakeMix("b", bpmMin: 138, bpmMax: 138, warmth: 0.6, energy: "peak"),
+                MakeMix("c", bpmMin: 138, bpmMax: 138, warmth: -0.4, energy: "peak"),
+                MakeMix("d", bpmMin: 138, bpmMax: 138, warmth: 0.4, energy: "peak"),
+                MakeMix("e", bpmMin: 138, bpmMax: 138, warmth: -0.2, energy: "peak"),
+                MakeMix("f", bpmMin: 138, bpmMax: 138, warmth: 0.2, energy: "peak"),
+            };
+            var useCase = MakeUseCase(mixes);
+
+            var rDefault = await useCase.GetAsync(MakeRequest(PrimetimeFriday), CancellationToken.None);
+            var rDarker = await useCase.GetAsync(MakeRequest(PrimetimeFriday, moodLean: MoodLean.Darker), CancellationToken.None);
+            var rWarmer = await useCase.GetAsync(MakeRequest(PrimetimeFriday, moodLean: MoodLean.Warmer), CancellationToken.None);
+
+            rDarker.Mix!.Id.Should().NotBe(rDefault.Mix!.Id);
+            rWarmer.Mix!.Id.Should().NotBe(rDefault.Mix!.Id);
+        }
+
+        [Test]
         public async Task GetAsync_lean_exhausts_pool_sets_leanIgnored()
         {
             // Mix is warm (warmth=0.5) → tagged warmer, not darker
