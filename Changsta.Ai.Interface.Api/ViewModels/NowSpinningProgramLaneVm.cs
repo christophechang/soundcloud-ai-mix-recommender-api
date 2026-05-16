@@ -14,9 +14,6 @@ namespace Changsta.Ai.Interface.Api.ViewModels
         public bool LeanIgnored { get; init; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
-        public bool SkipsIgnored { get; init; }
-
-        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
         public bool PoolFallback { get; init; }
 
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]

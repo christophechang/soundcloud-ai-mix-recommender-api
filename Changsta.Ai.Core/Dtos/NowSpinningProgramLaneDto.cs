@@ -12,8 +12,6 @@ namespace Changsta.Ai.Core.Dtos
 
         public bool LeanIgnored { get; init; }
 
-        public bool SkipsIgnored { get; init; }
-
         public bool PoolFallback { get; init; }
 
         public bool NoMixAvailable { get; init; }

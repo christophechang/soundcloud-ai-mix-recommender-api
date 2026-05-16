@@ -33,7 +33,7 @@ namespace Changsta.Ai.Tests.Unit.NowSpinning
         }
 
         [Test]
-        public async Task GetAsync_same_hour_same_skip_state_returns_same_mix()
+        public async Task GetAsync_same_hour_returns_same_mix()
         {
             var mixes = new[] { MakePrimetimeMix("a"), MakePrimetimeMix("b"), MakePrimetimeMix("c") };
             var useCase = MakeUseCase(mixes);
@@ -42,32 +42,6 @@ namespace Changsta.Ai.Tests.Unit.NowSpinning
             var r2 = await useCase.GetAsync(MakeRequest(PrimetimeFriday), CancellationToken.None);
 
             r1.Mix!.Id.Should().Be(r2.Mix!.Id);
-        }
-
-        [Test]
-        public async Task GetAsync_different_skip_state_may_return_different_mix()
-        {
-            var mixes = new[] { MakePrimetimeMix("a"), MakePrimetimeMix("b"), MakePrimetimeMix("c") };
-            var useCase = MakeUseCase(mixes);
-
-            var r1 = await useCase.GetAsync(MakeRequest(PrimetimeFriday, skipIds: Array.Empty<string>()), CancellationToken.None);
-            var r2 = await useCase.GetAsync(MakeRequest(PrimetimeFriday, skipIds: new[] { r1.Mix!.Id }), CancellationToken.None);
-
-            r2.Mix!.Id.Should().NotBe(r1.Mix.Id);
-        }
-
-        [Test]
-        public async Task GetAsync_skip_exhausts_pool_sets_skipsIgnored()
-        {
-            var mix = MakePrimetimeMix("only");
-            var useCase = MakeUseCase(new[] { mix });
-
-            var result = await useCase.GetAsync(
-                MakeRequest(PrimetimeFriday, skipIds: new[] { "only" }),
-                CancellationToken.None);
-
-            result.SkipsIgnored.Should().BeTrue();
-            result.Mix.Should().NotBeNull();
         }
 
         [Test]
@@ -105,7 +79,6 @@ namespace Changsta.Ai.Tests.Unit.NowSpinning
                 CancellationToken.None);
 
             result.LeanIgnored.Should().BeTrue();
-            result.SkipsIgnored.Should().BeFalse();
             result.Mix.Should().NotBeNull();
         }
 
@@ -203,7 +176,6 @@ namespace Changsta.Ai.Tests.Unit.NowSpinning
         private static NowSpinningRequestDto MakeRequest(
             DateTimeOffset at,
             MoodLean? moodLean = null,
-            string[]? skipIds = null,
             int scheduleCount = 0,
             int utcOffsetMinutes = 0)
         {
@@ -212,7 +184,6 @@ namespace Changsta.Ai.Tests.Unit.NowSpinning
                 UtcNow = at,
                 UtcOffsetMinutes = utcOffsetMinutes,
                 MoodLean = moodLean,
-                SkipIds = skipIds ?? Array.Empty<string>(),
                 ScheduleCount = scheduleCount,
             };
         }

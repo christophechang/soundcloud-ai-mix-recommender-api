@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 
 namespace Changsta.Ai.Core.Dtos
 {
@@ -8,8 +7,6 @@ namespace Changsta.Ai.Core.Dtos
         required public DateTimeOffset UtcNow { get; init; }
 
         public int UtcOffsetMinutes { get; init; } = 0;
-
-        public IReadOnlyList<string> SkipIds { get; init; } = Array.Empty<string>();
 
         public int ScheduleCount { get; init; } = 4;
     }
