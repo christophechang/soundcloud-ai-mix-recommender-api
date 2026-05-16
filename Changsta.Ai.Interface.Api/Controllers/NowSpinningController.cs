@@ -26,7 +26,6 @@ namespace Changsta.Ai.Interface.Api.Controllers
         public async Task<IActionResult> GetNowSpinningAsync(
             [FromQuery] int utcOffsetMinutes = 0,
             [FromQuery] string? moodLean = null,
-            [FromQuery] string? skip = null,
             [FromQuery] int schedule = 4,
             CancellationToken cancellationToken = default)
         {
@@ -42,16 +41,11 @@ namespace Changsta.Ai.Interface.Api.Controllers
                 parsedLean = lean;
             }
 
-            string[] skipIds = string.IsNullOrWhiteSpace(skip)
-                ? Array.Empty<string>()
-                : skip.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
             var request = new NowSpinningRequestDto
             {
                 UtcNow = DateTimeOffset.UtcNow,
                 UtcOffsetMinutes = utcOffsetMinutes,
                 MoodLean = parsedLean,
-                SkipIds = skipIds,
                 ScheduleCount = Math.Max(0, schedule),
             };
 
@@ -97,7 +91,6 @@ namespace Changsta.Ai.Interface.Api.Controllers
                     })
                     .ToArray(),
                 LeanIgnored = result.LeanIgnored,
-                SkipsIgnored = result.SkipsIgnored,
                 PoolFallback = result.PoolFallback,
             };
         }

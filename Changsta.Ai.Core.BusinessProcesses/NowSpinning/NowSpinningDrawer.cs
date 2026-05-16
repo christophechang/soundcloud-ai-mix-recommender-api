@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Core.Dtos;
 
@@ -13,15 +12,12 @@ namespace Changsta.Ai.Core.BusinessProcesses.NowSpinning
             SlotKey slot,
             DayBucket dayBucket,
             MoodLean? moodLean,
-            IReadOnlyList<string> userSkipIds,
             DateTimeOffset utcHour,
             out bool leanIgnored,
-            out bool skipsIgnored,
             out bool poolFallback,
             IReadOnlySet<string> alreadyUsed)
         {
             leanIgnored = false;
-            skipsIgnored = false;
             poolFallback = false;
 
             IReadOnlyList<PoolEntry> pool = GetPool(pools, slot, dayBucket);
@@ -39,36 +35,18 @@ namespace Changsta.Ai.Core.BusinessProcesses.NowSpinning
                 poolFallback = true;
             }
 
-            var skipSet = new HashSet<string>(userSkipIds, StringComparer.OrdinalIgnoreCase);
-
-            List<PoolEntry> filtered = ApplyFilters(pool, moodLean, skipSet, alreadyUsed);
+            List<PoolEntry> filtered = ApplyFilters(pool, moodLean, alreadyUsed);
 
             if (filtered.Count > 0)
             {
-                return SeededPick(filtered, utcHour, userSkipIds, moodLean).Mix;
-            }
-
-            if (userSkipIds.Count > 0)
-            {
-                filtered = ApplyFilters(pool, moodLean, new HashSet<string>(), alreadyUsed);
-
-                if (filtered.Count > 0)
-                {
-                    skipsIgnored = true;
-                    return SeededPick(filtered, utcHour, userSkipIds, moodLean).Mix;
-                }
+                return SeededPick(filtered, utcHour, moodLean).Mix;
             }
 
             leanIgnored = true;
-            if (userSkipIds.Count > 0)
-            {
-                skipsIgnored = true;
-            }
-
-            filtered = ApplyFilters(pool, null, new HashSet<string>(), alreadyUsed);
+            filtered = ApplyFilters(pool, null, alreadyUsed);
 
             return filtered.Count > 0
-                ? SeededPick(filtered, utcHour, userSkipIds, moodLean).Mix
+                ? SeededPick(filtered, utcHour, moodLean).Mix
                 : null;
         }
 
@@ -85,18 +63,12 @@ namespace Changsta.Ai.Core.BusinessProcesses.NowSpinning
         private static List<PoolEntry> ApplyFilters(
             IReadOnlyList<PoolEntry> pool,
             MoodLean? moodLean,
-            IReadOnlySet<string> skipIds,
             IReadOnlySet<string> alreadyUsed)
         {
             var result = new List<PoolEntry>(pool.Count);
 
             foreach (PoolEntry entry in pool)
             {
-                if (skipIds.Contains(entry.Mix.Id))
-                {
-                    continue;
-                }
-
                 if (alreadyUsed.Contains(entry.Mix.Id))
                 {
                     continue;
@@ -116,7 +88,6 @@ namespace Changsta.Ai.Core.BusinessProcesses.NowSpinning
         private static PoolEntry SeededPick(
             List<PoolEntry> pool,
             DateTimeOffset utcHour,
-            IReadOnlyList<string> userSkipIds,
             MoodLean? moodLean)
         {
             long hourEpochMs = new DateTimeOffset(
@@ -129,40 +100,11 @@ namespace Changsta.Ai.Core.BusinessProcesses.NowSpinning
                 TimeSpan.Zero)
                 .ToUnixTimeMilliseconds();
 
-            int skipHash = ComputeSkipHashFnv(userSkipIds);
             int moodHash = moodLean.HasValue ? ((int)moodLean.Value + 1) * 397 : 0;
-            int seed = unchecked((int)(hourEpochMs + skipHash) ^ moodHash);
+            int seed = unchecked((int)hourEpochMs ^ moodHash);
 
             int index = new Random(seed).Next(pool.Count);
             return pool[index];
-        }
-
-        private static int ComputeSkipHashFnv(IReadOnlyList<string> skipIds)
-        {
-            if (skipIds.Count == 0)
-            {
-                return 0;
-            }
-
-            string[] sorted = skipIds
-                .OrderBy(x => x, StringComparer.Ordinal)
-                .ToArray();
-
-            uint hash = 2166136261u;
-
-            foreach (string id in sorted)
-            {
-                foreach (char c in id)
-                {
-                    hash ^= (byte)(c & 0xFF);
-                    hash *= 16777619u;
-                }
-
-                hash ^= 0xFFu;
-                hash *= 16777619u;
-            }
-
-            return (int)hash;
         }
 
         private static IReadOnlyList<PoolEntry> GetPool(

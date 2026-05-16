@@ -55,7 +55,6 @@ namespace Changsta.Ai.Core.BusinessProcesses.NowSpinning
             var crossLaneUsed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var nowMixes = new Mix?[LaneOrder.Length];
             var leanIgnoredFlags = new bool[LaneOrder.Length];
-            var skipsIgnoredFlags = new bool[LaneOrder.Length];
             var poolFallbackFlags = new bool[LaneOrder.Length];
 
             foreach (int laneIndex in shuffledIndexes)
@@ -65,16 +64,13 @@ namespace Changsta.Ai.Core.BusinessProcesses.NowSpinning
                     slot,
                     dayBucket,
                     LaneOrder[laneIndex],
-                    request.SkipIds,
                     request.UtcNow,
                     out bool leanIgnored,
-                    out bool skipsIgnored,
                     out bool poolFallback,
                     crossLaneUsed);
 
                 nowMixes[laneIndex] = nowMix;
                 leanIgnoredFlags[laneIndex] = leanIgnored;
-                skipsIgnoredFlags[laneIndex] = skipsIgnored;
                 poolFallbackFlags[laneIndex] = poolFallback;
 
                 if (nowMix is not null)
@@ -101,7 +97,6 @@ namespace Changsta.Ai.Core.BusinessProcesses.NowSpinning
 
                 Mix? nowMix = nowMixes[i];
                 bool leanIgnored = leanIgnoredFlags[i];
-                bool skipsIgnored = skipsIgnoredFlags[i];
                 bool poolFallback = poolFallbackFlags[i];
 
                 var laneUsed = new HashSet<string>(crossLaneUsed, StringComparer.OrdinalIgnoreCase);
@@ -120,9 +115,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.NowSpinning
                         scheduleSlot,
                         scheduleDayBucket,
                         lean,
-                        request.SkipIds,
                         slotUtc,
-                        out _,
                         out _,
                         out _,
                         laneUsed);
@@ -146,7 +139,6 @@ namespace Changsta.Ai.Core.BusinessProcesses.NowSpinning
                     Mix = nowMix,
                     Schedule = schedule,
                     LeanIgnored = leanIgnored,
-                    SkipsIgnored = skipsIgnored,
                     PoolFallback = poolFallback,
                     NoMixAvailable = nowMix is null,
                 };

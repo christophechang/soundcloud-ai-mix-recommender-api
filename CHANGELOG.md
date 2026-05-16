@@ -2,6 +2,10 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.28
+
+- **Remove skip from Now Spinning endpoints.** Removed the `skip` query parameter and `skipsIgnored` response field from both `GET /api/catalog/now-spinning` and `GET /api/catalog/now-spinning/program`. Skip was a recommendation-style concept that conflicted with the broadcast-schedule model of these endpoints; the seeded hourly pick already provides deterministic, repeatable selection without per-user state.
+
 ## v1.27
 
 - **Now Spinning program endpoint.** New `GET /api/catalog/now-spinning/program` returns all five mood lanes (default, darker, warmer, slower, faster) in a single call. Now-playing picks are guaranteed unique across lanes via a shared exclusion set drawn in shuffled order per UTC hour. Response is cached in-memory until the next hour boundary.

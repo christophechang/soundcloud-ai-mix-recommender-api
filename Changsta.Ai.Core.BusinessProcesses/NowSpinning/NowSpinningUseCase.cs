@@ -41,10 +41,8 @@ namespace Changsta.Ai.Core.BusinessProcesses.NowSpinning
                 slot,
                 dayBucket,
                 request.MoodLean,
-                request.SkipIds,
                 request.UtcNow,
                 out bool leanIgnored,
-                out bool skipsIgnored,
                 out bool poolFallback,
                 usedIds);
 
@@ -84,9 +82,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.NowSpinning
                     scheduleSlot,
                     scheduleDayBucket,
                     request.MoodLean,
-                    request.SkipIds,
                     slotUtc,
-                    out _,
                     out _,
                     out _,
                     usedIds);
@@ -113,7 +109,6 @@ namespace Changsta.Ai.Core.BusinessProcesses.NowSpinning
                 Mix = nowMix,
                 Schedule = schedule,
                 LeanIgnored = leanIgnored,
-                SkipsIgnored = skipsIgnored,
                 PoolFallback = poolFallback,
             };
         }

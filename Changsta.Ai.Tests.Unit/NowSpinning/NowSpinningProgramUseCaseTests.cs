@@ -87,14 +87,12 @@ namespace Changsta.Ai.Tests.Unit.NowSpinning
         private static NowSpinningProgramRequestDto MakeRequest(
             DateTimeOffset at,
             int scheduleCount = 0,
-            int utcOffsetMinutes = 0,
-            string[]? skipIds = null)
+            int utcOffsetMinutes = 0)
         {
             return new NowSpinningProgramRequestDto
             {
                 UtcNow = at,
                 UtcOffsetMinutes = utcOffsetMinutes,
-                SkipIds = skipIds ?? Array.Empty<string>(),
                 ScheduleCount = scheduleCount,
             };
         }
