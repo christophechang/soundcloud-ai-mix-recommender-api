@@ -2,6 +2,11 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.27
+
+- **Now Spinning program endpoint.** New `GET /api/catalog/now-spinning/program` returns all five mood lanes (default, darker, warmer, slower, faster) in a single call. Now-playing picks are guaranteed unique across lanes via a shared exclusion set drawn in shuffled order per UTC hour. Response is cached in-memory until the next hour boundary.
+- **Refactor: shared draw and mapping helpers.** Extracted `NowSpinningDrawer` and `NowSpinningMixMapper` to eliminate duplicated logic between the two Now Spinning use cases and controllers.
+
 ## v1.26
 
 - **Now Spinning mood lane uniqueness.** Each `moodLean` value (`darker`, `warmer`, `slower`, `faster`) now produces a deterministically distinct mix selection per hour. Mood lean is factored into the seeded pick so different mood lanes never collide on the same mix at the same time slot.
