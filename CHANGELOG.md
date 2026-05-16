@@ -2,6 +2,10 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.26
+
+- **Now Spinning mood lane uniqueness.** Each `moodLean` value (`darker`, `warmer`, `slower`, `faster`) now produces a deterministically distinct mix selection per hour. Mood lean is factored into the seeded pick so different mood lanes never collide on the same mix at the same time slot.
+
 ## v1.25
 
 - **Now Spinning endpoint.** New `GET /api/catalog/now-spinning` returns one pre-scored mix for the current time slot plus a configurable schedule of upcoming slots. Scoring assigns every mix to one of 24 pools (6 time slots × 4 day buckets) based on BPM, warmth, and energy. Pick is seeded by UTC hour + skip list so all listeners in the same state hear the same mix. Supports `moodLean` filtering (`darker`, `warmer`, `slower`, `faster`), `skip` exclusions, and `utcOffsetMinutes` for local time resolution. Graceful fallback: ignores skip → ignores lean → adjacent slot → 503.
