@@ -173,6 +173,7 @@ builder.Services.AddScoped<IDeleteMixUseCase>(sp =>
 });
 builder.Services.AddScoped<IMixRecommendationUseCase, MixRecommendationUseCase>();
 builder.Services.AddScoped<INowSpinningUseCase, NowSpinningUseCase>();
+builder.Services.AddScoped<INowSpinningProgramUseCase, NowSpinningProgramUseCase>();
 builder.Services.AddScoped<IGetErrorInsightsUseCase, GetErrorInsightsUseCase>();
 builder.Services.AddScoped<IMixAiRecommender, OpenAiMixRecommender>();
 builder.Services.AddScoped<IMoodWeightEnricher, AiMoodWeightEnricher>();
