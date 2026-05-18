@@ -2,6 +2,10 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.29
+
+- **Now Spinning image URL.** `GET /api/catalog/now-spinning` and `GET /api/catalog/now-spinning/program` now include `imageUrl` in each mix response, sourced from the SoundCloud artwork URL stored in the catalog.
+
 ## v1.28
 
 - **Remove skip from Now Spinning endpoints.** Removed the `skip` query parameter and `skipsIgnored` response field from both `GET /api/catalog/now-spinning` and `GET /api/catalog/now-spinning/program`. Skip was a recommendation-style concept that conflicted with the broadcast-schedule model of these endpoints; the seeded hourly pick already provides deterministic, repeatable selection without per-user state.
