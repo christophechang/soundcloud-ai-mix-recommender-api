@@ -12,6 +12,7 @@ namespace Changsta.Ai.Interface.Api.ViewModels
                 Id = mix.Id,
                 Title = mix.Title,
                 Url = mix.Url,
+                ImageUrl = mix.ImageUrl,
                 Genre = mix.Genre,
                 Energy = mix.Energy,
                 Bpm = ComputeBpm(mix),
