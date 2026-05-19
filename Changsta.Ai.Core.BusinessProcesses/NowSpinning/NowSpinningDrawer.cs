@@ -90,18 +90,9 @@ namespace Changsta.Ai.Core.BusinessProcesses.NowSpinning
             DateTimeOffset utcHour,
             MoodLean? moodLean)
         {
-            long hourEpochMs = new DateTimeOffset(
-                utcHour.Year,
-                utcHour.Month,
-                utcHour.Day,
-                utcHour.Hour,
-                0,
-                0,
-                TimeSpan.Zero)
-                .ToUnixTimeMilliseconds();
-
+            int dayNumber = (int)(utcHour.ToUnixTimeSeconds() / 86400);
             int moodHash = moodLean.HasValue ? ((int)moodLean.Value + 1) * 397 : 0;
-            int seed = unchecked((int)hourEpochMs ^ moodHash);
+            int seed = unchecked(dayNumber ^ moodHash);
 
             int index = new Random(seed).Next(pool.Count);
             return pool[index];
