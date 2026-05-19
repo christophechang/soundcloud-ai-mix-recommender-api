@@ -26,7 +26,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
             _cache = cache ?? throw new ArgumentNullException(nameof(cache));
         }
 
-        [HttpGet("now-spinning/program")]
+        [HttpGet("radio/program")]
         public async Task<IActionResult> GetProgramAsync(
             [FromQuery] int utcOffsetMinutes = 0,
             [FromQuery] int schedule = 4,
@@ -44,7 +44,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
                 TimeSpan.Zero)
                 .ToUnixTimeMilliseconds();
 
-            string cacheKey = $"now-spinning-program:{hourEpochMs}:{utcOffsetMinutes}";
+            string cacheKey = $"radio-program:{hourEpochMs}:{utcOffsetMinutes}";
 
             if (_cache.TryGetValue(cacheKey, out NowSpinningProgramResponse? cached))
             {

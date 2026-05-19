@@ -7,6 +7,7 @@ using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Interface.Api.Controllers;
 using Changsta.Ai.Interface.Api.ViewModels;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Changsta.Ai.Tests.Unit.Controllers
@@ -542,11 +543,15 @@ namespace Changsta.Ai.Tests.Unit.Controllers
 
         private static MixCatalogController BuildSut(IReadOnlyList<Mix> mixes)
         {
-            return new MixCatalogController(
+            var sut = new MixCatalogController(
                 new StubMixCatalogueProvider(mixes),
                 new StubCatalogFlushUseCase(),
                 new StubDeleteMixUseCase(),
                 new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+
+            sut.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
+
+            return sut;
         }
 
         private static Mix MakeMix(string id, string genre, params (string Artist, string Title)[] tracks)
