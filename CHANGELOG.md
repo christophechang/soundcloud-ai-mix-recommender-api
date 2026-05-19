@@ -2,6 +2,10 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.31
+
+- **Day-based radio rotation.** The seeded pick for each slot now advances once per calendar day instead of once per hour, ensuring mixes cycle across the full pool day-to-day and avoiding repeated surfacing of the same mixes on consecutive days.
+
 ## v1.30
 
 - **Rename Now Spinning routes to Radio.** `GET /api/catalog/now-spinning` is now `GET /api/catalog/radio` and `GET /api/catalog/now-spinning/program` is now `GET /api/catalog/radio/program`.
