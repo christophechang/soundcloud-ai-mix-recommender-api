@@ -22,7 +22,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
             _useCase = useCase ?? throw new ArgumentNullException(nameof(useCase));
         }
 
-        [HttpGet("now-spinning")]
+        [HttpGet("radio")]
         public async Task<IActionResult> GetNowSpinningAsync(
             [FromQuery] int utcOffsetMinutes = 0,
             [FromQuery] string? moodLean = null,

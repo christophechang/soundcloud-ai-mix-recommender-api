@@ -2,6 +2,11 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.30
+
+- **Rename Now Spinning routes to Radio.** `GET /api/catalog/now-spinning` is now `GET /api/catalog/radio` and `GET /api/catalog/now-spinning/program` is now `GET /api/catalog/radio/program`.
+- **Mix catalog total count header.** `GET /api/catalog/mixes` now returns `X-Total-Count` response header containing the total number of matching mixes before pagination.
+
 ## v1.29
 
 - **Now Spinning image URL.** `GET /api/catalog/now-spinning` and `GET /api/catalog/now-spinning/program` now include `imageUrl` in each mix response, sourced from the SoundCloud artwork URL stored in the catalog.

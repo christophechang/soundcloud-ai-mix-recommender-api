@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -201,6 +202,8 @@ namespace Changsta.Ai.Interface.Api.Controllers
             Mix[] ordered = filtered
                 .OrderByDescending(m => m.PublishedAt ?? DateTimeOffset.MinValue)
                 .ToArray();
+
+            Response.Headers.Append("X-Total-Count", ordered.Length.ToString(CultureInfo.InvariantCulture));
 
             return Ok(BuildPage(ordered, page, pageSize));
         }
