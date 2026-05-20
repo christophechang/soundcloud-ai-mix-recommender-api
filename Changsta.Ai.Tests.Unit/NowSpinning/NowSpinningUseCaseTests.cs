@@ -18,6 +18,10 @@ namespace Changsta.Ai.Tests.Unit.NowSpinning
         private static readonly DateTimeOffset PrimetimeFriday =
             new DateTimeOffset(2026, 5, 15, 22, 0, 0, TimeSpan.Zero);
 
+        // 2026-05-15 is a Friday, UTC 09:00 → morning (warmth target +0.5)
+        private static readonly DateTimeOffset MorningFriday =
+            new DateTimeOffset(2026, 5, 15, 9, 0, 0, TimeSpan.Zero);
+
         [Test]
         public async Task GetAsync_returns_mix_from_matching_slot()
         {
@@ -45,9 +49,35 @@ namespace Changsta.Ai.Tests.Unit.NowSpinning
         }
 
         [Test]
-        public async Task GetAsync_different_mood_lean_returns_different_mix()
+        public async Task GetAsync_different_days_same_week_return_different_mixes()
         {
-            // All mixes satisfy both darker and warmer — pool overlap guaranteed
+            // Seven consecutive primetime hours spanning the same Unix week — pool of 7
+            // ensures each position maps to a distinct entry (no wrap-around).
+            var mixes = new[]
+            {
+                MakePrimetimeMix("mon"), MakePrimetimeMix("tue"), MakePrimetimeMix("wed"),
+                MakePrimetimeMix("thu"), MakePrimetimeMix("fri"), MakePrimetimeMix("sat"),
+                MakePrimetimeMix("sun"),
+            };
+            var useCase = MakeUseCase(mixes);
+
+            // 2026-05-14 through 2026-05-20 — all fall within Unix week 2941 (epoch-aligned,
+            // week starts Thu; days 20587–20593), so shuffle seed is constant across all 7
+            // and positions 0–6 are guaranteed distinct.
+            var ids = new System.Collections.Generic.List<string>();
+            for (int d = 0; d < 7; d++)
+            {
+                DateTimeOffset day = new DateTimeOffset(2026, 5, 14, 22, 0, 0, TimeSpan.Zero).AddDays(d);
+                var result = await useCase.GetAsync(MakeRequest(day), CancellationToken.None);
+                ids.Add(result.Mix!.Id);
+            }
+
+            ids.Should().OnlyHaveUniqueItems();
+        }
+
+        [Test]
+        public async Task GetAsync_darker_lean_returns_mix_with_darker_tag()
+        {
             var mixes = new[]
             {
                 MakeMix("a", bpmMin: 138, bpmMax: 138, warmth: -0.6, energy: "peak"),
@@ -59,12 +89,36 @@ namespace Changsta.Ai.Tests.Unit.NowSpinning
             };
             var useCase = MakeUseCase(mixes);
 
-            var rDefault = await useCase.GetAsync(MakeRequest(PrimetimeFriday), CancellationToken.None);
-            var rDarker = await useCase.GetAsync(MakeRequest(PrimetimeFriday, moodLean: MoodLean.Darker), CancellationToken.None);
-            var rWarmer = await useCase.GetAsync(MakeRequest(PrimetimeFriday, moodLean: MoodLean.Warmer), CancellationToken.None);
+            var result = await useCase.GetAsync(
+                MakeRequest(PrimetimeFriday, moodLean: MoodLean.Darker),
+                CancellationToken.None);
 
-            rDarker.Mix!.Id.Should().NotBe(rDefault.Mix!.Id);
-            rWarmer.Mix!.Id.Should().NotBe(rDefault.Mix!.Id);
+            result.LeanIgnored.Should().BeFalse();
+            result.Mix!.Warmth.Should().BeLessThan(-0.3);
+        }
+
+        [Test]
+        public async Task GetAsync_warmer_lean_returns_mix_with_warmer_tag()
+        {
+            // Morning slot warmth target is +0.5 — warm mixes score well and make the pool.
+            // bpmTarget = 122 (Friday morning), energy set = {low-mid, mid, chilled, low}.
+            var mixes = new[]
+            {
+                MakeMix("w1", bpmMin: 122, bpmMax: 122, warmth: 0.7, energy: "mid"),
+                MakeMix("w2", bpmMin: 122, bpmMax: 122, warmth: 0.5, energy: "mid"),
+                MakeMix("w3", bpmMin: 122, bpmMax: 122, warmth: 0.4, energy: "mid"),
+                MakeMix("c1", bpmMin: 122, bpmMax: 122, warmth: 0.0, energy: "mid"),
+                MakeMix("c2", bpmMin: 122, bpmMax: 122, warmth: -0.3, energy: "mid"),
+                MakeMix("c3", bpmMin: 122, bpmMax: 122, warmth: -0.6, energy: "mid"),
+            };
+            var useCase = MakeUseCase(mixes);
+
+            var result = await useCase.GetAsync(
+                MakeRequest(MorningFriday, moodLean: MoodLean.Warmer),
+                CancellationToken.None);
+
+            result.LeanIgnored.Should().BeFalse();
+            result.Mix!.Warmth.Should().BeGreaterThan(0.3);
         }
 
         [Test]
