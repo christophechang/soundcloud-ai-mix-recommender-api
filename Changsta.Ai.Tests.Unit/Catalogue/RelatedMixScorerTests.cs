@@ -48,7 +48,7 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
         }
 
         [Test]
-        public void ComputeRelatedMixes_shared_artist_scores_above_genre_only()
+        public void ComputeRelatedMixes_same_genre_scores_above_single_shared_artist_different_genre()
         {
             var target = MakeMix(
                 "1",
@@ -56,7 +56,7 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
                 genre: "dnb",
                 tracklist: new[] { new Track { Artist = "Skeptical", Title = "Sequence" } });
 
-            var sharedArtist = MakeMix(
+            var sharedArtistDiffGenre = MakeMix(
                 "2",
                 "https://sc.test/mix-2",
                 genre: "house",
@@ -64,12 +64,12 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
 
             var sameGenreOnly = MakeMix("3", "https://sc.test/mix-3", genre: "dnb");
 
-            var mixes = new[] { target, sharedArtist, sameGenreOnly };
+            var mixes = new[] { target, sharedArtistDiffGenre, sameGenreOnly };
 
             var result = RelatedMixScorer.ComputeRelatedMixes(mixes, out _);
 
-            result[0].RelatedMixes[0].Url.Should().Be("https://sc.test/mix-2");
-            result[0].RelatedMixes[1].Url.Should().Be("https://sc.test/mix-3");
+            result[0].RelatedMixes[0].Url.Should().Be("https://sc.test/mix-3");
+            result[0].RelatedMixes[1].Url.Should().Be("https://sc.test/mix-2");
         }
 
         [Test]
@@ -296,6 +296,38 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             changed.Should().BeTrue();
         }
 
+        [Test]
+        public void ComputeRelatedMixes_warmth_close_scores_above_warmth_near()
+        {
+            var target = MakeMix("1", "https://sc.test/mix-1", genre: "dnb", warmth: 0.5);
+
+            var warmthClose = MakeMix("2", "https://sc.test/close", genre: "dnb", warmth: 0.55);
+            var warmthNear = MakeMix("3", "https://sc.test/near", genre: "dnb", warmth: 0.8);
+            var noWarmth = MakeMix("4", "https://sc.test/none", genre: "dnb");
+
+            var mixes = new[] { target, warmthClose, warmthNear, noWarmth };
+
+            var result = RelatedMixScorer.ComputeRelatedMixes(mixes, out _);
+
+            result[0].RelatedMixes[0].Url.Should().Be("https://sc.test/close");
+            result[0].RelatedMixes[1].Url.Should().Be("https://sc.test/near");
+        }
+
+        [Test]
+        public void ComputeRelatedMixes_bpm_tight_match_scores_above_loose_overlap()
+        {
+            var target = MakeMix("1", "https://sc.test/mix-1", genre: "dnb", bpmMin: 170, bpmMax: 175);
+
+            var tightMatch = MakeMix("2", "https://sc.test/tight", genre: "dnb", bpmMin: 171, bpmMax: 174);
+            var looseOverlap = MakeMix("3", "https://sc.test/loose", genre: "dnb", bpmMin: 174, bpmMax: 182);
+
+            var mixes = new[] { target, tightMatch, looseOverlap };
+
+            var result = RelatedMixScorer.ComputeRelatedMixes(mixes, out _);
+
+            result[0].RelatedMixes[0].Url.Should().Be("https://sc.test/tight");
+        }
+
         private static Mix MakeMix(
             string id,
             string url,
@@ -307,7 +339,8 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             IReadOnlyList<string>? moods = null,
             int? bpmMin = null,
             int? bpmMax = null,
-            DateTimeOffset? publishedAt = null)
+            DateTimeOffset? publishedAt = null,
+            double? warmth = null)
         {
             return new Mix
             {
@@ -322,6 +355,7 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
                 BpmMin = bpmMin,
                 BpmMax = bpmMax,
                 PublishedAt = publishedAt,
+                Warmth = warmth,
             };
         }
     }
