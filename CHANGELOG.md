@@ -2,6 +2,10 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.32
+
+- **Weekly mix rotation guarantee.** The radio slot picker now uses a week-seeded Fisher-Yates shuffle so each day of a Unix week maps to a distinct pool position. Within any 7-day window falling in the same week, the same mix will not repeat. The week resets to a fresh shuffle each Sunday-aligned Unix week boundary.
+
 ## v1.31
 
 - **Day-based radio rotation.** The seeded pick for each slot now advances once per calendar day instead of once per hour, ensuring mixes cycle across the full pool day-to-day and avoiding repeated surfacing of the same mixes on consecutive days.

@@ -91,11 +91,29 @@ namespace Changsta.Ai.Core.BusinessProcesses.NowSpinning
             MoodLean? moodLean)
         {
             int dayNumber = (int)(utcHour.ToUnixTimeSeconds() / 86400);
+            int weekNumber = dayNumber / 7;
             int moodHash = moodLean.HasValue ? ((int)moodLean.Value + 1) * 397 : 0;
-            int seed = unchecked(dayNumber ^ moodHash);
+            int weekSeed = unchecked(weekNumber ^ moodHash);
 
-            int index = new Random(seed).Next(pool.Count);
-            return pool[index];
+            // Shuffle pool indices once per week so each day of the week maps to a
+            // distinct entry — prevents the same mix being picked on multiple days.
+            int[] indices = new int[pool.Count];
+            for (int i = 0; i < indices.Length; i++)
+            {
+                indices[i] = i;
+            }
+
+            var rng = new Random(weekSeed);
+            for (int i = indices.Length - 1; i > 0; i--)
+            {
+                int j = rng.Next(i + 1);
+                int tmp = indices[i];
+                indices[i] = indices[j];
+                indices[j] = tmp;
+            }
+
+            int position = (dayNumber % 7) % pool.Count;
+            return pool[indices[position]];
         }
 
         private static IReadOnlyList<PoolEntry> GetPool(
