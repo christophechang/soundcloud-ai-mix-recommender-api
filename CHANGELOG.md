@@ -2,6 +2,10 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.33
+
+- **Related mix scoring improvements.** Genre weight raised (6 → 10) to act as a firmer anchor. BPM matching is now graduated (tight < 3 BPM diff = +3, loose < 8 BPM = +2, range overlap = +1) instead of a flat +1 binary. Warmth proximity scoring added (+2 for delta < 0.2, +1 for delta < 0.5) using the existing `Warmth` field that was previously unused.
+
 ## v1.32
 
 - **Weekly mix rotation guarantee.** The radio slot picker now uses a week-seeded Fisher-Yates shuffle so each day of a Unix week maps to a distinct pool position. Within any 7-day window falling in the same week, the same mix will not repeat. The week resets to a fresh shuffle each Sunday-aligned Unix week boundary.

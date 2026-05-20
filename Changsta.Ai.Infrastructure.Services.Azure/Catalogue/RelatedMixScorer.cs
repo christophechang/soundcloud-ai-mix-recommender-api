@@ -13,9 +13,13 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
         private const int MaxSharedMoodsCap = 3;
         private const int ScoreSharedTrack = 15;
         private const int ScoreSharedArtist = 8;
-        private const int ScoreSameGenre = 6;
+        private const int ScoreSameGenre = 10;
         private const int ScoreSameEnergy = 3;
         private const int ScoreSharedMood = 2;
+        private const int ScoreWarmthClose = 2;
+        private const int ScoreWarmthNear = 1;
+        private const int ScoreBpmClose = 3;
+        private const int ScoreBpmNear = 2;
         private const int ScoreBpmOverlap = 1;
 
         public static IReadOnlyList<Mix> ComputeRelatedMixes(IReadOnlyList<Mix> mixes, out bool changed)
@@ -100,22 +104,60 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 .Count(m => targetMoods.Contains(m.ToLowerInvariant()));
             score += Math.Min(sharedMoods, MaxSharedMoodsCap) * ScoreSharedMood;
 
-            if (BpmOverlap(target, candidate))
-            {
-                score += ScoreBpmOverlap;
-            }
+            score += WarmthScore(target, candidate);
+            score += BpmScore(target, candidate);
 
             return score;
         }
 
-        private static bool BpmOverlap(Mix a, Mix b)
+        private static int WarmthScore(Mix a, Mix b)
+        {
+            if (a.Warmth is null || b.Warmth is null)
+            {
+                return 0;
+            }
+
+            double delta = Math.Abs(a.Warmth.Value - b.Warmth.Value);
+            if (delta < 0.2)
+            {
+                return ScoreWarmthClose;
+            }
+
+            if (delta < 0.5)
+            {
+                return ScoreWarmthNear;
+            }
+
+            return 0;
+        }
+
+        private static int BpmScore(Mix a, Mix b)
         {
             if (a.BpmMin is null || a.BpmMax is null || b.BpmMin is null || b.BpmMax is null)
             {
-                return false;
+                return 0;
             }
 
-            return a.BpmMin <= b.BpmMax && b.BpmMin <= a.BpmMax;
+            int aMid = (a.BpmMin.Value + a.BpmMax.Value) / 2;
+            int bMid = (b.BpmMin.Value + b.BpmMax.Value) / 2;
+            int diff = Math.Abs(aMid - bMid);
+
+            if (diff < 3)
+            {
+                return ScoreBpmClose;
+            }
+
+            if (diff < 8)
+            {
+                return ScoreBpmNear;
+            }
+
+            if (a.BpmMin <= b.BpmMax && b.BpmMin <= a.BpmMax)
+            {
+                return ScoreBpmOverlap;
+            }
+
+            return 0;
         }
 
         private static HashSet<(string, string)> BuildTrackSet(IReadOnlyList<Track> tracks)
