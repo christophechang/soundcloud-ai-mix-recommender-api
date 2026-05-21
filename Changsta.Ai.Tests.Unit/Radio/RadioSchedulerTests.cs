@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Changsta.Ai.Core.BusinessProcesses.Radio;
 using Changsta.Ai.Core.Domain;
+using Changsta.Ai.Core.Exceptions;
 using FluentAssertions;
 using NUnit.Framework;
 
@@ -150,10 +151,10 @@ namespace Changsta.Ai.Tests.Unit.Radio
         }
 
         [Test]
-        public void Empty_station_catalogue_throws_InvalidOperationException()
+        public void Empty_station_catalogue_throws_RadioStationUnavailableException()
         {
             Action act = () => Build(Thursday, Catalogue(0, 24, 24));
-            act.Should().Throw<InvalidOperationException>()
+            act.Should().Throw<RadioStationUnavailableException>()
                 .WithMessage("*touchdown-fm*");
         }
 

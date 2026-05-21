@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Changsta.Ai.Core.BusinessProcesses.NowSpinning;
 using Changsta.Ai.Core.Domain;
+using Changsta.Ai.Core.Exceptions;
 
 namespace Changsta.Ai.Core.BusinessProcesses.Radio
 {
@@ -28,9 +29,9 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
 
                 if (eligible.Count == 0)
                 {
-                    throw new InvalidOperationException(
-                        $"Station '{station.Id}' has no eligible mixes in the catalogue. " +
-                        $"Expected genres: [{string.Join(", ", station.Genres)}].");
+                    string genres = string.Join(", ", station.Genres);
+                    string msg = $"Station '{station.Id}' has no eligible mixes in the catalogue. Expected genres: [{genres}].";
+                    throw new RadioStationUnavailableException(station.Id, msg);
                 }
 
                 int bpmOffset = RadioStationDefinitions.GetBpmOffset(station.Id);
