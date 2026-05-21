@@ -25,7 +25,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
         public async Task GetAsync_default_station_id_is_touchdown_fm()
         {
             RadioScheduleResultDto r = await Run(Catalogue());
-            r.DefaultStationId.Should().Be("touchdown-fm");
+            r.DefaultStationId.Should().Be("140");
         }
 
         [Test]
@@ -33,7 +33,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
         {
             RadioScheduleResultDto r = await Run(Catalogue());
             r.Stations.Where(s => s.IsDefault).Should().HaveCount(1);
-            r.Stations.Single(s => s.IsDefault).Id.Should().Be("touchdown-fm");
+            r.Stations.Single(s => s.IsDefault).Id.Should().Be("140");
         }
 
         [Test]

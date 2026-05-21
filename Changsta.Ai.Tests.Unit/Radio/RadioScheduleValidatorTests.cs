@@ -20,27 +20,27 @@ namespace Changsta.Ai.Tests.Unit.Radio
         [Test]
         public void Missing_slots_produces_SlotCountMismatch()
         {
-            var violations = RadioScheduleValidator.Validate(ScheduleWithMissingSlot("touchdown-fm"));
+            var violations = RadioScheduleValidator.Validate(ScheduleWithMissingSlot("140"));
             violations.Should().Contain(v =>
-                v.StationId == "touchdown-fm" &&
+                v.StationId == "140" &&
                 v.Rule == RadioScheduleRule.SlotCountMismatch);
         }
 
         [Test]
         public void Wrong_genre_on_station_produces_GenreMismatch()
         {
-            var violations = RadioScheduleValidator.Validate(ScheduleWithWrongGenre("touchdown-fm", "house"));
+            var violations = RadioScheduleValidator.Validate(ScheduleWithWrongGenre("140", "house"));
             violations.Should().Contain(v =>
-                v.StationId == "touchdown-fm" &&
+                v.StationId == "140" &&
                 v.Rule == RadioScheduleRule.GenreMismatch);
         }
 
         [Test]
         public void Repeated_mix_on_same_station_produces_SameStationSameDayRepeat()
         {
-            var violations = RadioScheduleValidator.Validate(ScheduleWithRepeat("touchdown-fm"));
+            var violations = RadioScheduleValidator.Validate(ScheduleWithRepeat("140"));
             violations.Should().Contain(v =>
-                v.StationId == "touchdown-fm" &&
+                v.StationId == "140" &&
                 v.Rule == RadioScheduleRule.SameStationSameDayRepeat);
         }
 

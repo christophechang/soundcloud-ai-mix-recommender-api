@@ -2,6 +2,10 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.35
+
+- **Station rename.** Updated radio station IDs and names: `touchdown-fm` → `140` (Crucial), `deep-signal-fm` → `4x4` (Origin FM), `jungle-pressure` → `170` (Killa FM). Frequencies, descriptions, genres, and schedule data unchanged.
+
 ## v1.34
 
 - **Radio stations API.** Replaced the Now Spinning endpoints with a multi-station radio schedule API. `GET /api/catalog/radio/stations` returns the full schedule across all stations; each station owns a genre cluster with BPM offsets and energy thresholds. The scheduler builds per-station hour slots using a slot scorer that applies energy auditing and clustering penalties. A schedule validator enforces all scheduling rules before the response is returned. Stations that cannot produce a valid schedule return 503.

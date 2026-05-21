@@ -38,7 +38,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
         {
             var ok = (OkObjectResult)await MakeController().GetStationsAsync(CancellationToken.None);
             var response = (RadioResponse)ok.Value!;
-            response.DefaultStationId.Should().Be("touchdown-fm");
+            response.DefaultStationId.Should().Be("140");
         }
 
         [Test]
@@ -128,7 +128,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
         private sealed class ThrowingUseCase : IGetRadioScheduleUseCase
         {
             public Task<RadioScheduleResultDto> GetAsync(CancellationToken ct)
-                => throw new RadioStationUnavailableException("touchdown-fm", "No mixes found.");
+                => throw new RadioStationUnavailableException("140", "No mixes found.");
         }
     }
 }

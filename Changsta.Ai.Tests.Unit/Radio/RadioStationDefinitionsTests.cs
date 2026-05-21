@@ -8,19 +8,19 @@ namespace Changsta.Ai.Tests.Unit.Radio
     [TestFixture]
     public sealed class RadioStationDefinitionsTests
     {
-        [TestCase("uk bass", "touchdown-fm")]
-        [TestCase("breakbeat", "touchdown-fm")]
-        [TestCase("ukg", "touchdown-fm")]
-        [TestCase("hip-hop", "touchdown-fm")]
-        [TestCase("hardcore", "touchdown-fm")]
-        [TestCase("house", "deep-signal-fm")]
-        [TestCase("deep-house", "deep-signal-fm")]
-        [TestCase("electronica", "deep-signal-fm")]
-        [TestCase("techno", "deep-signal-fm")]
-        [TestCase("disco", "deep-signal-fm")]
-        [TestCase("funk", "deep-signal-fm")]
-        [TestCase("jungle", "jungle-pressure")]
-        [TestCase("dnb", "jungle-pressure")]
+        [TestCase("uk bass", "140")]
+        [TestCase("breakbeat", "140")]
+        [TestCase("ukg", "140")]
+        [TestCase("hip-hop", "140")]
+        [TestCase("hardcore", "140")]
+        [TestCase("house", "4x4")]
+        [TestCase("deep-house", "4x4")]
+        [TestCase("electronica", "4x4")]
+        [TestCase("techno", "4x4")]
+        [TestCase("disco", "4x4")]
+        [TestCase("funk", "4x4")]
+        [TestCase("jungle", "170")]
+        [TestCase("dnb", "170")]
         public void Genre_maps_to_correct_station(string genre, string expectedStationId)
         {
             bool found = RadioStationDefinitions.TryGetStationForGenre(genre, out string stationId);
@@ -39,13 +39,13 @@ namespace Changsta.Ai.Tests.Unit.Radio
         public void Genre_lookup_is_case_insensitive()
         {
             RadioStationDefinitions.TryGetStationForGenre("UK Bass", out string stationId).Should().BeTrue();
-            stationId.Should().Be("touchdown-fm");
+            stationId.Should().Be("140");
         }
 
         [Test]
         public void Touchdown_FM_is_default_station()
         {
-            RadioStationDefinitions.DefaultStationId.Should().Be("touchdown-fm");
+            RadioStationDefinitions.DefaultStationId.Should().Be("140");
         }
 
         [Test]
@@ -96,14 +96,14 @@ namespace Changsta.Ai.Tests.Unit.Radio
         [Test]
         public void Jungle_pressure_bpm_offset_is_positive()
         {
-            int offset = RadioStationDefinitions.GetBpmOffset("jungle-pressure");
+            int offset = RadioStationDefinitions.GetBpmOffset("170");
             offset.Should().BeGreaterThan(0, because: "DNB/Jungle BPM is much higher than the global slot targets");
         }
 
         [Test]
         public void Deep_signal_fm_bpm_offset_is_negative()
         {
-            int offset = RadioStationDefinitions.GetBpmOffset("deep-signal-fm");
+            int offset = RadioStationDefinitions.GetBpmOffset("4x4");
             offset.Should().BeLessThan(0, because: "House runs slower than the global slot targets");
         }
 

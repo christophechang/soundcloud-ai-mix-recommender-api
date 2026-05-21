@@ -6,15 +6,15 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
 {
     internal static class RadioStationDefinitions
     {
-        internal const string DefaultStationId = "touchdown-fm";
+        internal const string DefaultStationId = "140";
 
         // Genres use normalized canonical forms produced by GenreNormalizer (all lowercase).
         internal static readonly IReadOnlyList<RadioStation> Stations = new RadioStation[]
         {
             new RadioStation
             {
-                Id = "touchdown-fm",
-                Name = "Touchdown FM",
+                Id = "140",
+                Name = "Crucial",
                 Frequency = "103.5 FM",
                 Description = "UK Bass, Garage, Breaks, Hip-Hop and Hardcore",
                 IsDefault = true,
@@ -22,16 +22,16 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
             },
             new RadioStation
             {
-                Id = "deep-signal-fm",
-                Name = "Deep Signal FM",
+                Id = "4x4",
+                Name = "Origin FM",
                 Frequency = "97.2 FM",
                 Description = "House, Deep House, Electronica, Techno, Disco and Funk",
                 Genres = new[] { "house", "deep-house", "electronica", "techno", "disco", "funk" },
             },
             new RadioStation
             {
-                Id = "jungle-pressure",
-                Name = "Jungle Pressure",
+                Id = "170",
+                Name = "Killa FM",
                 Frequency = "107.7 FM",
                 Description = "Jungle and Drum & Bass",
                 Genres = new[] { "jungle", "dnb" },
@@ -43,9 +43,9 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
         private static readonly IReadOnlyDictionary<string, int> _bpmOffsets =
             new Dictionary<string, int>(StringComparer.Ordinal)
             {
-                ["touchdown-fm"] = 0,    // garage/breaks align with global targets (110-138)
-                ["deep-signal-fm"] = -15,  // house runs 100-125 BPM
-                ["jungle-pressure"] = +38, // DNB/Jungle runs 160-180 BPM
+                ["140"] = 0,    // garage/breaks align with global targets (110-138)
+                ["4x4"] = -15,  // house runs 100-125 BPM
+                ["170"] = +38, // DNB/Jungle runs 160-180 BPM
             };
 
         private static readonly IReadOnlyDictionary<string, string> _genreToStationId
