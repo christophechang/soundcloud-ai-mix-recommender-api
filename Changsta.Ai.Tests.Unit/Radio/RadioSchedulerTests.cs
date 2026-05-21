@@ -155,15 +155,15 @@ namespace Changsta.Ai.Tests.Unit.Radio
         {
             Action act = () => Build(Thursday, Catalogue(0, 24, 24));
             act.Should().Throw<RadioStationUnavailableException>()
-                .WithMessage("*touchdown-fm*");
+                .WithMessage("*140*");
         }
 
         [Test]
         public void Jungle_pressure_bpm_target_is_higher_than_touchdown_for_same_slot()
         {
             RadioSchedule s = Build(Thursday, Catalogue(30, 30, 30));
-            s.StationSlots.Should().ContainKey("jungle-pressure");
-            s.StationSlots["jungle-pressure"].Should().HaveCount(24);
+            s.StationSlots.Should().ContainKey("170");
+            s.StationSlots["170"].Should().HaveCount(24);
         }
 
         private static RadioSchedule Build(DateOnly date, IEnumerable<Mix> mixes)
