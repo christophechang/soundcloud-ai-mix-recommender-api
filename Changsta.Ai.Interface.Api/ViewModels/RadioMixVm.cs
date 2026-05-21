@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace Changsta.Ai.Interface.Api.ViewModels
 {
-    public sealed class NowSpinningMixVm
+    public sealed class RadioMixVm
     {
         required public string Id { get; init; }
 

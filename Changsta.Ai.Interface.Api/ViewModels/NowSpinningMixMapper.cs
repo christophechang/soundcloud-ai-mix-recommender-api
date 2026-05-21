@@ -5,9 +5,9 @@ namespace Changsta.Ai.Interface.Api.ViewModels
 {
     internal static class NowSpinningMixMapper
     {
-        internal static NowSpinningMixVm MapMix(Mix mix)
+        internal static RadioMixVm MapMix(Mix mix)
         {
-            return new NowSpinningMixVm
+            return new RadioMixVm
             {
                 Id = mix.Id,
                 Title = mix.Title,
