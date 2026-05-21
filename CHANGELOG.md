@@ -2,6 +2,12 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.34
+
+- **Radio stations API.** Replaced the Now Spinning endpoints with a multi-station radio schedule API. `GET /api/catalog/radio/stations` returns the full schedule across all stations; each station owns a genre cluster with BPM offsets and energy thresholds. The scheduler builds per-station hour slots using a slot scorer that applies energy auditing and clustering penalties. A schedule validator enforces all scheduling rules before the response is returned. Stations that cannot produce a valid schedule return 503.
+- **Station-relative BPM and energy scoring.** Slot selection uses station-anchored BPM ranges and an energy audit pass to penalise consecutive high-energy or low-energy clusters, ensuring each station's schedule has audible dynamics.
+- **Threshold fallback.** When no mix clears the primary energy threshold, the scheduler relaxes to a fallback threshold rather than failing, preventing empty slots on sparse catalogs.
+
 ## v1.33
 
 - **Related mix scoring improvements.** Genre weight raised (6 → 10) to act as a firmer anchor. BPM matching is now graduated (tight < 3 BPM diff = +3, loose < 8 BPM = +2, range overlap = +1) instead of a flat +1 binary. Warmth proximity scoring added (+2 for delta < 0.2, +1 for delta < 0.5) using the existing `Warmth` field that was previously unused.
