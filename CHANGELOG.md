@@ -2,6 +2,10 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.37
+
+- **Radio mix intro text.** `RadioMixVm` now includes an optional `intro` field, sourced from the mix's `Intro` property. Exposed through all radio station endpoints.
+
 ## v1.36
 
 - **Station rename.** Renamed radio station "Crucial" to "Crucial FM".

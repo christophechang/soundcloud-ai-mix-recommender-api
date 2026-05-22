@@ -11,6 +11,8 @@ namespace Changsta.Ai.Interface.Api.ViewModels
 
         required public string Url { get; init; }
 
+        public string? Intro { get; init; }
+
         public string? ImageUrl { get; init; }
 
         required public string Genre { get; init; }
