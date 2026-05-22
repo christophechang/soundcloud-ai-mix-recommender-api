@@ -53,6 +53,17 @@ namespace Changsta.Ai.Tests.Unit.Radio
         }
 
         [Test]
+        public async Task GetStationsAsync_current_slot_mix_includes_intro()
+        {
+            var ok = (OkObjectResult)await MakeController().GetStationsAsync(CancellationToken.None);
+            var response = (RadioResponse)ok.Value!;
+            foreach (RadioStationVm station in response.Stations)
+            {
+                station.CurrentSlot.Mix.Intro.Should().Be($"Intro copy for mix-{station.Id}.");
+            }
+        }
+
+        [Test]
         public async Task GetStationsAsync_each_station_has_frequency()
         {
             var ok = (OkObjectResult)await MakeController().GetStationsAsync(CancellationToken.None);
@@ -111,6 +122,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
             Id = id,
             Title = $"A - {id}",
             Url = $"https://sc.test/{id}",
+            Intro = $"Intro copy for {id}.",
             Genre = genre,
             Energy = "mid",
             BpmMin = 125,
