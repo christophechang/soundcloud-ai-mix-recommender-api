@@ -14,7 +14,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
             new RadioStation
             {
                 Id = "140",
-                Name = "Crucial",
+                Name = "Crucial FM",
                 Frequency = "103.5 FM",
                 Description = "UK Bass, Garage, Breaks, Hip-Hop and Hardcore",
                 IsDefault = true,

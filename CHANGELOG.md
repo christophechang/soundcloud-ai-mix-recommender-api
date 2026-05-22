@@ -2,6 +2,10 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.36
+
+- **Station rename.** Renamed radio station "Crucial" to "Crucial FM".
+
 ## v1.35
 
 - **Station rename.** Updated radio station IDs and names: `touchdown-fm` → `140` (Crucial), `deep-signal-fm` → `4x4` (Origin FM), `jungle-pressure` → `170` (Killa FM). Frequencies, descriptions, genres, and schedule data unchanged.
