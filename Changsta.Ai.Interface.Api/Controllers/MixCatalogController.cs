@@ -328,7 +328,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
             CancellationToken cancellationToken = default)
         {
             IReadOnlyList<Mix> mixes = await _catalogueProvider
-                .GetLatestAsync(CatalogMaxItems, cancellationToken)
+                .GetLatestAsync(int.MaxValue, cancellationToken)
                 .ConfigureAwait(false);
 
             Mix? match = mixes.FirstOrDefault(m =>
