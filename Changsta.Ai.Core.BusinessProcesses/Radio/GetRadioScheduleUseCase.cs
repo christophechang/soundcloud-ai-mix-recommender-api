@@ -52,10 +52,12 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
                 {
                     Id = station.Id,
                     Slug = station.Slug,
+                    Strapline = station.Strapline,
                     Name = station.Name,
                     Frequency = station.Frequency,
                     Description = station.Description,
                     IsDefault = station.IsDefault,
+                    Genres = station.Genres,
                     CurrentSlot = currentSlot,
                     TodaySlots = todaySlots,
                 });

@@ -94,6 +94,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
                 {
                     Id = s.Id,
                     Slug = s.Slug,
+                    Strapline = s.Strapline,
                     Name = s.Name,
                     Frequency = s.Frequency,
                     Description = s.Description,

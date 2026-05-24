@@ -2,6 +2,11 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.39
+
+- **Station strapline field.** Each station in the radio API response now includes a `strapline` string (e.g. `"For the Breaks Headz"`).
+- **Station genres field.** Each station now exposes its programmed `genres` string array, sourced directly from the scheduler definitions.
+
 ## v1.38
 
 - **Station slug field.** Each station in the radio API response now includes a `slug` property (`crucial-fm`, `origin-fm`, `killa-fm`) for use in URLs and routing.
