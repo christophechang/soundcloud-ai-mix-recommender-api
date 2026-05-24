@@ -2,6 +2,11 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.38
+
+- **Station slug field.** Each station in the radio API response now includes a `slug` property (`crucial-fm`, `origin-fm`, `killa-fm`) for use in URLs and routing.
+- **Internal NowSpinning rename.** Internal `NowSpinning` namespace and `NowSpinningMixMapper` class renamed to `Radio`. No API contract changes.
+
 ## v1.37
 
 - **Radio mix intro text.** `RadioMixVm` now includes an optional `intro` field, sourced from the mix's `Intro` property. Exposed through all radio station endpoints.

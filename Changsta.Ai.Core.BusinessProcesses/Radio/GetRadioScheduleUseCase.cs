@@ -51,6 +51,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
                 stations.Add(new RadioStationScheduleDto
                 {
                     Id = station.Id,
+                    Slug = station.Slug,
                     Name = station.Name,
                     Frequency = station.Frequency,
                     Description = station.Description,

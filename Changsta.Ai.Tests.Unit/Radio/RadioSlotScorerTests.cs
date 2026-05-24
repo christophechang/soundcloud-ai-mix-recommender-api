@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using Changsta.Ai.Core.BusinessProcesses.NowSpinning;
 using Changsta.Ai.Core.BusinessProcesses.Radio;
 using Changsta.Ai.Core.Domain;
 using FluentAssertions;

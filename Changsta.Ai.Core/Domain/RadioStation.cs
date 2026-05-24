@@ -7,6 +7,8 @@ namespace Changsta.Ai.Core.Domain
     {
         required public string Id { get; init; }
 
+        required public string Slug { get; init; }
+
         required public string Name { get; init; }
 
         required public string Frequency { get; init; }

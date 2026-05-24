@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Changsta.Ai.Core.BusinessProcesses.NowSpinning;
 using Changsta.Ai.Core.Domain;
 
 namespace Changsta.Ai.Core.BusinessProcesses.Radio

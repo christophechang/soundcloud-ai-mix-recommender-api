@@ -54,6 +54,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
             new RadioStationVm
             {
                 Id = s.Id,
+                Slug = s.Slug,
                 Name = s.Name,
                 Frequency = s.Frequency,
                 Description = s.Description,
@@ -66,7 +67,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
             new RadioSlotVm
             {
                 Hour = slot.Hour,
-                Mix = NowSpinningMixMapper.MapMix(slot.Mix),
+                Mix = RadioMixMapper.MapMix(slot.Mix),
                 IsCurrent = slot.IsCurrent,
                 Warnings = slot.AuditWarnings,
             };

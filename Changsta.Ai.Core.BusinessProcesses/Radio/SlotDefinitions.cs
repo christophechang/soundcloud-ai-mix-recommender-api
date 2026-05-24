@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Changsta.Ai.Core.BusinessProcesses.NowSpinning
+namespace Changsta.Ai.Core.BusinessProcesses.Radio
 {
     internal static class SlotDefinitions
     {
