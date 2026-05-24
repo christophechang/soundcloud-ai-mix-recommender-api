@@ -9,7 +9,11 @@ namespace Changsta.Ai.Core.Dtos
 
         required public string Slug { get; init; }
 
+        required public string Strapline { get; init; }
+
         required public string Name { get; init; }
+
+        public IReadOnlyList<string> Genres { get; init; } = Array.Empty<string>();
 
         required public string Frequency { get; init; }
 

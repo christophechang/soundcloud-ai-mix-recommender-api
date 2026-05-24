@@ -55,10 +55,12 @@ namespace Changsta.Ai.Interface.Api.Controllers
             {
                 Id = s.Id,
                 Slug = s.Slug,
+                Strapline = s.Strapline,
                 Name = s.Name,
                 Frequency = s.Frequency,
                 Description = s.Description,
                 IsDefault = s.IsDefault,
+                Genres = s.Genres,
                 CurrentSlot = MapSlot(s.CurrentSlot),
                 TodaySlots = s.TodaySlots.Select(MapSlot).ToArray(),
             };
