@@ -2,6 +2,11 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.40
+
+- **Genre alias normalisation.** `deep-house` is merged into `house` in the station genres response. Mix counts from both are combined for sort ordering. Scheduler internals unchanged.
+- **Genre sort by mix count.** Station `genres` array is now ordered by descending mix count in the current catalogue.
+
 ## v1.39
 
 - **Station strapline field.** Each station in the radio API response now includes a `strapline` string (e.g. `"For the Breaks Headz"`).

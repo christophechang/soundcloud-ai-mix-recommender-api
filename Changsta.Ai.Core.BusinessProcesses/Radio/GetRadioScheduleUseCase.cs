@@ -14,6 +14,12 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
     {
         private const int CatalogMaxItems = 200;
 
+        private static readonly IReadOnlyDictionary<string, string> GenreAliases =
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["deep-house"] = "house",
+            };
+
         private readonly IMixCatalogueProvider _catalogueProvider;
         private readonly RadioScheduler _scheduler;
 
@@ -37,6 +43,13 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
 
             IReadOnlyList<RadioScheduleViolation> violations = RadioScheduleValidator.Validate(schedule);
 
+            var genreCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (Mix mix in mixes)
+            {
+                string normalized = GenreAliases.TryGetValue(mix.Genre, out string? alias) ? alias : mix.Genre;
+                genreCounts[normalized] = genreCounts.TryGetValue(normalized, out int existing) ? existing + 1 : 1;
+            }
+
             var stations = new List<RadioStationScheduleDto>(RadioStationDefinitions.Stations.Count);
 
             foreach (RadioStation station in RadioStationDefinitions.Stations)
@@ -48,6 +61,12 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
                     .Select(s => MapSlot(s, s.Hour == currentHour))
                     .ToArray();
 
+                string[] sortedGenres = station.Genres
+                    .Select(g => GenreAliases.TryGetValue(g, out string? alias) ? alias : g)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderByDescending(g => genreCounts.TryGetValue(g, out int c) ? c : 0)
+                    .ToArray();
+
                 stations.Add(new RadioStationScheduleDto
                 {
                     Id = station.Id,
@@ -57,7 +76,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
                     Frequency = station.Frequency,
                     Description = station.Description,
                     IsDefault = station.IsDefault,
-                    Genres = station.Genres,
+                    Genres = sortedGenres,
                     CurrentSlot = currentSlot,
                     TodaySlots = todaySlots,
                 });
