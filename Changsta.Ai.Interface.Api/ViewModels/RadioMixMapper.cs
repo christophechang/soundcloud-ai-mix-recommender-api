@@ -3,7 +3,7 @@ using Changsta.Ai.Core.Domain;
 
 namespace Changsta.Ai.Interface.Api.ViewModels
 {
-    internal static class NowSpinningMixMapper
+    internal static class RadioMixMapper
     {
         internal static RadioMixVm MapMix(Mix mix)
         {

@@ -1,4 +1,4 @@
-namespace Changsta.Ai.Core.BusinessProcesses.NowSpinning
+namespace Changsta.Ai.Core.BusinessProcesses.Radio
 {
     internal enum SlotKey
     {

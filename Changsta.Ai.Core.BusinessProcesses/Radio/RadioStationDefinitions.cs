@@ -14,6 +14,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
             new RadioStation
             {
                 Id = "140",
+                Slug = "crucial-fm",
                 Name = "Crucial FM",
                 Frequency = "103.5 FM",
                 Description = "UK Bass, Garage, Breaks, Hip-Hop and Hardcore",
@@ -23,6 +24,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
             new RadioStation
             {
                 Id = "4x4",
+                Slug = "origin-fm",
                 Name = "Origin FM",
                 Frequency = "97.2 FM",
                 Description = "House, Deep House, Electronica, Techno, Disco and Funk",
@@ -31,6 +33,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
             new RadioStation
             {
                 Id = "170",
+                Slug = "killa-fm",
                 Name = "Killa FM",
                 Frequency = "107.7 FM",
                 Description = "Jungle and Drum & Bass",

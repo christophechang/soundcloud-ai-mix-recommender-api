@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Changsta.Ai.Core.BusinessProcesses.NowSpinning;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Core.Exceptions;
 

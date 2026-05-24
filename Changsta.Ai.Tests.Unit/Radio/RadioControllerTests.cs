@@ -93,6 +93,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
                 .Select(s => new RadioStationScheduleDto
                 {
                     Id = s.Id,
+                    Slug = s.Slug,
                     Name = s.Name,
                     Frequency = s.Frequency,
                     Description = s.Description,
