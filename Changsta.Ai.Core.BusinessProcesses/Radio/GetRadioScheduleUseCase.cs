@@ -13,12 +13,16 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
     public sealed class GetRadioScheduleUseCase : IGetRadioScheduleUseCase
     {
         private const int CatalogMaxItems = 200;
+        private const string ScheduleTimezoneId = "Europe/London";
 
         private static readonly IReadOnlyDictionary<string, string> GenreAliases =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
                 ["deep-house"] = "house",
             };
+
+        private static readonly TimeZoneInfo ScheduleTimezone =
+            TimeZoneInfo.FindSystemTimeZoneById(ScheduleTimezoneId);
 
         private readonly IMixCatalogueProvider _catalogueProvider;
         private readonly RadioScheduler _scheduler;
@@ -32,8 +36,9 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
         public async Task<RadioScheduleResultDto> GetAsync(CancellationToken cancellationToken)
         {
             DateTimeOffset utcNow = DateTimeOffset.UtcNow;
-            int currentHour = utcNow.Hour;
-            DateOnly scheduleDate = DateOnly.FromDateTime(utcNow.UtcDateTime);
+            DateTime localNow = TimeZoneInfo.ConvertTimeFromUtc(utcNow.UtcDateTime, ScheduleTimezone);
+            int currentHour = localNow.Hour;
+            DateOnly scheduleDate = DateOnly.FromDateTime(localNow);
 
             IReadOnlyList<Mix> mixes = await _catalogueProvider
                 .GetLatestAsync(CatalogMaxItems, cancellationToken)
@@ -86,7 +91,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
             {
                 GeneratedAtUtc = utcNow,
                 ScheduleDate = scheduleDate.ToString("yyyy-MM-dd"),
-                Timezone = "UTC",
+                Timezone = ScheduleTimezoneId,
                 CurrentHour = currentHour,
                 DefaultStationId = RadioStationDefinitions.DefaultStationId,
                 Stations = stations,

@@ -74,7 +74,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
         {
             RadioScheduleResultDto r = await Run(Catalogue());
             r.ScheduleDate.Should().MatchRegex(@"^\d{4}-\d{2}-\d{2}$");
-            r.Timezone.Should().Be("UTC");
+            r.Timezone.Should().Be("Europe/London");
         }
 
         [Test]
