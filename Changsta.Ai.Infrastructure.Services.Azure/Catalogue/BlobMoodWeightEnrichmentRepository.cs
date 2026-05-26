@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Azure;
 using Azure.Identity;
 using Azure.Storage.Blobs;
+using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Infrastructure.Services.Azure.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
