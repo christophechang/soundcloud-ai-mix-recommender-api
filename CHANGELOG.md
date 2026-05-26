@@ -2,6 +2,10 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.41
+
+- **Radio schedule now indexed in Europe/London.** `GET /api/radio/stations` now returns `timezone: "Europe/London"`, with `scheduleDate`, `currentHour`, and each slot's `hour` keyed to London local time (handles BST/GMT automatically). Previously these were UTC-indexed, which caused the schedule to misalign with the UK listener clock. `generatedAtUtc` remains a UTC ISO timestamp.
+
 ## v1.40
 
 - **Genre alias normalisation.** `deep-house` is merged into `house` in the station genres response. Mix counts from both are combined for sort ordering. Scheduler internals unchanged.
