@@ -22,15 +22,15 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
         private const int MaxRetryAttempts = 2;
         private const int RecommendationCacheTtlMinutes = 60;
 
-        private readonly ChatClient chat;
-        private readonly IMemoryCache cache;
-        private readonly ILogger<OpenAiMixRecommender> logger;
+        private readonly ChatClient _chat;
+        private readonly IMemoryCache _cache;
+        private readonly ILogger<OpenAiMixRecommender> _logger;
 
         public OpenAiMixRecommender(IOptions<OpenAiOptions> options, IMemoryCache cache, ILogger<OpenAiMixRecommender> logger)
         {
             var resolvedOptions = options?.Value ?? throw new ArgumentNullException(nameof(options));
-            this.cache = cache ?? throw new ArgumentNullException(nameof(cache));
-            this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
             if (string.IsNullOrWhiteSpace(resolvedOptions.ApiKey))
             {
@@ -42,7 +42,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 throw new InvalidOperationException("OpenAI:Model is not configured.");
             }
 
-            this.chat = new ChatClient(model: resolvedOptions.Model, apiKey: resolvedOptions.ApiKey);
+            _chat = new ChatClient(model: resolvedOptions.Model, apiKey: resolvedOptions.ApiKey);
         }
 
         public async Task<IReadOnlyList<MixAiRecommendation>> RecommendAsync(
@@ -58,10 +58,10 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             if (maxResults <= 0) throw new ArgumentOutOfRangeException(nameof(maxResults));
 
             string cacheKey = BuildCacheKey(question, maxResults);
-            if (this.cache.TryGetValue(cacheKey, out IReadOnlyList<MixAiRecommendation>? cached) && cached != null)
+            if (_cache.TryGetValue(cacheKey, out IReadOnlyList<MixAiRecommendation>? cached) && cached != null)
             {
                 totalStopwatch.Stop();
-                this.logger.LogInformation(
+                _logger.LogInformation(
                     "Recommendation cache hit. questionLength={QuestionLength} maxResults={MaxResults} resultCount={ResultCount} totalMs={TotalMs}",
                     question.Length,
                     maxResults,
@@ -82,7 +82,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 analysis.IsPureGenreQuery,
                 analysis.IncludeTrackTitles);
 
-            this.logger.LogInformation(
+            _logger.LogInformation(
                 "Recommendation request prepared. questionLength={QuestionLength} maxResults={MaxResults} mixCount={MixCount} trackSpecific={TrackSpecific} promptMode={PromptMode} promptLength={PromptLength}",
                 question.Length,
                 maxResults,
@@ -108,7 +108,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
                 try
                 {
-                    ChatCompletion completion = await chat
+                    ChatCompletion completion = await _chat
                         .CompleteChatAsync(messages, cancellationToken: cancellationToken)
                         .ConfigureAwait(false);
 
@@ -137,12 +137,12 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
                     if (results.Length > 0)
                     {
-                        this.cache.Set(cacheKey, (IReadOnlyList<MixAiRecommendation>)results, TimeSpan.FromMinutes(RecommendationCacheTtlMinutes));
+                        _cache.Set(cacheKey, (IReadOnlyList<MixAiRecommendation>)results, TimeSpan.FromMinutes(RecommendationCacheTtlMinutes));
                     }
 
                     attemptStopwatch.Stop();
                     totalStopwatch.Stop();
-                    this.logger.LogInformation(
+                    _logger.LogInformation(
                         "Recommendation request succeeded. attempt={Attempt} resultCount={ResultCount} openAiMs={OpenAiMs} totalMs={TotalMs}",
                         attempt,
                         results.Length,
@@ -154,14 +154,14 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 {
                     attemptStopwatch.Stop();
                     lastException = ex;
-                    this.logger.LogInformation(
+                    _logger.LogInformation(
                         "Recommendation attempt failed. attempt={Attempt} maxAttempts={MaxAttempts} openAiMs={OpenAiMs} failureType={FailureType} message={FailureMessage}",
                         attempt,
                         MaxRetryAttempts,
                         attemptStopwatch.ElapsedMilliseconds,
                         ex.GetType().Name,
                         ex.Message);
-                    this.logger.LogWarning(
+                    _logger.LogWarning(
                         ex,
                         "AI recommendation attempt {Attempt}/{MaxAttempts} failed.",
                         attempt,
@@ -180,12 +180,12 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 }
             }
 
-            this.logger.LogError(
+            _logger.LogError(
                 lastException,
                 "All {MaxAttempts} AI recommendation attempts failed. Returning empty results.",
                 MaxRetryAttempts);
             totalStopwatch.Stop();
-            this.logger.LogInformation(
+            _logger.LogInformation(
                 "Recommendation request failed after retries. maxAttempts={MaxAttempts} totalMs={TotalMs}",
                 MaxRetryAttempts,
                 totalStopwatch.ElapsedMilliseconds);
