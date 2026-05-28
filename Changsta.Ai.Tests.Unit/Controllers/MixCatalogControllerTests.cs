@@ -477,6 +477,20 @@ namespace Changsta.Ai.Tests.Unit.Controllers
             Assert.That(result, Is.InstanceOf<OkObjectResult>());
         }
 
+        [Test]
+        public async Task GetMixBySlugAsync_searches_beyond_catalog_page_limit()
+        {
+            Mix[] mixes = Enumerable.Range(1, 200)
+                .Select(i => MakeMixWithUrl(i.ToString(), $"https://soundcloud.com/changsta/recent-{i}", "breaks"))
+                .Append(MakeMixWithUrl("201", "https://soundcloud.com/changsta/older-mix", "dnb"))
+                .ToArray();
+
+            IActionResult result = await BuildSut(mixes).GetMixBySlugAsync("older-mix", CancellationToken.None);
+
+            var mix = (Mix)((OkObjectResult)result).Value!;
+            Assert.That(mix.Id, Is.EqualTo("201"));
+        }
+
         // ── NormalizeGenre null safety ────────────────────────────────────────
         [Test]
         public async Task GetCatalogAsync_mix_with_null_genre_does_not_throw()
@@ -605,7 +619,8 @@ namespace Changsta.Ai.Tests.Unit.Controllers
 
             public Task<IReadOnlyList<Mix>> GetLatestAsync(int maxItems, CancellationToken cancellationToken)
             {
-                return Task.FromResult(_mixes);
+                IReadOnlyList<Mix> result = _mixes.Count > maxItems ? _mixes.Take(maxItems).ToArray() : _mixes;
+                return Task.FromResult(result);
             }
         }
     }
