@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Azure;
 using Azure.Identity;
 using Azure.Storage.Blobs;
+using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Infrastructure.Services.Azure.Configuration;
 using Changsta.Ai.Infrastructure.Services.Azure.Models;

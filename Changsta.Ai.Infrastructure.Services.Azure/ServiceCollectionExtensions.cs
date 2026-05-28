@@ -1,3 +1,4 @@
+using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Contracts.Diagnostics;
 using Changsta.Ai.Infrastructure.Services.Azure.Catalogue;
 using Changsta.Ai.Infrastructure.Services.Azure.Configuration;
