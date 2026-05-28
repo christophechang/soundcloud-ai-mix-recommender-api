@@ -1,5 +1,6 @@
 using Azure.Core;
 using Azure.Identity;
+using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Contracts.Diagnostics;
 using Changsta.Ai.Infrastructure.Services.Azure.Catalogue;
 using Changsta.Ai.Infrastructure.Services.Azure.Configuration;
@@ -7,6 +8,7 @@ using Changsta.Ai.Infrastructure.Services.Azure.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Changsta.Ai.Infrastructure.Services.Azure
 {
@@ -16,7 +18,10 @@ namespace Changsta.Ai.Infrastructure.Services.Azure
             this IServiceCollection services,
             IConfiguration configuration)
         {
-            services.Configure<BlobCatalogOptions>(configuration.GetSection("Azure:BlobCatalog"));
+            services.AddSingleton<IValidateOptions<BlobCatalogOptions>, BlobCatalogOptionsValidator>();
+            services.AddOptions<BlobCatalogOptions>()
+                .Bind(configuration.GetSection("Azure:BlobCatalog"))
+                .ValidateOnStart();
             AddAzureCredential(services);
 
             // Repositories hold a long-lived BlobContainerClient (thread-safe per Azure SDK
@@ -33,6 +38,8 @@ namespace Changsta.Ai.Infrastructure.Services.Azure
             this IServiceCollection services,
             IConfiguration configuration)
         {
+            // LogAnalytics WorkspaceId is intentionally optional: an empty value disables the
+            // diagnostics path (see AppInsightsDiagnosticsProvider). No ValidateOnStart here.
             services.Configure<LogAnalyticsOptions>(configuration.GetSection("Azure:LogAnalytics"));
             AddAzureCredential(services);
 

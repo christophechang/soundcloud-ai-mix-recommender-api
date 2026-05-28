@@ -21,22 +21,21 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
                 ["deep-house"] = "house",
             };
 
-        private static readonly TimeZoneInfo ScheduleTimezone =
-            TimeZoneInfo.FindSystemTimeZoneById(ScheduleTimezoneId);
-
         private readonly IMixCatalogueProvider _catalogueProvider;
         private readonly RadioScheduler _scheduler;
+        private readonly TimeZoneInfo _scheduleTimezone;
 
         public GetRadioScheduleUseCase(IMixCatalogueProvider catalogueProvider)
         {
             _catalogueProvider = catalogueProvider ?? throw new ArgumentNullException(nameof(catalogueProvider));
             _scheduler = new RadioScheduler();
+            _scheduleTimezone = ResolveScheduleTimezone();
         }
 
         public async Task<RadioScheduleResultDto> GetAsync(CancellationToken cancellationToken)
         {
             DateTimeOffset utcNow = DateTimeOffset.UtcNow;
-            DateTime localNow = TimeZoneInfo.ConvertTimeFromUtc(utcNow.UtcDateTime, ScheduleTimezone);
+            DateTime localNow = TimeZoneInfo.ConvertTimeFromUtc(utcNow.UtcDateTime, _scheduleTimezone);
             int currentHour = localNow.Hour;
             DateOnly scheduleDate = DateOnly.FromDateTime(localNow);
 
@@ -108,5 +107,21 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
                 AuditWarnings = slot.AuditWarnings,
                 RelaxedRules = slot.RelaxedRules,
             };
+
+        private static TimeZoneInfo ResolveScheduleTimezone()
+        {
+            try
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById(ScheduleTimezoneId);
+            }
+            catch (TimeZoneNotFoundException)
+            {
+                return TimeZoneInfo.Utc;
+            }
+            catch (InvalidTimeZoneException)
+            {
+                return TimeZoneInfo.Utc;
+            }
+        }
     }
 }

@@ -1,0 +1,49 @@
+# Dependabot configuration. See:
+# https://docs.github.com/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+version: 2
+updates:
+  # NuGet packages across the .NET solution. Dependabot resolves projects from .csproj files
+  # under the listed directory, so a single root entry covers every project in the solution.
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/London"
+    open-pull-requests-limit: 5
+    labels:
+      - "type: chore"
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      microsoft-extensions:
+        patterns:
+          - "Microsoft.Extensions.*"
+      azure-sdk:
+        patterns:
+          - "Azure.*"
+      opentelemetry:
+        patterns:
+          - "OpenTelemetry.*"
+          - "Azure.Monitor.OpenTelemetry.*"
+      test-deps:
+        patterns:
+          - "NUnit*"
+          - "FluentAssertions"
+          - "Microsoft.NET.Test.Sdk"
+          - "coverlet.*"
+
+  # GitHub Actions workflows.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Europe/London"
+    open-pull-requests-limit: 3
+    labels:
+      - "type: chore"
+    commit-message:
+      prefix: "chore(deps)"
