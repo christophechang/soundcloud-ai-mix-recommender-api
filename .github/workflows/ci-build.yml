@@ -41,6 +41,15 @@ jobs:
       - name: Restore
         run: dotnet restore ${{ env.SOLUTION }}
 
+      - name: Audit dependencies for known vulnerabilities
+        run: |
+          set -o pipefail
+          dotnet list ${{ env.SOLUTION }} package --vulnerable --include-transitive 2>&1 | tee vulns.txt
+          if grep -q 'has the following vulnerable packages' vulns.txt; then
+            echo "::error::Vulnerable NuGet packages detected. See job log for details."
+            exit 1
+          fi
+
       - name: Build
         run: dotnet build ${{ env.SOLUTION }} --configuration Release --no-restore
 

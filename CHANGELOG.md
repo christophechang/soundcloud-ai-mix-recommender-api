@@ -2,6 +2,20 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.42
+
+- **Catalog flush resilience.** Blob write failures during a catalog refresh no longer surface as 500. Both the main catalog write and the mood-weight sidecar write now catch storage exceptions, log a warning, and continue serving the freshly-loaded in-memory catalog. The write is retried on the next flush.
+- **Full-catalog slug lookup.** `GET /api/catalog/mixes/{slug}` now searches all mixes in the catalog instead of being capped at the first 200 entries, fixing 404s for older mixes.
+- **Legacy now-spinning route restored.** `GET /api/catalog/now-spinning/program` is back as a compatibility alias for `GET /api/radio/stations`, restoring clients that had not yet migrated to the new route.
+- **Recommendation cache keyed by prompt and catalog version.** The AI recommender cache key now includes a `PromptVersion` constant and the current catalog revision. Prompt changes can be rolled in by bumping the constant; calling `POST /api/catalog/flush` immediately invalidates stale AI responses instead of waiting for the 60-minute TTL.
+- **Unknown AI mix IDs skipped.** If the AI returns a mix ID that is no longer in the catalog (e.g. deleted between request and response), that result is silently dropped rather than throwing a `KeyNotFoundException` and returning 500.
+- **Startup validation for required configuration.** Missing `OpenAI:ApiKey`, `OpenAI:Model`, `Azure:BlobCatalog:ContainerName`, `Azure:BlobCatalog:BlobName`, and the ConnectionString/ServiceEndpoint requirement are now enforced at host startup via `ValidateOnStart`, so a misconfigured deploy fails immediately with a clear message rather than 500 on the first request.
+- **Azure SDK clients reused across requests.** `DefaultAzureCredential`, `BlobContainerClient`, and `LogsQueryClient` are now constructed once per process (singleton) instead of per request, eliminating redundant AAD/MSI token acquisitions and socket churn.
+- **Tracklist `\r`-only line ending fix.** Descriptions using bare carriage-return line endings (legacy clients) now parse tracklists correctly. Marker detection and line-ending normalisation are unified in a single helper shared by both `MixDescriptionParser` and `TracklistExtractor`.
+- **Blob repository interfaces moved to Core.Contracts.** `IBlobMixCatalogueRepository` and `IMoodWeightEnrichmentRepository` relocated from the Azure infrastructure namespace into `Changsta.Ai.Core.Contracts.Catalogue`, correcting the dependency direction.
+- **OpenTelemetry advisory resolved.** Bumped `Azure.Monitor.OpenTelemetry.AspNetCore` from 1.4.0 to 1.5.0, clearing GHSA-g94r-2vxg-569j (NU1902) against `OpenTelemetry.Api` 1.14.0. CI vulnerability gate is now a hard failure.
+- **Dependabot enabled.** Weekly NuGet and GitHub Actions updates configured with grouped PRs for `Microsoft.Extensions.*`, `Azure.*`, `OpenTelemetry.*`, and the test toolchain.
+
 ## v1.41
 
 - **Radio schedule now indexed in Europe/London.** `GET /api/radio/stations` now returns `timezone: "Europe/London"`, with `scheduleDate`, `currentHour`, and each slot's `hour` keyed to London local time (handles BST/GMT automatically). Previously these were UTC-indexed, which caused the schedule to misalign with the UK listener clock. `generatedAtUtc` remains a UTC ISO timestamp.
@@ -124,7 +138,7 @@ Notable changes to the SoundCloud Mix Recommender API.
 ## v1.14
 
 - **Permalink change handling.** When a SoundCloud mix URL changes, the catalog now detects the same track by its stable SoundCloud ID (`tag:soundcloud,2010:tracks/{id}`), transfers all computed metadata (genre, energy, BPM, moods, related mixes) to the new URL, and removes the orphaned old URL from the blob catalog. Previously the old URL would accumulate as dead weight and the new URL would lose all computed data.
-- **Smart quote fix in schema parser.** The `[changsta:mix:v1 {...}]` JSON block parser now normalises Unicode curly quotes (`“`/`”`) to straight quotes before parsing. Fixes schema extraction failures when SoundCloud's description editor auto-converts quotation marks.
+- **Smart quote fix in schema parser.** The `[changsta:mix:v1 {...}]` JSON block parser now normalises Unicode curly quotes (`"`/`"`) to straight quotes before parsing. Fixes schema extraction failures when SoundCloud's description editor auto-converts quotation marks.
 
 ## v1.13
 

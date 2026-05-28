@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Changsta.Ai.Core.Domain;
 
-namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
+namespace Changsta.Ai.Core.Contracts.Catalogue
 {
     public interface IBlobMixCatalogueRepository
     {

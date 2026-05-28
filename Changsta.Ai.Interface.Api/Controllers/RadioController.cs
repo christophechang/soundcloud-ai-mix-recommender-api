@@ -23,6 +23,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
         }
 
         [HttpGet("stations")]
+        [HttpGet("/api/catalog/now-spinning/program")]
         public async Task<IActionResult> GetStationsAsync(CancellationToken cancellationToken = default)
         {
             try

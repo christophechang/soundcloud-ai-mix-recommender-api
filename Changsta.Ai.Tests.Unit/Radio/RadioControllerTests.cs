@@ -75,6 +75,19 @@ namespace Changsta.Ai.Tests.Unit.Radio
         }
 
         [Test]
+        public void GetStationsAsync_supports_legacy_now_spinning_program_route()
+        {
+            var attributes = typeof(RadioController)
+                .GetMethod(nameof(RadioController.GetStationsAsync)) !
+                .GetCustomAttributes(typeof(HttpGetAttribute), inherit: false)
+                .Cast<HttpGetAttribute>()
+                .Select(a => a.Template)
+                .ToArray();
+
+            attributes.Should().Contain("/api/catalog/now-spinning/program");
+        }
+
+        [Test]
         public async Task GetStationsAsync_returns_503_when_station_unavailable()
         {
             var controller = new RadioController(new ThrowingUseCase());
