@@ -54,24 +54,29 @@ namespace Changsta.Ai.Core.BusinessProcesses.Recommendations
 
             var mixById = mixes.ToDictionary(m => m.Id, StringComparer.Ordinal);
 
-            var results = aiResults
-                .Select(r =>
+            // Defence-in-depth: the AI infrastructure validator should already restrict
+            // returned MixIds to the prompt set, but skip any id that no longer maps to a
+            // catalogue mix (e.g. a race with a deletion / refresh) rather than throw.
+            var results = new List<MixRecommendationResultDto>(aiResults.Count);
+            foreach (MixAiRecommendation r in aiResults)
+            {
+                if (!mixById.TryGetValue(r.MixId, out Mix? mix))
                 {
-                    Mix mix = mixById[r.MixId];
+                    continue;
+                }
 
-                    return new MixRecommendationResultDto
-                    {
-                        MixId = mix.Id,
-                        Title = mix.Title,
-                        Url = mix.Url,
-                        Duration = mix.Duration,
-                        ImageUrl = mix.ImageUrl,
-                        Reason = r.Reason,
-                        Why = r.Why,
-                        Confidence = r.Confidence,
-                    };
-                })
-                .ToArray();
+                results.Add(new MixRecommendationResultDto
+                {
+                    MixId = mix.Id,
+                    Title = mix.Title,
+                    Url = mix.Url,
+                    Duration = mix.Duration,
+                    ImageUrl = mix.ImageUrl,
+                    Reason = r.Reason,
+                    Why = r.Why,
+                    Confidence = r.Confidence,
+                });
+            }
 
             return new MixRecommendationResponseDto
             {

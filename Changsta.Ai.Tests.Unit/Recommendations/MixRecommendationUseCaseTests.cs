@@ -14,6 +14,96 @@ namespace Changsta.Ai.Tests.Unit.Recommendations
     public sealed class MixRecommendationUseCaseTests
     {
         [Test]
+        public async Task RecommendAsync_skips_results_whose_mix_id_is_not_in_the_catalogue()
+        {
+            var mix = new Mix
+            {
+                Id = "mix-1",
+                Title = "Catalogue Mix",
+                Url = "https://soundcloud.test/mix-1",
+                Genre = "house",
+                Energy = "mid",
+            };
+
+            var sut = new MixRecommendationUseCase(
+                new StubMixCatalogueProvider(new[] { mix }),
+                new StubMixAiRecommender(new[]
+                {
+                    new MixAiRecommendation
+                    {
+                        MixId = "mix-1",
+                        Title = "Catalogue Mix",
+                        Url = "https://soundcloud.test/mix-1",
+                        Reason = "Matches.",
+                        Why = new[] { "house" },
+                        Confidence = 0.9,
+                    },
+                    new MixAiRecommendation
+                    {
+                        MixId = "unknown-mix-id",
+                        Title = "Phantom",
+                        Url = "https://soundcloud.test/phantom",
+                        Reason = "Hallucinated.",
+                        Why = new[] { "house" },
+                        Confidence = 0.7,
+                    },
+                }));
+
+            MixRecommendationResponseDto response = await sut
+                .RecommendAsync(
+                    new MixRecommendationRequestDto
+                    {
+                        Question = "Give me house",
+                        MaxResults = 5,
+                    },
+                    CancellationToken.None)
+                .ConfigureAwait(false);
+
+            Assert.That(response.Results, Has.Count.EqualTo(1));
+            Assert.That(response.Results[0].MixId, Is.EqualTo("mix-1"));
+        }
+
+        [Test]
+        public async Task RecommendAsync_returns_empty_results_when_all_ai_ids_are_unknown()
+        {
+            var mix = new Mix
+            {
+                Id = "mix-1",
+                Title = "Catalogue Mix",
+                Url = "https://soundcloud.test/mix-1",
+                Genre = "house",
+                Energy = "mid",
+            };
+
+            var sut = new MixRecommendationUseCase(
+                new StubMixCatalogueProvider(new[] { mix }),
+                new StubMixAiRecommender(new[]
+                {
+                    new MixAiRecommendation
+                    {
+                        MixId = "ghost-1",
+                        Title = "Ghost",
+                        Url = "https://soundcloud.test/ghost-1",
+                        Reason = "Hallucinated.",
+                        Why = new[] { "house" },
+                        Confidence = 0.5,
+                    },
+                }));
+
+            MixRecommendationResponseDto response = await sut
+                .RecommendAsync(
+                    new MixRecommendationRequestDto
+                    {
+                        Question = "Give me house",
+                        MaxResults = 5,
+                    },
+                    CancellationToken.None)
+                .ConfigureAwait(false);
+
+            Assert.That(response.Results, Is.Empty);
+        }
+
+        [Test]
         public async Task RecommendAsync_hydrates_result_metadata_from_catalogue_mix()
         {
             var mix = new Mix
