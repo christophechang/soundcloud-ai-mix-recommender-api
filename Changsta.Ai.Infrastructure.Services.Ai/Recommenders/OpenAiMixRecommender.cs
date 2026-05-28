@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Changsta.Ai.Core.Contracts.Ai;
+using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Infrastructure.Services.Ai.Configuration;
 using Microsoft.Extensions.Caching.Memory;
@@ -22,14 +23,24 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
         private const int MaxRetryAttempts = 2;
         private const int RecommendationCacheTtlMinutes = 60;
 
+        // Bump whenever MixPromptBuilder or MixRecommendationQueryAnalyzer change in a way
+        // that should invalidate previously-cached AI responses for the same question.
+        private const int PromptVersion = 1;
+
         private readonly ChatClient _chat;
         private readonly IMemoryCache _cache;
+        private readonly ICatalogCacheInvalidator _catalogVersion;
         private readonly ILogger<OpenAiMixRecommender> _logger;
 
-        public OpenAiMixRecommender(IOptions<OpenAiOptions> options, IMemoryCache cache, ILogger<OpenAiMixRecommender> logger)
+        public OpenAiMixRecommender(
+            IOptions<OpenAiOptions> options,
+            IMemoryCache cache,
+            ICatalogCacheInvalidator catalogVersion,
+            ILogger<OpenAiMixRecommender> logger)
         {
             var resolvedOptions = options?.Value ?? throw new ArgumentNullException(nameof(options));
             _cache = cache ?? throw new ArgumentNullException(nameof(cache));
+            _catalogVersion = catalogVersion ?? throw new ArgumentNullException(nameof(catalogVersion));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
             if (string.IsNullOrWhiteSpace(resolvedOptions.ApiKey))
@@ -57,7 +68,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             mixes = mixes ?? throw new ArgumentNullException(nameof(mixes));
             if (maxResults <= 0) throw new ArgumentOutOfRangeException(nameof(maxResults));
 
-            string cacheKey = BuildCacheKey(question, maxResults);
+            string cacheKey = BuildCacheKey(question, maxResults, PromptVersion, _catalogVersion.Version);
             if (_cache.TryGetValue(cacheKey, out IReadOnlyList<MixAiRecommendation>? cached) && cached != null)
             {
                 totalStopwatch.Stop();
@@ -193,7 +204,10 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             return Array.Empty<MixAiRecommendation>();
         }
 
-        private static string BuildCacheKey(string question, int maxResults) =>
-            "recommend:" + question.Trim().ToLowerInvariant() + ":" + maxResults.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        internal static string BuildCacheKey(string question, int maxResults, int promptVersion, int catalogueVersion) =>
+            "recommend:v" + promptVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            + ":c" + catalogueVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            + ":" + question.Trim().ToLowerInvariant()
+            + ":" + maxResults.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 }
