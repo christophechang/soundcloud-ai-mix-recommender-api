@@ -41,17 +41,12 @@ jobs:
       - name: Restore
         run: dotnet restore ${{ env.SOLUTION }}
 
-      # Vulnerability scan over the full transitive graph. Currently runs in advisory mode
-      # (continue-on-error) because of an outstanding transitive NU1902 (see #33). Flip
-      # continue-on-error to false (and drop this comment) once the known advisories are
-      # resolved so the step becomes a hard CI gate.
       - name: Audit dependencies for known vulnerabilities
-        continue-on-error: true
         run: |
           set -o pipefail
           dotnet list ${{ env.SOLUTION }} package --vulnerable --include-transitive 2>&1 | tee vulns.txt
           if grep -q 'has the following vulnerable packages' vulns.txt; then
-            echo "::warning::Vulnerable NuGet packages detected. See job log for details."
+            echo "::error::Vulnerable NuGet packages detected. See job log for details."
             exit 1
           fi
 
