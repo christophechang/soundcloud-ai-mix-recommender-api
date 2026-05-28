@@ -5,7 +5,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Azure;
-using Azure.Identity;
+using Azure.Core;
 using Azure.Storage.Blobs;
 using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Infrastructure.Services.Azure.Configuration;
@@ -28,10 +28,12 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
 
         public BlobMoodWeightEnrichmentRepository(
             IOptions<BlobCatalogOptions> options,
+            TokenCredential credential,
             ILogger<BlobMoodWeightEnrichmentRepository> logger)
         {
             var resolved = options?.Value ?? throw new ArgumentNullException(nameof(options));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            credential = credential ?? throw new ArgumentNullException(nameof(credential));
 
             bool hasConnectionString = !string.IsNullOrWhiteSpace(resolved.ConnectionString);
             bool hasServiceEndpoint = !string.IsNullOrWhiteSpace(resolved.ServiceEndpoint);
@@ -51,7 +53,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             {
                 var containerUri = new Uri(
                     resolved.ServiceEndpoint!.TrimEnd('/') + "/" + resolved.ContainerName);
-                _containerClient = new BlobContainerClient(containerUri, new DefaultAzureCredential());
+                _containerClient = new BlobContainerClient(containerUri, credential);
             }
             else
             {
