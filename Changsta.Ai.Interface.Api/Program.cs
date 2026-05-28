@@ -20,6 +20,7 @@ using Changsta.Ai.Interface.Api.Services;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -112,8 +113,10 @@ builder.Services.AddRateLimiter(options =>
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
-builder.Services.Configure<OpenAiOptions>(
-    builder.Configuration.GetSection("OpenAI"));
+builder.Services.AddSingleton<IValidateOptions<OpenAiOptions>, OpenAiOptionsValidator>();
+builder.Services.AddOptions<OpenAiOptions>()
+    .Bind(builder.Configuration.GetSection("OpenAI"))
+    .ValidateOnStart();
 
 builder.Services.AddAzureBlobMixCatalog(builder.Configuration);
 builder.Services.AddAzureDiagnostics(builder.Configuration);

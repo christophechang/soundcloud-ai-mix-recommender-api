@@ -124,7 +124,14 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
 
                         if (_enrichmentRepository is not null)
                         {
-                            await _enrichmentRepository.WriteAsync(enrichedWeights, cancellationToken).ConfigureAwait(false);
+                            try
+                            {
+                                await _enrichmentRepository.WriteAsync(enrichedWeights, cancellationToken).ConfigureAwait(false);
+                            }
+                            catch (Exception ex) when (ex is not OperationCanceledException)
+                            {
+                                _logger.LogWarning(ex, "Failed to persist enriched mood weights — continuing with in-memory scores for this catalog load.");
+                            }
                         }
                     }
                 }
@@ -143,7 +150,14 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                         updatedEntries,
                         blobGenresChanged);
 
-                    await _repository.WriteAsync(merged, cancellationToken).ConfigureAwait(false);
+                    try
+                    {
+                        await _repository.WriteAsync(merged, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        _logger.LogWarning(ex, "Blob catalog write failed — serving the refreshed in-memory catalog and retrying persistence on the next load.");
+                    }
                 }
 
                 _cache.Set(cacheKey, merged, new MemoryCacheEntryOptions

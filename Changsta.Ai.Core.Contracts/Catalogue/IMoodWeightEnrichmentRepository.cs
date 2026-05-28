@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
+namespace Changsta.Ai.Core.Contracts.Catalogue
 {
     public interface IMoodWeightEnrichmentRepository
     {

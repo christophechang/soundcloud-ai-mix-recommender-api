@@ -53,6 +53,33 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
         }
 
         [Test]
+        public async Task GetLatestAsync_blob_write_failure_returns_refreshed_catalog()
+        {
+            var rssMix = MakeMix("1", "https://sc.test/mix-1");
+            var blobRepo = new StubBlobRepository
+            {
+                WriteException = new InvalidOperationException("write unavailable"),
+            };
+            var logger = new ListLogger<BlobBackedMixCatalogueProvider>();
+
+            var sut = BuildSut(
+                blobRepo: blobRepo,
+                blobMixes: Array.Empty<Mix>(),
+                rssMixes: new[] { rssMix },
+                logger: logger);
+
+            var result = await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(result, Has.Count.EqualTo(1));
+            Assert.That(result[0].Url, Is.EqualTo("https://sc.test/mix-1"));
+            Assert.That(blobRepo.WriteCallCount, Is.EqualTo(1));
+            Assert.That(
+                logger.Entries.Any(e => e.Level == LogLevel.Warning
+                    && e.Message.Contains("Blob catalog write failed", StringComparison.Ordinal)),
+                Is.True);
+        }
+
+        [Test]
         public async Task GetLatestAsync_rss_failure_falls_back_to_blob_only()
         {
             var blobMix = MakeMix("1", "https://sc.test/mix-1");
@@ -838,6 +865,38 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
         }
 
         [Test]
+        public async Task GetLatestAsync_sidecar_write_failure_still_returns_catalog()
+        {
+            var rssMix = MakeMix("1", "https://sc.test/mix-1", moods: new[] { "melancholic" });
+            var enricher = new StubMoodWeightEnricher
+            {
+                ReturnValue = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase)
+                    { ["melancholic"] = -0.5 },
+            };
+            var enrichmentRepo = new StubMoodWeightEnrichmentRepository
+            {
+                WriteException = new InvalidOperationException("sidecar unavailable"),
+            };
+            var logger = new ListLogger<BlobBackedMixCatalogueProvider>();
+
+            var sut = BuildSut(
+                blobMixes: Array.Empty<Mix>(),
+                rssMixes: new[] { rssMix },
+                enrichmentRepo: enrichmentRepo,
+                enricher: enricher,
+                logger: logger);
+
+            var result = await sut.GetLatestAsync(10, CancellationToken.None);
+
+            Assert.That(result, Has.Count.EqualTo(1));
+            Assert.That(enrichmentRepo.WriteCallCount, Is.EqualTo(1));
+            Assert.That(
+                logger.Entries.Any(e => e.Level == LogLevel.Warning
+                    && e.Message.Contains("Failed to persist enriched mood weights", StringComparison.Ordinal)),
+                Is.True);
+        }
+
+        [Test]
         public async Task GetLatestAsync_skips_sidecar_write_when_enricher_returns_empty()
         {
             var rssMix = MakeMix("1", "https://sc.test/mix-1", moods: new[] { "melancholic" });
@@ -1037,6 +1096,8 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
 
             public IReadOnlyList<Mix>? WrittenMixes { get; private set; }
 
+            public Exception? WriteException { get; set; }
+
             public int WriteCallCount { get; private set; }
 
             public int ReadCallCount { get; private set; }
@@ -1050,6 +1111,11 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             public Task WriteAsync(IReadOnlyList<Mix> mixes, CancellationToken cancellationToken)
             {
                 WriteCallCount++;
+                if (WriteException is not null)
+                {
+                    throw WriteException;
+                }
+
                 WrittenMixes = mixes;
                 return Task.CompletedTask;
             }
@@ -1058,8 +1124,11 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
         private sealed class StubMoodWeightEnricher : IMoodWeightEnricher
         {
             public IReadOnlyList<string>? ReceivedNewMoods { get; private set; }
+
             public IReadOnlyDictionary<string, double>? ReceivedExistingWeights { get; private set; }
+
             public int CallCount { get; private set; }
+
             public IReadOnlyDictionary<string, double> ReturnValue { get; set; } =
                 new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
 
@@ -1079,7 +1148,11 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
         {
             public IReadOnlyDictionary<string, double> StoredWeights { get; set; } =
                 new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+
             public IReadOnlyDictionary<string, double>? WrittenWeights { get; private set; }
+
+            public Exception? WriteException { get; set; }
+
             public int WriteCallCount { get; private set; }
 
             public Task<IReadOnlyDictionary<string, double>> ReadAsync(CancellationToken cancellationToken)
@@ -1090,6 +1163,11 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             public Task WriteAsync(IReadOnlyDictionary<string, double> weights, CancellationToken cancellationToken)
             {
                 WriteCallCount++;
+                if (WriteException is not null)
+                {
+                    throw WriteException;
+                }
+
                 WrittenWeights = weights;
                 return Task.CompletedTask;
             }

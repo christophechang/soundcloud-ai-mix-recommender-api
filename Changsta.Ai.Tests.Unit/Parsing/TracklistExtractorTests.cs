@@ -86,6 +86,24 @@ namespace Changsta.Ai.Tests.Unit.Parsing
         }
 
         [Test]
+        public void Extract_WithCarriageReturnOnlyLineEndings_ExtractsTracks()
+        {
+            const string description =
+                "Intro line.\r" +
+                "Tracklist\r" +
+                "WZ - Organix\r" +
+                "Synkro - No Escape\r";
+
+            var result = TracklistExtractor.Extract(description);
+
+            Assert.That(result, Has.Count.EqualTo(2));
+            Assert.That(result[0].Artist, Is.EqualTo("WZ"));
+            Assert.That(result[0].Title, Is.EqualTo("Organix"));
+            Assert.That(result[1].Artist, Is.EqualTo("Synkro"));
+            Assert.That(result[1].Title, Is.EqualTo("No Escape"));
+        }
+
+        [Test]
         public void Extract_WhenTrackHasMultipleSeparators_SplitsOnFirstOnly()
         {
             const string description =

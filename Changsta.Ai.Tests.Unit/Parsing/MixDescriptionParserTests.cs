@@ -82,5 +82,73 @@ namespace Changsta.Ai.Tests.Unit.Parsing
 
             Assert.That(result, Is.EqualTo("Intro text here."));
         }
+
+        [Test]
+        public void ExtractIntro_WithCarriageReturnOnlyLineEndings_ReturnsIntro()
+        {
+            const string description =
+                "Intro line one.\r" +
+                "Intro line two.\r" +
+                "Tracklist\r" +
+                "Artist A - Track One\r";
+
+            string? result = MixDescriptionParser.ExtractIntro(description);
+
+            Assert.That(result, Is.EqualTo("Intro line one.\nIntro line two."));
+        }
+
+        [Test]
+        public void SplitDescription_WhenDescriptionIsNull_ReturnsNullIntroAndEmptyTrackSection()
+        {
+            (string? intro, string trackSection) = MixDescriptionParser.SplitDescription(null);
+
+            Assert.That(intro, Is.Null);
+            Assert.That(trackSection, Is.Empty);
+        }
+
+        [Test]
+        public void SplitDescription_WhenNoMarker_ReturnsNullIntroAndEmptyTrackSection()
+        {
+            const string description =
+                "Just some description\n" +
+                "with no marker.\n";
+
+            (string? intro, string trackSection) = MixDescriptionParser.SplitDescription(description);
+
+            Assert.That(intro, Is.Null);
+            Assert.That(trackSection, Is.Empty);
+        }
+
+        [Test]
+        public void SplitDescription_WithMarker_ReturnsIntroAndTrackSection()
+        {
+            const string description =
+                "Intro paragraph.\n" +
+                "\n" +
+                "Tracklist\n" +
+                "Artist A - Track One\n" +
+                "Artist B - Track Two\n";
+
+            (string? intro, string trackSection) = MixDescriptionParser.SplitDescription(description);
+
+            Assert.That(intro, Is.EqualTo("Intro paragraph."));
+            Assert.That(trackSection, Is.EqualTo("Artist A - Track One\nArtist B - Track Two"));
+        }
+
+        [Test]
+        public void SplitDescription_WithCarriageReturnOnlyLineEndings_FindsMarkerAndSplitsCleanly()
+        {
+            const string description =
+                "Intro paragraph.\r" +
+                "\r" +
+                "Tracklist\r" +
+                "Artist A - Track One\r" +
+                "Artist B - Track Two\r";
+
+            (string? intro, string trackSection) = MixDescriptionParser.SplitDescription(description);
+
+            Assert.That(intro, Is.EqualTo("Intro paragraph."));
+            Assert.That(trackSection, Is.EqualTo("Artist A - Track One\nArtist B - Track Two"));
+        }
     }
 }

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Azure.Identity;
+using Azure.Core;
 using Azure.Monitor.Query;
 using Azure.Monitor.Query.Models;
 using Changsta.Ai.Core.Contracts.Diagnostics;
@@ -17,10 +17,18 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Diagnostics
         private const int MaxExceptions = 100;
 
         private readonly LogAnalyticsOptions _options;
+        private readonly LogsQueryClient _client;
 
-        public AppInsightsDiagnosticsProvider(IOptions<LogAnalyticsOptions> options)
+        public AppInsightsDiagnosticsProvider(
+            IOptions<LogAnalyticsOptions> options,
+            TokenCredential credential)
         {
             _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+            credential = credential ?? throw new ArgumentNullException(nameof(credential));
+
+            // LogsQueryClient + the underlying HttpPipeline + the TokenCredential's internal
+            // token cache are all designed for reuse across calls.
+            _client = new LogsQueryClient(credential);
         }
 
         public async Task<DiagnosticsResult> GetErrorsAsync(int hours, CancellationToken cancellationToken)
@@ -34,7 +42,6 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Diagnostics
                 };
             }
 
-            var client = new LogsQueryClient(new DefaultAzureCredential());
             var timeRange = new QueryTimeRange(TimeSpan.FromHours(hours));
 
             string requestsQuery =
@@ -52,9 +59,9 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Diagnostics
                 $" | order by TimeGenerated desc" +
                 $" | take {MaxExceptions}";
 
-            var requestsTask = client.QueryWorkspaceAsync(
+            var requestsTask = _client.QueryWorkspaceAsync(
                 _options.WorkspaceId, requestsQuery, timeRange, cancellationToken: cancellationToken);
-            var exceptionsTask = client.QueryWorkspaceAsync(
+            var exceptionsTask = _client.QueryWorkspaceAsync(
                 _options.WorkspaceId, exceptionsQuery, timeRange, cancellationToken: cancellationToken);
 
             await Task.WhenAll(requestsTask, exceptionsTask).ConfigureAwait(false);
