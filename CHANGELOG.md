@@ -4,6 +4,7 @@ Notable changes to the SoundCloud Mix Recommender API.
 
 ## v1.42
 
+- **Station rename.** Renamed radio station "Crucial FM" to "Tooz FM" (`slug: tooz-fm`).
 - **Catalog flush resilience.** Blob write failures during a catalog refresh no longer surface as 500. Both the main catalog write and the mood-weight sidecar write now catch storage exceptions, log a warning, and continue serving the freshly-loaded in-memory catalog. The write is retried on the next flush.
 - **Full-catalog slug lookup.** `GET /api/catalog/mixes/{slug}` now searches all mixes in the catalog instead of being capped at the first 200 entries, fixing 404s for older mixes.
 - **Legacy now-spinning route restored.** `GET /api/catalog/now-spinning/program` is back as a compatibility alias for `GET /api/radio/stations`, restoring clients that had not yet migrated to the new route.
