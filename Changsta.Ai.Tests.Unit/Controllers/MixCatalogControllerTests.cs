@@ -309,6 +309,19 @@ namespace Changsta.Ai.Tests.Unit.Controllers
         }
 
         [Test]
+        public async Task GetMixesAsync_items_include_slug_derived_from_url()
+        {
+            var mixes = new[]
+            {
+                MakeMixWithUrl("1", "https://soundcloud.com/changsta/riddim-memory", "breaks"),
+            };
+
+            var page = await InvokeMixesAsync(BuildSut(mixes), null, 1, 20);
+
+            Assert.That(page.Items[0].Slug, Is.EqualTo("riddim-memory"));
+        }
+
+        [Test]
         public async Task GetMixesAsync_returns_400_for_invalid_page()
         {
             IActionResult result = await BuildSut(Array.Empty<Mix>())
