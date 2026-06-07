@@ -2,6 +2,10 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.44
+
+- **Mix slug in catalog response.** `GET /api/catalog/mixes` now includes a `slug` field on every item, derived from the SoundCloud permalink URL (e.g. `https://soundcloud.com/changsta/riddim-memory` → `"slug": "riddim-memory"`). Canonical identity for `/mix?mix=SLUG` deep links is now owned by the API rather than computed client-side.
+
 ## v1.43
 
 - **Station rename.** Renamed radio station "Crucial FM" to "Tooz FM" (`slug: tooz-fm`).

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Changsta.Ai.Core.Normalization;
 
 namespace Changsta.Ai.Core.Domain
 {
@@ -10,6 +11,8 @@ namespace Changsta.Ai.Core.Domain
         required public string Title { get; init; }
 
         required public string Url { get; init; }
+
+        public string Slug => MixSlugHelper.ExtractSlug(Url);
 
         public string? Description { get; init; }
 
