@@ -465,6 +465,27 @@ namespace Changsta.Ai.Tests.Unit.Controllers
         }
 
         [Test]
+        public async Task GetMixBySlugAsync_returns_mix_matching_title_slug_when_url_slug_changed()
+        {
+            var mixes = new[]
+            {
+                new Mix
+                {
+                    Id = "1",
+                    Title = "Step Up DB Mix",
+                    Url = "https://soundcloud.com/changsta/step-up-dnb-mix",
+                    Genre = "dnb",
+                    Energy = "high",
+                },
+            };
+
+            IActionResult result = await BuildSut(mixes).GetMixBySlugAsync("step-up-db-mix", CancellationToken.None);
+
+            var mix = (Mix)((OkObjectResult)result).Value!;
+            Assert.That(mix.Id, Is.EqualTo("1"));
+        }
+
+        [Test]
         public async Task GetMixBySlugAsync_returns_404_when_no_match()
         {
             var mixes = new[]
