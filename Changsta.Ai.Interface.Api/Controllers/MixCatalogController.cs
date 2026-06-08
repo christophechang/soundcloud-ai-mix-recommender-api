@@ -332,7 +332,8 @@ namespace Changsta.Ai.Interface.Api.Controllers
                 .ConfigureAwait(false);
 
             Mix? match = mixes.FirstOrDefault(m =>
-                string.Equals(MixSlugHelper.ExtractSlug(m.Url), slug, StringComparison.OrdinalIgnoreCase));
+                string.Equals(MixSlugHelper.ExtractSlug(m.Url), slug, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(MixSlugHelper.FromTitle(m.Title), slug, StringComparison.OrdinalIgnoreCase));
 
             if (match is null)
             {
