@@ -14,6 +14,7 @@ using Changsta.Ai.Infrastructure.Services.Ai.Configuration;
 using Changsta.Ai.Infrastructure.Services.Ai.Recommenders;
 using Changsta.Ai.Infrastructure.Services.Azure;
 using Changsta.Ai.Infrastructure.Services.Azure.Catalogue;
+using Changsta.Ai.Infrastructure.Services.Azure.Diagnostics;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue;
 using Changsta.Ai.Interface.Api.Cors;
 using Changsta.Ai.Interface.Api.Middleware;
@@ -61,10 +62,12 @@ string? aiConnectionString = builder.Configuration["ApplicationInsights:Connecti
 
 if (!string.IsNullOrEmpty(aiConnectionString))
 {
-    builder.Services.AddOpenTelemetry().UseAzureMonitor(o =>
-    {
-        o.ConnectionString = aiConnectionString;
-    });
+    builder.Services.AddOpenTelemetry()
+        .UseAzureMonitor(o =>
+        {
+            o.ConnectionString = aiConnectionString;
+        })
+        .WithMetrics(m => m.AddMeter(CatalogueMetrics.MeterName));
 }
 
 builder.Services.AddHealthChecks();
