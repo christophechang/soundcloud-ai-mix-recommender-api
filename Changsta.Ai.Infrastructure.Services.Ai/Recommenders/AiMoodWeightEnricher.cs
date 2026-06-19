@@ -39,7 +39,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 throw new InvalidOperationException("OpenAI:Model is not configured.");
             }
 
-            _chat = new ChatClient(model: resolved.Model, apiKey: resolved.ApiKey);
+            _chat = OpenAiChatClientFactory.Create(resolved);
         }
 
         public async Task<IReadOnlyDictionary<string, double>> EnrichAsync(
