@@ -125,7 +125,10 @@ if (!builder.Environment.IsDevelopment()
 // SoundCloudRssMixCatalogueProvider is registered as its concrete type (not as IMixCatalogueProvider)
 // to avoid a circular DI graph: BlobBackedMixCatalogueProvider also implements IMixCatalogueProvider
 // and wraps SoundCloudRssMixCatalogueProvider as its inner provider.
-builder.Services.AddScoped<SoundCloudRssMixCatalogueProvider>(sp =>
+// Singleton: the catalogue providers are stateless apart from the shared cache + the rebuild
+// semaphore, so a single instance per process is correct (and lets the semaphore be an instance
+// field rather than static — see issue #56). All dependencies below are singletons too.
+builder.Services.AddSingleton<SoundCloudRssMixCatalogueProvider>(sp =>
 {
     var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
     var configuration = sp.GetRequiredService<IConfiguration>();
@@ -147,7 +150,7 @@ builder.Services.AddScoped<SoundCloudRssMixCatalogueProvider>(sp =>
         logger);
 });
 
-builder.Services.AddScoped<IMixCatalogueProvider>(sp =>
+builder.Services.AddSingleton<IMixCatalogueProvider>(sp =>
 {
     var inner = sp.GetRequiredService<SoundCloudRssMixCatalogueProvider>();
     var repo = sp.GetRequiredService<IBlobMixCatalogueRepository>();
@@ -173,7 +176,10 @@ builder.Services.AddScoped<IMixRecommendationUseCase, MixRecommendationUseCase>(
 builder.Services.AddRadioScheduling();
 builder.Services.AddScoped<IGetErrorInsightsUseCase, GetErrorInsightsUseCase>();
 builder.Services.AddScoped<IMixAiRecommender, OpenAiMixRecommender>();
-builder.Services.AddScoped<IMoodWeightEnricher, AiMoodWeightEnricher>();
+
+// Singleton so it can be consumed by the singleton catalogue provider without a captive
+// dependency; AiMoodWeightEnricher holds only a ChatClient and has no per-request state (#56).
+builder.Services.AddSingleton<IMoodWeightEnricher, AiMoodWeightEnricher>();
 builder.Services.AddHostedService<CatalogWarmupService>();
 
 var app = builder.Build();

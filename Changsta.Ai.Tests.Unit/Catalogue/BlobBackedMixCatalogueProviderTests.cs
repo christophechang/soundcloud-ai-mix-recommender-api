@@ -19,6 +19,32 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
     public sealed class BlobBackedMixCatalogueProviderTests
     {
         [Test]
+        public async Task GetLatestAsync_serialises_concurrent_cold_rebuilds_into_one()
+        {
+            // Two concurrent cold callers on the same (singleton) instance must rebuild only once:
+            // the rebuild semaphore serialises them and the post-acquire cache re-check dedups the
+            // second. See issue #56.
+            var repo = new StubBlobRepository { BlobMixes = new[] { MakeMix("1", "https://sc.test/1") } };
+            var inner = new DelayingMixCatalogueProvider(Array.Empty<Mix>(), TimeSpan.FromMilliseconds(100));
+            var provider = new BlobBackedMixCatalogueProvider(
+                inner,
+                repo,
+                new MemoryCache(new MemoryCacheOptions()),
+                new IncrementingCacheInvalidator(),
+                NullLogger<BlobBackedMixCatalogueProvider>.Instance,
+                new Dictionary<string, double>(),
+                enrichmentRepository: null,
+                moodWeightEnricher: null);
+
+            Task<IReadOnlyList<Mix>> first = provider.GetLatestAsync(200, CancellationToken.None);
+            Task<IReadOnlyList<Mix>> second = provider.GetLatestAsync(200, CancellationToken.None);
+            await Task.WhenAll(first, second);
+
+            repo.ReadCallCount.Should().Be(1);
+            inner.CallCount.Should().Be(1);
+        }
+
+        [Test]
         public async Task GetLatestAsync_after_delete_does_not_resurrect_mix_absent_from_rss()
         {
             // Models the delete-then-refresh flow (issue #89): a mix removed from the blob and no
@@ -1095,6 +1121,27 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             public Task<IReadOnlyList<Mix>> GetLatestAsync(int maxItems, CancellationToken cancellationToken)
             {
                 return Task.FromResult(_mixes);
+            }
+        }
+
+        private sealed class DelayingMixCatalogueProvider : IMixCatalogueProvider
+        {
+            private readonly IReadOnlyList<Mix> _mixes;
+            private readonly TimeSpan _delay;
+
+            public DelayingMixCatalogueProvider(IReadOnlyList<Mix> mixes, TimeSpan delay)
+            {
+                _mixes = mixes;
+                _delay = delay;
+            }
+
+            public int CallCount { get; private set; }
+
+            public async Task<IReadOnlyList<Mix>> GetLatestAsync(int maxItems, CancellationToken cancellationToken)
+            {
+                CallCount++;
+                await Task.Delay(_delay, cancellationToken).ConfigureAwait(false);
+                return _mixes;
             }
         }
 
