@@ -16,21 +16,11 @@ namespace Changsta.Ai.Interface.Api.ViewModels
                 ImageUrl = mix.ImageUrl,
                 Genre = mix.Genre,
                 Energy = mix.Energy,
-                Bpm = ComputeBpm(mix),
+                Bpm = mix.GetMidBpm(),
                 Moods = mix.Moods,
                 PublishedAt = mix.PublishedAt,
                 Duration = ParseDurationSeconds(mix.Duration),
             };
-        }
-
-        private static int? ComputeBpm(Mix mix)
-        {
-            if (mix.BpmMin.HasValue && mix.BpmMax.HasValue)
-            {
-                return (int)Math.Round((mix.BpmMin.Value + mix.BpmMax.Value) / 2.0);
-            }
-
-            return mix.BpmMin ?? mix.BpmMax;
         }
 
         private static int? ParseDurationSeconds(string? duration)
