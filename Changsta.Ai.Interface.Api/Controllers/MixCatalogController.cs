@@ -7,9 +7,9 @@ using System.Threading.Tasks;
 using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Core.Normalization;
+using Changsta.Ai.Interface.Api.Security;
 using Changsta.Ai.Interface.Api.ViewModels;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
 
 namespace Changsta.Ai.Interface.Api.Controllers
 {
@@ -27,52 +27,31 @@ namespace Changsta.Ai.Interface.Api.Controllers
         private readonly IMixCatalogueProvider _catalogueProvider;
         private readonly ICatalogFlushUseCase _flushUseCase;
         private readonly IDeleteMixUseCase _deleteMixUseCase;
-        private readonly IConfiguration _configuration;
 
         public MixCatalogController(
             IMixCatalogueProvider catalogueProvider,
             ICatalogFlushUseCase flushUseCase,
-            IDeleteMixUseCase deleteMixUseCase,
-            IConfiguration configuration)
+            IDeleteMixUseCase deleteMixUseCase)
         {
             _catalogueProvider = catalogueProvider;
             _flushUseCase = flushUseCase;
             _deleteMixUseCase = deleteMixUseCase;
-            _configuration = configuration;
         }
 
         [HttpPost("flush")]
+        [BearerSecret("Catalog:FlushSecret")]
         public async Task<IActionResult> FlushCatalogAsync(CancellationToken cancellationToken)
         {
-            string? expectedSecret = _configuration["Catalog:FlushSecret"];
-            if (!string.IsNullOrEmpty(expectedSecret))
-            {
-                if (!Request.Headers.TryGetValue("Authorization", out var authHeader)
-                    || !string.Equals(authHeader.ToString(), $"Bearer {expectedSecret}", StringComparison.Ordinal))
-                {
-                    return Unauthorized(new { error = "Invalid or missing authorization." });
-                }
-            }
-
             await _flushUseCase.FlushAsync(cancellationToken).ConfigureAwait(false);
             return Ok(new { flushed = true });
         }
 
         [HttpDelete("mixes")]
+        [BearerSecret("Catalog:FlushSecret")]
         public async Task<IActionResult> DeleteMixAsync(
             [FromQuery] string slug,
             CancellationToken cancellationToken)
         {
-            string? expectedSecret = _configuration["Catalog:FlushSecret"];
-            if (!string.IsNullOrEmpty(expectedSecret))
-            {
-                if (!Request.Headers.TryGetValue("Authorization", out var authHeader)
-                    || !string.Equals(authHeader.ToString(), $"Bearer {expectedSecret}", StringComparison.Ordinal))
-                {
-                    return Unauthorized(new { error = "Invalid or missing authorization." });
-                }
-            }
-
             if (string.IsNullOrWhiteSpace(slug))
             {
                 return BadRequest(new { error = "slug is required." });
