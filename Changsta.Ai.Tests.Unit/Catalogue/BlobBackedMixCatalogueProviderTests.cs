@@ -7,6 +7,7 @@ using Changsta.Ai.Core.Contracts.Ai;
 using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Infrastructure.Services.Azure.Catalogue;
+using Changsta.Ai.Infrastructure.Services.Azure.Diagnostics;
 using FluentAssertions;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -152,6 +153,45 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             Assert.That(result, Has.Count.EqualTo(1));
             Assert.That(result[0].Url, Is.EqualTo("https://sc.test/mix-1"));
             Assert.That(blobRepo.WriteCallCount, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void GetLatestAsync_propagates_cancellation_instead_of_swallowing_it()
+        {
+            // Cancellation must not be caught by the 'safe' RSS wrapper and reported as a degraded
+            // service — it should propagate so the request short-circuits cleanly. See issue #55.
+            var sut = BuildSut(
+                blobMixes: new[] { MakeMix("1", "https://sc.test/mix-1") },
+                rssException: new OperationCanceledException());
+
+            Assert.That(
+                async () => await sut.GetLatestAsync(10, CancellationToken.None),
+                Throws.InstanceOf<OperationCanceledException>());
+        }
+
+        [Test]
+        public async Task GetLatestAsync_increments_rss_failure_counter_on_rss_error()
+        {
+            long measured = 0;
+            using var listener = new System.Diagnostics.Metrics.MeterListener();
+            listener.InstrumentPublished = (instrument, l) =>
+            {
+                if (instrument.Meter.Name == CatalogueMetrics.MeterName
+                    && instrument.Name == "catalogue.rss_fetch_failures")
+                {
+                    l.EnableMeasurementEvents(instrument);
+                }
+            };
+            listener.SetMeasurementEventCallback<long>((_, value, _, _) => Interlocked.Add(ref measured, value));
+            listener.Start();
+
+            var sut = BuildSut(
+                blobMixes: new[] { MakeMix("1", "https://sc.test/mix-1") },
+                rssException: new HttpRequestException("RSS down"));
+
+            await sut.GetLatestAsync(10, CancellationToken.None);
+
+            measured.Should().BeGreaterThanOrEqualTo(1);
         }
 
         [Test]

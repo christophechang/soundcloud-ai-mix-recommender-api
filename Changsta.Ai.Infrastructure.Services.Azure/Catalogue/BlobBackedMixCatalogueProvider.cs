@@ -8,6 +8,7 @@ using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Core.Normalization;
 using Changsta.Ai.Core.Parsing;
+using Changsta.Ai.Infrastructure.Services.Azure.Diagnostics;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
@@ -87,8 +88,9 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                     blobMixes = blobRead.Mixes;
                     blobETag = blobRead.ETag;
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
+                    CatalogueMetrics.BlobReadFailures.Add(1);
                     _logger.LogError(ex, "Blob catalog read failed — serving RSS-only catalog and skipping write-back to avoid overwriting intact data.");
                     blobMixes = Array.Empty<Mix>();
                     blobReadSucceeded = false;
@@ -168,6 +170,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                         // Includes CatalogConcurrencyException: a concurrent writer changed the blob
                         // between our read and write. Serve the in-memory merged result and let the
                         // next refresh re-read and retry persistence.
+                        CatalogueMetrics.BlobWriteFailures.Add(1);
                         _logger.LogWarning(ex, "Blob catalog write failed — serving the refreshed in-memory catalog and retrying persistence on the next load.");
                     }
                 }
@@ -635,8 +638,9 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                     .GetLatestAsync(int.MaxValue, cancellationToken)
                     .ConfigureAwait(false);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                CatalogueMetrics.RssFetchFailures.Add(1);
                 _logger.LogWarning(ex, "RSS feed fetch failed — proceeding with blob catalog only.");
                 return Array.Empty<Mix>();
             }
@@ -654,8 +658,9 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             {
                 return await _enrichmentRepository.ReadAsync(cancellationToken).ConfigureAwait(false);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                CatalogueMetrics.EnrichedWeightsLoadFailures.Add(1);
                 _logger.LogWarning(ex, "Failed to load enriched mood weights — proceeding with base weights only.");
                 return new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
             }
@@ -672,8 +677,9 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                     .EnrichAsync(existingWeights, unknownMoods, cancellationToken)
                     .ConfigureAwait(false);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                CatalogueMetrics.AiEnrichmentFailures.Add(1);
                 _logger.LogWarning(ex, "AI mood enrichment failed — new moods will have no weight this cycle.");
                 return new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
             }

@@ -80,7 +80,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
                 return result;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.LogWarning(ex, "AI mood weight enrichment call failed.");
                 return new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
