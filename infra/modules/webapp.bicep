@@ -20,6 +20,9 @@ resource webApp 'Microsoft.Web/sites@2023-12-01' = {
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
       linuxFxVersion: isLinux ? 'DOTNETCORE|10.0' : ''
+      // The app maps /health (Program.cs); wiring it here lets the platform auto-heal an
+      // unhealthy instance instead of leaving a wedged process running. See issue #91.
+      healthCheckPath: '/health'
       appSettings: appSettings
     }
   }
