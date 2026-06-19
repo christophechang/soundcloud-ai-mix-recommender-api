@@ -45,40 +45,43 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             "featuring",
         };
 
-        // Pre-sorted longest-first so multi-word phrases ("drum and bass") match before
-        // their shorter substrings ("dnb"). Each tuple is (query alias, catalog genre value).
-        private static readonly (string Alias, string Genre)[] GenreAliasesByLength = new[]
+        // Curated set of genre phrases this analyser looks for inside a free-text query, ordered
+        // longest-first so multi-word phrases ("drum and bass") match before their shorter
+        // substrings ("dnb"). The canonical catalogue genre for each alias is resolved by
+        // GenreNormalizer (the single source of truth for genre aliasing — see issue #37), so this
+        // list only declares *which* phrases to detect, not how they canonicalise.
+        private static readonly string[] GenreAliasesByLength = new[]
         {
-            ("liquid drum and bass", "dnb"),
-            ("drum and bass", "dnb"),
-            ("drum & bass", "dnb"),
-            ("ragga jungle", "jungle"),
-            ("electronica", "electronica"),
-            ("tech house", "techno"),
-            ("tech-house", "techno"),
-            ("break beat", "breakbeat"),
-            ("deep-house", "deep-house"),
-            ("deep house", "deep-house"),
-            ("uk garage", "ukg"),
-            ("breakbeat", "breakbeat"),
-            ("neurofunk", "dnb"),
-            ("two step", "ukg"),
-            ("uk-bass", "uk bass"),
-            ("uk bass", "uk bass"),
-            ("hip-hop", "hip-hop"),
-            ("hip hop", "hip-hop"),
-            ("jungle", "jungle"),
-            ("techno", "techno"),
-            ("breaks", "breakbeat"),
-            ("hiphop", "hip-hop"),
-            ("garage", "ukg"),
-            ("house", "house"),
-            ("2step", "ukg"),
-            ("2-step", "ukg"),
-            ("d&b", "dnb"),
-            ("ukg", "ukg"),
-            ("dnb", "dnb"),
-            ("idm", "electronica"),
+            "liquid drum and bass",
+            "drum and bass",
+            "drum & bass",
+            "ragga jungle",
+            "electronica",
+            "tech house",
+            "tech-house",
+            "break beat",
+            "deep-house",
+            "deep house",
+            "uk garage",
+            "breakbeat",
+            "neurofunk",
+            "two step",
+            "uk-bass",
+            "uk bass",
+            "hip-hop",
+            "hip hop",
+            "jungle",
+            "techno",
+            "breaks",
+            "hiphop",
+            "garage",
+            "house",
+            "2step",
+            "2-step",
+            "d&b",
+            "ukg",
+            "dnb",
+            "idm",
         };
 
         public static MixRecommendationQueryAnalysis Analyze(string question, IReadOnlyList<Mix> mixes)
@@ -205,11 +208,11 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
             string q = question.Trim();
 
-            foreach (var (alias, canonicalGenre) in GenreAliasesByLength)
+            foreach (string alias in GenreAliasesByLength)
             {
                 if (q.Contains(alias, StringComparison.OrdinalIgnoreCase))
                 {
-                    genre = canonicalGenre;
+                    genre = GenreNormalizer.Normalize(alias);
                     matchedAlias = alias;
                     return true;
                 }

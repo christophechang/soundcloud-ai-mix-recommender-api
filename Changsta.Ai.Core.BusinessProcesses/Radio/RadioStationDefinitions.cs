@@ -30,6 +30,10 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
                 Name = "Origin FM",
                 Frequency = "97.2 FM",
                 Description = "House, Deep House, Electronica, Techno, Disco and Funk",
+
+                // "deep-house" is a live entry, not dead: GenreNormalizer canonicalises "deep house"
+                // to "deep-house", and RadioScheduler matches a mix's canonical genre against this
+                // list, so the entry is what schedules deep-house mixes onto Origin FM. See #37.
                 Genres = new[] { "house", "deep-house", "electronica", "techno", "disco", "funk" },
             },
             new RadioStation

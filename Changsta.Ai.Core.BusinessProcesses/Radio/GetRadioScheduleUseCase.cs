@@ -16,6 +16,10 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
         private const int CatalogMaxItems = 200;
         private const string ScheduleTimezoneId = "Europe/London";
 
+        // Display-only fold for the schedule UI: deep-house mixes are surfaced under the "house"
+        // genre label/count. This is deliberately distinct from GenreNormalizer (the canonical
+        // source of truth, which keeps "deep-house" as its own canonical genre — see issue #37).
+        // It does not affect station scheduling, which matches the canonical genre directly.
         private static readonly IReadOnlyDictionary<string, string> GenreAliases =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
