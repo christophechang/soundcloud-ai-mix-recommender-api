@@ -17,6 +17,7 @@ using Changsta.Ai.Infrastructure.Services.Azure.Catalogue;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue;
 using Changsta.Ai.Interface.Api.Cors;
 using Changsta.Ai.Interface.Api.Middleware;
+using Changsta.Ai.Interface.Api.RateLimiting;
 using Changsta.Ai.Interface.Api.Services;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Caching.Memory;
@@ -77,36 +78,9 @@ builder.Services.AddMemoryCache();
 
 bool trustCloudflareHeader = builder.Configuration.GetValue<bool>("RateLimiting:TrustCloudflareHeader");
 
-builder.Services.AddRateLimiter(options =>
-{
-    // 10 requests per minute per client IP.
-    // CF-Connecting-IP is only trusted when RateLimiting:TrustCloudflareHeader is true (prod only).
-    // In all other environments the TCP RemoteIpAddress is used directly.
-    options.AddPolicy("recommend", httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: (trustCloudflareHeader
-                ? httpContext.Request.Headers["CF-Connecting-IP"].FirstOrDefault()
-                : null)
-                ?? httpContext.Connection.RemoteIpAddress?.ToString()
-                ?? "unknown",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 10,
-                Window = TimeSpan.FromMinutes(1),
-                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                QueueLimit = 0,
-            }));
-
-    options.OnRejected = async (context, cancellationToken) =>
-    {
-        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-        context.HttpContext.Response.ContentType = "application/json";
-        context.HttpContext.Response.Headers["Retry-After"] = "60";
-        await context.HttpContext.Response.WriteAsJsonAsync(
-            new { error = "Too many requests. Please wait a moment and try again." },
-            cancellationToken).ConfigureAwait(false);
-    };
-});
+// Global per-IP default policy on every endpoint, with stricter named policies for the AI
+// recommend endpoint and the privileged mutation/diagnostics endpoints. See issue #35.
+builder.Services.AddRateLimiter(options => RateLimitPolicies.Configure(options, trustCloudflareHeader));
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
@@ -226,6 +200,8 @@ app.MapControllers();
 
 app.MapGet("/", () => Results.NoContent());
 
-app.MapHealthChecks("/health");
+// Health probes must not be throttled by the global limiter or the platform may mark the
+// instance unhealthy under load.
+app.MapHealthChecks("/health").DisableRateLimiting();
 
 app.Run();

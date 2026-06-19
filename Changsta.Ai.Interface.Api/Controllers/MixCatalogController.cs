@@ -7,9 +7,11 @@ using System.Threading.Tasks;
 using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Core.Normalization;
+using Changsta.Ai.Interface.Api.RateLimiting;
 using Changsta.Ai.Interface.Api.Security;
 using Changsta.Ai.Interface.Api.ViewModels;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Changsta.Ai.Interface.Api.Controllers
 {
@@ -39,6 +41,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
         }
 
         [HttpPost("flush")]
+        [EnableRateLimiting(RateLimitPolicies.Privileged)]
         [BearerSecret("Catalog:FlushSecret")]
         public async Task<IActionResult> FlushCatalogAsync(CancellationToken cancellationToken)
         {
@@ -47,6 +50,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
         }
 
         [HttpDelete("mixes")]
+        [EnableRateLimiting(RateLimitPolicies.Privileged)]
         [BearerSecret("Catalog:FlushSecret")]
         public async Task<IActionResult> DeleteMixAsync(
             [FromQuery] string slug,

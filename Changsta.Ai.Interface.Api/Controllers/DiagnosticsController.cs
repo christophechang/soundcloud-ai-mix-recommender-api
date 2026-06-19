@@ -1,8 +1,10 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Changsta.Ai.Core.Contracts.Diagnostics;
+using Changsta.Ai.Interface.Api.RateLimiting;
 using Changsta.Ai.Interface.Api.Security;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Changsta.Ai.Interface.Api.Controllers
 {
@@ -22,6 +24,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
         }
 
         [HttpGet("errors")]
+        [EnableRateLimiting(RateLimitPolicies.Privileged)]
         [BearerSecret("Catalog:FlushSecret")]
         public async Task<IActionResult> GetErrorsAsync(
             [FromQuery] int hours = DefaultWindowHours,
