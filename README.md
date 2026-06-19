@@ -239,6 +239,17 @@ Returns a paginated `CatalogPage<Mix>` of all mixes containing a track by the na
 
 Returns `Healthy` when the process is running. Used by Azure App Service for health probes.
 
+### `DELETE /api/catalog/mixes?slug=...`
+
+Admin-only (bearer secret). Removes a mix from the durable blob catalogue using optimistic
+concurrency (ETag `If-Match`) and invalidates the cache.
+
+**Deletion semantics:** the catalogue is merged from the blob plus the live SoundCloud RSS feed.
+Deleting removes the mix from the blob, but if it is still present in the SoundCloud RSS window it
+will be re-discovered and re-merged on the next refresh — this is expected behaviour, since RSS is
+the source of truth for whether a mix exists. Deletion is durable for mixes that have been removed
+upstream on SoundCloud (or have aged out of the RSS window).
+
 ---
 
 ## Tech Stack

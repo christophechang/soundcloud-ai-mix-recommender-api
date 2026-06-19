@@ -25,6 +25,16 @@ namespace Changsta.Ai.Core.BusinessProcesses.Catalogue
 
         public async Task<bool> DeleteAsync(string id, CancellationToken cancellationToken)
         {
+            // The deleter removes the mix from the durable blob catalogue under optimistic
+            // concurrency (issue #34). We then invalidate the in-memory cache so the next read
+            // reflects the deletion.
+            //
+            // RSS-window semantics (issue #89): the catalogue is merged from the blob plus the live
+            // SoundCloud RSS feed. Deletion removes the mix from the blob, but if it is still present
+            // in the RSS window it will be re-discovered on a refresh — this is expected, since RSS is
+            // the source of truth for a mix's existence. Deletion is durable for mixes that have been
+            // removed upstream (or aged out of the RSS window). Tombstones are deliberately not added
+            // at this stage.
             bool deleted = await _deleter.DeleteBySlugAsync(id, cancellationToken).ConfigureAwait(false);
 
             if (deleted)

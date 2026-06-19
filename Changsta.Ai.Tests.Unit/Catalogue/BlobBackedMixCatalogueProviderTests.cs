@@ -19,6 +19,38 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
     public sealed class BlobBackedMixCatalogueProviderTests
     {
         [Test]
+        public async Task GetLatestAsync_after_delete_does_not_resurrect_mix_absent_from_rss()
+        {
+            // Models the delete-then-refresh flow (issue #89): a mix removed from the blob and no
+            // longer in the RSS window must not reappear after a cache-invalidating refresh.
+            Mix keep = MakeMix("keep", "https://sc.test/keep");
+            Mix doomed = MakeMix("doomed", "https://sc.test/doomed");
+
+            var repo = new StubBlobRepository { BlobMixes = new[] { keep, doomed } };
+            var invalidator = new IncrementingCacheInvalidator();
+            var provider = new BlobBackedMixCatalogueProvider(
+                new StubMixCatalogueProvider(Array.Empty<Mix>()),
+                repo,
+                new MemoryCache(new MemoryCacheOptions()),
+                invalidator,
+                NullLogger<BlobBackedMixCatalogueProvider>.Instance,
+                new Dictionary<string, double>(),
+                enrichmentRepository: null,
+                moodWeightEnricher: null);
+
+            IReadOnlyList<Mix> initial = await provider.GetLatestAsync(200, CancellationToken.None);
+            initial.Select(m => m.Id).Should().Contain(new[] { "keep", "doomed" });
+
+            // Admin delete removes it from the blob and invalidates the cache.
+            repo.BlobMixes = new[] { keep };
+            invalidator.Invalidate();
+
+            IReadOnlyList<Mix> afterDelete = await provider.GetLatestAsync(200, CancellationToken.None);
+            afterDelete.Select(m => m.Id).Should().Contain("keep");
+            afterDelete.Select(m => m.Id).Should().NotContain("doomed");
+        }
+
+        [Test]
         public async Task GetLatestAsync_merges_blob_and_rss_rss_wins_on_url_collision()
         {
             var blobMix = MakeMix("1", "https://sc.test/mix-1", "Old Title");
@@ -1088,6 +1120,13 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             public void Invalidate()
             {
             }
+        }
+
+        private sealed class IncrementingCacheInvalidator : ICatalogCacheInvalidator
+        {
+            public int Version { get; private set; }
+
+            public void Invalidate() => Version++;
         }
 
         private sealed class StubBlobRepository : IBlobMixCatalogueRepository
