@@ -2,6 +2,10 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.45
+
+- **Bounded OpenAI request timeout.** OpenAI calls now use a configurable per-request network timeout (`OpenAI:TimeoutSeconds`, default 30 seconds), applied to both the recommender and the mood-weight enricher. A slow or unresponsive OpenAI endpoint can no longer stall a request indefinitely — previously it could hang for the SDK default and again across a retry, risking thread-pool exhaustion on the single instance. A fired timeout now returns a clean `503 Service Unavailable` instead of hanging or a misleading empty `200`, while genuine client cancellations still propagate. `OpenAI:TimeoutSeconds` is validated as positive at startup.
+
 ## v1.44
 
 - **Mix slug in catalog response.** `GET /api/catalog/mixes` now includes a `slug` field on every item, derived from the SoundCloud permalink URL (e.g. `https://soundcloud.com/changsta/riddim-memory` → `"slug": "riddim-memory"`). Canonical identity for `/mix?mix=SLUG` deep links is now owned by the API rather than computed client-side.
@@ -146,7 +150,7 @@ Notable changes to the SoundCloud Mix Recommender API.
 ## v1.14
 
 - **Permalink change handling.** When a SoundCloud mix URL changes, the catalog now detects the same track by its stable SoundCloud ID (`tag:soundcloud,2010:tracks/{id}`), transfers all computed metadata (genre, energy, BPM, moods, related mixes) to the new URL, and removes the orphaned old URL from the blob catalog. Previously the old URL would accumulate as dead weight and the new URL would lose all computed data.
-- **Smart quote fix in schema parser.** The `[changsta:mix:v1 {...}]` JSON block parser now normalises Unicode curly quotes (`"`/`"`) to straight quotes before parsing. Fixes schema extraction failures when SoundCloud's description editor auto-converts quotation marks.
+- **Smart quote fix in schema parser.** The `[changsta:mix:v1 {...}]` JSON block parser now normalises Unicode curly quotes (`“`/`”`) to straight quotes before parsing. Fixes schema extraction failures when SoundCloud's description editor auto-converts quotation marks.
 
 ## v1.13
 
