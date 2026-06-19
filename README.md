@@ -183,7 +183,7 @@ Before any result is returned:
 | `clarifyingQuestion` | string\|null | Non-null only when `question` is empty or whitespace |
 | `maxResultsApplied` | integer | The effective maxResults used after clamping |
 
-`results` may be an empty array on `200` — this means the AI found no catalogue mixes with sufficient evidence to match the query, or both AI response validation attempts failed. Upstream AI connection failures are handled by the global error middleware.
+`results` may be an empty array on `200` — this means the AI found no catalogue mixes with sufficient evidence to match the query, or both AI response validation attempts failed. Upstream AI connection failures are handled by the global error middleware. OpenAI calls use a bounded per-request network timeout (`OpenAI:TimeoutSeconds`, default 30); if the upstream stalls past it the request returns `503` rather than hanging.
 
 ---
 

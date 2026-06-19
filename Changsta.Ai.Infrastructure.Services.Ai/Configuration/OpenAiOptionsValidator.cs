@@ -23,6 +23,11 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Configuration
                 failures.Add("OpenAI:Model is not configured.");
             }
 
+            if (options.TimeoutSeconds <= 0)
+            {
+                failures.Add("OpenAI:TimeoutSeconds must be greater than zero.");
+            }
+
             return failures.Count == 0
                 ? ValidateOptionsResult.Success
                 : ValidateOptionsResult.Fail(failures);
