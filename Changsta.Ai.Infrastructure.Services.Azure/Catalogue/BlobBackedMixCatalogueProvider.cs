@@ -13,7 +13,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
 {
-    public sealed class BlobBackedMixCatalogueProvider : IMixCatalogueProvider
+    public sealed class BlobBackedMixCatalogueProvider : IMixCatalogueProvider, IDisposable
     {
         private const string CacheKeyPrefix = "blob_catalog_v";
         private const int MinTracksForNearEquivalentLegacyMatch = 8;
@@ -23,9 +23,11 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
         // can refresh sooner. See issue #88.
         private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(1);
 
-        // Intentionally static: guards a process-wide blob load and must be shared across all
-        // per-request instances. The scoped lifetime of this class is for DI composition only.
-        private static readonly SemaphoreSlim LoadSemaphore = new SemaphoreSlim(1, 1);
+        // Serialises catalogue rebuilds so concurrent cold requests don't all rebuild (and re-run
+        // RSS fetch / mood enrichment) at once. This is an instance field: the provider is
+        // registered as a Singleton (see Program.cs), so one instance owns the lock — matching the
+        // intent, without mixing static state into a per-request lifetime. See issue #56.
+        private readonly SemaphoreSlim _loadSemaphore = new SemaphoreSlim(1, 1);
 
         private readonly IMixCatalogueProvider _innerProvider;
         private readonly IBlobMixCatalogueRepository _repository;
@@ -65,7 +67,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 return cached.Count > maxItems ? cached.Take(maxItems).ToArray() : cached;
             }
 
-            await LoadSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            await _loadSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
             try
             {
@@ -179,9 +181,11 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             }
             finally
             {
-                LoadSemaphore.Release();
+                _loadSemaphore.Release();
             }
         }
+
+        public void Dispose() => _loadSemaphore.Dispose();
 
         private static void LogUnknownGenres(
             ILogger<BlobBackedMixCatalogueProvider> logger,
