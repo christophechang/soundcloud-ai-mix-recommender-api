@@ -1094,7 +1094,11 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
         {
             public IReadOnlyList<Mix> BlobMixes { get; set; } = Array.Empty<Mix>();
 
+            public string? ReadETag { get; set; } = "etag-0";
+
             public IReadOnlyList<Mix>? WrittenMixes { get; private set; }
+
+            public string? WrittenETag { get; private set; }
 
             public Exception? WriteException { get; set; }
 
@@ -1102,13 +1106,13 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
 
             public int ReadCallCount { get; private set; }
 
-            public Task<IReadOnlyList<Mix>> ReadAsync(CancellationToken cancellationToken)
+            public Task<CatalogReadResult> ReadAsync(CancellationToken cancellationToken)
             {
                 ReadCallCount++;
-                return Task.FromResult(BlobMixes);
+                return Task.FromResult(new CatalogReadResult(BlobMixes, ReadETag));
             }
 
-            public Task WriteAsync(IReadOnlyList<Mix> mixes, CancellationToken cancellationToken)
+            public Task WriteAsync(IReadOnlyList<Mix> mixes, string? expectedETag, CancellationToken cancellationToken)
             {
                 WriteCallCount++;
                 if (WriteException is not null)
@@ -1117,6 +1121,7 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
                 }
 
                 WrittenMixes = mixes;
+                WrittenETag = expectedETag;
                 return Task.CompletedTask;
             }
         }

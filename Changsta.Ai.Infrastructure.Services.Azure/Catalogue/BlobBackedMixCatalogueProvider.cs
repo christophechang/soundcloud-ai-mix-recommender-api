@@ -77,10 +77,13 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
 
                 bool blobReadSucceeded = true;
                 IReadOnlyList<Mix> blobMixes;
+                string? blobETag = null;
 
                 try
                 {
-                    blobMixes = await _repository.ReadAsync(cancellationToken).ConfigureAwait(false);
+                    CatalogReadResult blobRead = await _repository.ReadAsync(cancellationToken).ConfigureAwait(false);
+                    blobMixes = blobRead.Mixes;
+                    blobETag = blobRead.ETag;
                 }
                 catch (Exception ex)
                 {
@@ -156,10 +159,13 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
 
                     try
                     {
-                        await _repository.WriteAsync(merged, cancellationToken).ConfigureAwait(false);
+                        await _repository.WriteAsync(merged, blobETag, cancellationToken).ConfigureAwait(false);
                     }
                     catch (Exception ex) when (ex is not OperationCanceledException)
                     {
+                        // Includes CatalogConcurrencyException: a concurrent writer changed the blob
+                        // between our read and write. Serve the in-memory merged result and let the
+                        // next refresh re-read and retry persistence.
                         _logger.LogWarning(ex, "Blob catalog write failed — serving the refreshed in-memory catalog and retrying persistence on the next load.");
                     }
                 }
