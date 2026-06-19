@@ -7,6 +7,7 @@ using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Contracts.Radio;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Core.Dtos;
+using Microsoft.Extensions.Logging;
 
 namespace Changsta.Ai.Core.BusinessProcesses.Radio
 {
@@ -25,11 +26,14 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
         private readonly RadioScheduler _scheduler;
         private readonly TimeZoneInfo _scheduleTimezone;
 
-        public GetRadioScheduleUseCase(IMixCatalogueProvider catalogueProvider)
+        public GetRadioScheduleUseCase(
+            IMixCatalogueProvider catalogueProvider,
+            ILogger<GetRadioScheduleUseCase> logger)
         {
             _catalogueProvider = catalogueProvider ?? throw new ArgumentNullException(nameof(catalogueProvider));
+            ArgumentNullException.ThrowIfNull(logger);
             _scheduler = new RadioScheduler();
-            _scheduleTimezone = ResolveScheduleTimezone();
+            _scheduleTimezone = ResolveScheduleTimezone(ScheduleTimezoneId, logger);
         }
 
         public async Task<RadioScheduleResultDto> GetAsync(CancellationToken cancellationToken)
@@ -98,6 +102,25 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
             };
         }
 
+        // Resolved per instance (not in a static initialiser) so a host without tzdata
+        // degrades to UTC with a logged warning rather than poisoning the type with a
+        // TypeInitializationException for the rest of the process. See issue #48.
+        internal static TimeZoneInfo ResolveScheduleTimezone(string timezoneId, ILogger logger)
+        {
+            try
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById(timezoneId);
+            }
+            catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException)
+            {
+                logger.LogWarning(
+                    ex,
+                    "Schedule timezone '{TimezoneId}' could not be resolved on this host; falling back to UTC. Radio slot hours may be offset.",
+                    timezoneId);
+                return TimeZoneInfo.Utc;
+            }
+        }
+
         private static RadioHourSlotDto MapSlot(RadioScheduledSlot slot, bool isCurrent) =>
             new RadioHourSlotDto
             {
@@ -107,21 +130,5 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
                 AuditWarnings = slot.AuditWarnings,
                 RelaxedRules = slot.RelaxedRules,
             };
-
-        private static TimeZoneInfo ResolveScheduleTimezone()
-        {
-            try
-            {
-                return TimeZoneInfo.FindSystemTimeZoneById(ScheduleTimezoneId);
-            }
-            catch (TimeZoneNotFoundException)
-            {
-                return TimeZoneInfo.Utc;
-            }
-            catch (InvalidTimeZoneException)
-            {
-                return TimeZoneInfo.Utc;
-            }
-        }
     }
 }
