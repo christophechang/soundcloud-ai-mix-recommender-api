@@ -166,7 +166,7 @@ Before any result is returned:
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `question` | string | yes | Natural language query. Min 1, max 2000 characters. |
-| `maxResults` | integer | no | Default `3`, min `1`, max `20`. Silently clamped if out of range. |
+| `maxResults` | integer | no | Default `3`, min `1`, max `20`. Out-of-range values are clamped to this range; the effective value is returned as `maxResultsApplied`. |
 
 **Response fields:**
 

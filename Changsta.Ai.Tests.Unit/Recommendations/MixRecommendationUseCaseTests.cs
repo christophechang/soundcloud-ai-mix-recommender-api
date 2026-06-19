@@ -153,6 +153,42 @@ namespace Changsta.Ai.Tests.Unit.Recommendations
             Assert.That(response.Results[0].ImageUrl, Is.EqualTo("https://img.test/metadata-mix.png"));
         }
 
+        [TestCase(0, 1)]
+        [TestCase(-5, 1)]
+        [TestCase(1, 1)]
+        [TestCase(20, 20)]
+        [TestCase(50, 20)]
+        public async Task RecommendAsync_clamps_max_results_and_echoes_applied_value(int requested, int expectedApplied)
+        {
+            var mix = new Mix
+            {
+                Id = "mix-1",
+                Title = "Catalogue Mix",
+                Url = "https://soundcloud.test/mix-1",
+                Genre = "house",
+                Energy = "mid",
+            };
+
+            int observedMaxResults = -1;
+            var sut = new MixRecommendationUseCase(
+                new StubMixCatalogueProvider(new[] { mix }),
+                new StubMixAiRecommender(Array.Empty<MixAiRecommendation>(), max => observedMaxResults = max),
+                NullLogger<MixRecommendationUseCase>.Instance);
+
+            MixRecommendationResponseDto response = await sut
+                .RecommendAsync(
+                    new MixRecommendationRequestDto
+                    {
+                        Question = "Give me house",
+                        MaxResults = requested,
+                    },
+                    CancellationToken.None)
+                .ConfigureAwait(false);
+
+            Assert.That(response.MaxResultsApplied, Is.EqualTo(expectedApplied));
+            Assert.That(observedMaxResults, Is.EqualTo(expectedApplied));
+        }
+
         [Test]
         public async Task RecommendAsync_logs_warning_when_dropping_unknown_mix_id()
         {
@@ -217,10 +253,12 @@ namespace Changsta.Ai.Tests.Unit.Recommendations
         private sealed class StubMixAiRecommender : IMixAiRecommender
         {
             private readonly IReadOnlyList<MixAiRecommendation> _recommendations;
+            private readonly Action<int>? _onMaxResults;
 
-            public StubMixAiRecommender(IReadOnlyList<MixAiRecommendation> recommendations)
+            public StubMixAiRecommender(IReadOnlyList<MixAiRecommendation> recommendations, Action<int>? onMaxResults = null)
             {
                 _recommendations = recommendations;
+                _onMaxResults = onMaxResults;
             }
 
             public Task<IReadOnlyList<MixAiRecommendation>> RecommendAsync(
@@ -229,6 +267,7 @@ namespace Changsta.Ai.Tests.Unit.Recommendations
                 int maxResults,
                 CancellationToken cancellationToken)
             {
+                _onMaxResults?.Invoke(maxResults);
                 return Task.FromResult(_recommendations);
             }
         }
