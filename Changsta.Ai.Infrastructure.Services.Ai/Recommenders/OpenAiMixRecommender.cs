@@ -44,16 +44,9 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             _catalogVersion = catalogVersion ?? throw new ArgumentNullException(nameof(catalogVersion));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-            if (string.IsNullOrWhiteSpace(resolvedOptions.ApiKey))
-            {
-                throw new InvalidOperationException("OpenAI:ApiKey is not configured.");
-            }
-
-            if (string.IsNullOrWhiteSpace(resolvedOptions.Model))
-            {
-                throw new InvalidOperationException("OpenAI:Model is not configured.");
-            }
-
+            // ApiKey / Model / TimeoutSeconds are validated at startup by OpenAiOptionsValidator
+            // (AddOptions<OpenAiOptions>().Validate(...).ValidateOnStart()), so no constructor-time
+            // re-validation is needed here. See issue #40.
             _timeoutSeconds = resolvedOptions.TimeoutSeconds;
             _chat = OpenAiChatClientFactory.Create(resolvedOptions);
         }
