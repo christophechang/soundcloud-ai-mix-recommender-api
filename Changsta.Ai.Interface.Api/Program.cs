@@ -130,6 +130,16 @@ builder.Services.AddSingleton(moodWeights);
 
 builder.Services.AddSingleton<ICatalogCacheInvalidator, CatalogCacheInvalidator>();
 
+// Fail fast at startup if the SoundCloud feed isn't configured. appsettings.json ships an empty
+// default (each operator supplies their own numeric user id via env vars / user-secrets — see
+// README), and warmup swallows exceptions, so without this guard a missing value would only
+// surface as a confusing runtime error on the first request.
+if (string.IsNullOrWhiteSpace(builder.Configuration["SoundCloud:RssUrl"]))
+{
+    throw new InvalidOperationException(
+        "SoundCloud:RssUrl is not configured. Set it via environment variables or user-secrets (see README).");
+}
+
 // SoundCloudRssMixCatalogueProvider is registered as its concrete type (not as IMixCatalogueProvider)
 // to avoid a circular DI graph: BlobBackedMixCatalogueProvider also implements IMixCatalogueProvider
 // and wraps SoundCloudRssMixCatalogueProvider as its inner provider.
@@ -141,8 +151,11 @@ builder.Services.AddScoped<SoundCloudRssMixCatalogueProvider>(sp =>
     var invalidator = sp.GetRequiredService<ICatalogCacheInvalidator>();
     var logger = sp.GetRequiredService<ILogger<SoundCloudRssMixCatalogueProvider>>();
 
-    string rssUrl = configuration["SoundCloud:RssUrl"]
-        ?? throw new InvalidOperationException("SoundCloud:RssUrl is not configured.");
+    string? rssUrl = configuration["SoundCloud:RssUrl"];
+    if (string.IsNullOrWhiteSpace(rssUrl))
+    {
+        throw new InvalidOperationException("SoundCloud:RssUrl is not configured.");
+    }
 
     return new SoundCloudRssMixCatalogueProvider(
         httpClientFactory.CreateClient("SoundCloudRss"),

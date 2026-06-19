@@ -27,6 +27,8 @@ npm install -g azurite
 azurite --silent --location /tmp/azurite --debug /tmp/azurite-debug.log
 
 # 2. Set secrets
+# SoundCloud:RssUrl ships empty in appsettings.json — the app fails fast at startup until you
+# set your own numeric SoundCloud user ID below.
 dotnet user-secrets set "OpenAI:ApiKey" "your-key-here" --project Changsta.Ai.Interface.Api
 dotnet user-secrets set "OpenAI:Model" "gpt-4.1-mini" --project Changsta.Ai.Interface.Api
 dotnet user-secrets set "Azure:BlobCatalog:ConnectionString" "UseDevelopmentStorage=true" --project Changsta.Ai.Interface.Api
