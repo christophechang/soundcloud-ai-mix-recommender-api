@@ -46,6 +46,10 @@ namespace Changsta.Ai.Core.BusinessProcesses.Recommendations
                 };
             }
 
+            // Out-of-range maxResults is intentionally clamped (not rejected with a 400):
+            // the response echoes the effective value back as MaxResultsApplied so callers
+            // can see what was used. This keeps the public contract stable for clients that
+            // omit or send a slightly off value. See issue #46.
             int maxResults = Math.Clamp(request.MaxResults, 1, MaxResultsUpperBound);
 
             var mixes = await _mixCatalogueProvider
