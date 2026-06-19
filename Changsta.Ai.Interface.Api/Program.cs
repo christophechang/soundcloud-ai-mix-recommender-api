@@ -15,6 +15,7 @@ using Changsta.Ai.Infrastructure.Services.Ai.Recommenders;
 using Changsta.Ai.Infrastructure.Services.Azure;
 using Changsta.Ai.Infrastructure.Services.Azure.Catalogue;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue;
+using Changsta.Ai.Interface.Api.Cors;
 using Changsta.Ai.Interface.Api.Middleware;
 using Changsta.Ai.Interface.Api.Services;
 using Microsoft.AspNetCore.RateLimiting;
@@ -36,12 +37,9 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     });
 
-var allowedOrigins = new[]
-{
-    "https://changsta.com",
-    "https://www.changsta.com",
-    "http://localhost:8080",
-};
+// Origins come from configuration (Cors:AllowedOrigins); localhost is appended only in
+// Development and production is validated to reject non-https/localhost origins. See issue #32.
+string[] allowedOrigins = CorsOriginResolver.Resolve(builder.Configuration, builder.Environment);
 
 builder.Services.AddCors(options =>
 {
