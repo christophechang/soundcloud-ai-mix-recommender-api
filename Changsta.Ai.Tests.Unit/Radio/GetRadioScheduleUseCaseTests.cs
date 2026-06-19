@@ -113,8 +113,26 @@ namespace Changsta.Ai.Tests.Unit.Radio
             logger.Entries.Should().NotContain(e => e.Level == LogLevel.Warning);
         }
 
+        [Test]
+        public async Task GetAsync_uses_the_injected_scheduler()
+        {
+            var spy = new SpyRadioScheduler();
+            var sut = new GetRadioScheduleUseCase(
+                new StubCatalogue(Catalogue()),
+                NullLogger<GetRadioScheduleUseCase>.Instance,
+                spy);
+
+            RadioScheduleResultDto result = await sut.GetAsync(CancellationToken.None);
+
+            spy.Called.Should().BeTrue();
+            result.Stations.Should().HaveCount(3);
+        }
+
         private static Task<RadioScheduleResultDto> Run(IReadOnlyList<Mix> mixes)
-            => new GetRadioScheduleUseCase(new StubCatalogue(mixes), NullLogger<GetRadioScheduleUseCase>.Instance)
+            => new GetRadioScheduleUseCase(
+                    new StubCatalogue(mixes),
+                    NullLogger<GetRadioScheduleUseCase>.Instance,
+                    new RadioScheduler())
                 .GetAsync(CancellationToken.None);
 
         private static IReadOnlyList<Mix> Catalogue()
@@ -158,6 +176,19 @@ namespace Changsta.Ai.Tests.Unit.Radio
 
             public Task<IReadOnlyList<Mix>> GetLatestAsync(int maxItems, CancellationToken ct)
                 => Task.FromResult(_mixes);
+        }
+
+        private sealed class SpyRadioScheduler : IRadioScheduler
+        {
+            private readonly RadioScheduler _inner = new();
+
+            public bool Called { get; private set; }
+
+            public RadioSchedule Build(IReadOnlyList<Mix> catalogue, DateOnly date)
+            {
+                Called = true;
+                return _inner.Build(catalogue, date);
+            }
         }
 
         private sealed class ListLogger : ILogger

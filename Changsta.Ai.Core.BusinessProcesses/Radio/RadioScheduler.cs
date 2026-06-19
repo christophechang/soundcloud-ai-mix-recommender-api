@@ -6,13 +6,13 @@ using Changsta.Ai.Core.Exceptions;
 
 namespace Changsta.Ai.Core.BusinessProcesses.Radio
 {
-    internal sealed class RadioScheduler
+    internal sealed class RadioScheduler : IRadioScheduler
     {
         private const double MinScoreThreshold = 4.0;
         private const int RecentGenreWindow = 3;
         private const int RecentArtistWindow = 3;
 
-        internal RadioSchedule Build(IReadOnlyList<Mix> catalogue, DateOnly date)
+        public RadioSchedule Build(IReadOnlyList<Mix> catalogue, DateOnly date)
         {
             DayBucket dayBucket = SlotDefinitions.ResolveDayBucket(
                 new DateTime(date.Year, date.Month, date.Day).DayOfWeek);
