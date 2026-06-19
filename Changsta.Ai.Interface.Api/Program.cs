@@ -175,7 +175,7 @@ builder.Services.AddScoped<IDeleteMixUseCase>(sp =>
     return new DeleteMixUseCase(deleter, invalidator, provider);
 });
 builder.Services.AddScoped<IMixRecommendationUseCase, MixRecommendationUseCase>();
-builder.Services.AddScoped<IGetRadioScheduleUseCase, GetRadioScheduleUseCase>();
+builder.Services.AddRadioScheduling();
 builder.Services.AddScoped<IGetErrorInsightsUseCase, GetErrorInsightsUseCase>();
 builder.Services.AddScoped<IMixAiRecommender, OpenAiMixRecommender>();
 builder.Services.AddScoped<IMoodWeightEnricher, AiMoodWeightEnricher>();

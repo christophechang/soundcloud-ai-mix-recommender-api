@@ -23,16 +23,19 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
             };
 
         private readonly IMixCatalogueProvider _catalogueProvider;
-        private readonly RadioScheduler _scheduler;
+        private readonly IRadioScheduler _scheduler;
         private readonly TimeZoneInfo _scheduleTimezone;
 
-        public GetRadioScheduleUseCase(
+        // Internal so the scheduler can be substituted in tests; the public IGetRadioScheduleUseCase
+        // contract is wired through DI via RadioServiceCollectionExtensions.AddRadioScheduling.
+        internal GetRadioScheduleUseCase(
             IMixCatalogueProvider catalogueProvider,
-            ILogger<GetRadioScheduleUseCase> logger)
+            ILogger<GetRadioScheduleUseCase> logger,
+            IRadioScheduler scheduler)
         {
             _catalogueProvider = catalogueProvider ?? throw new ArgumentNullException(nameof(catalogueProvider));
             ArgumentNullException.ThrowIfNull(logger);
-            _scheduler = new RadioScheduler();
+            _scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
             _scheduleTimezone = ResolveScheduleTimezone(ScheduleTimezoneId, logger);
         }
 
