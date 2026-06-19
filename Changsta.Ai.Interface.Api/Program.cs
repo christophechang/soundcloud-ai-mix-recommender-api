@@ -140,6 +140,16 @@ if (string.IsNullOrWhiteSpace(builder.Configuration["SoundCloud:RssUrl"]))
         "SoundCloud:RssUrl is not configured. Set it via environment variables or user-secrets (see README).");
 }
 
+// Fail closed: the privileged endpoints (catalog flush/delete, diagnostics) are guarded by the
+// Catalog:FlushSecret bearer secret. Outside Development, refuse to start when it is unset so the
+// endpoints can never run unauthenticated. See issues #31 / #85.
+if (!builder.Environment.IsDevelopment()
+    && string.IsNullOrWhiteSpace(builder.Configuration["Catalog:FlushSecret"]))
+{
+    throw new InvalidOperationException(
+        "Catalog:FlushSecret must be configured in non-Development environments; it protects the flush, delete, and diagnostics endpoints.");
+}
+
 // SoundCloudRssMixCatalogueProvider is registered as its concrete type (not as IMixCatalogueProvider)
 // to avoid a circular DI graph: BlobBackedMixCatalogueProvider also implements IMixCatalogueProvider
 // and wraps SoundCloudRssMixCatalogueProvider as its inner provider.

@@ -573,8 +573,7 @@ namespace Changsta.Ai.Tests.Unit.Controllers
             var sut = new MixCatalogController(
                 new StubMixCatalogueProvider(mixes),
                 new StubCatalogFlushUseCase(),
-                new StubDeleteMixUseCase(),
-                new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
+                new StubDeleteMixUseCase());
 
             sut.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
 
