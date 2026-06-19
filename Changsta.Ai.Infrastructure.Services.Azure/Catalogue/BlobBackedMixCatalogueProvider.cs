@@ -17,7 +17,11 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
     {
         private const string CacheKeyPrefix = "blob_catalog_v";
         private const int MinTracksForNearEquivalentLegacyMatch = 8;
-        private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(24);
+
+        // 1-hour merged-catalogue TTL — matches the documented contract (README). Newly
+        // published mixes appear within this window; the warmup service and flush endpoint
+        // can refresh sooner. See issue #88.
+        private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(1);
 
         // Intentionally static: guards a process-wide blob load and must be shared across all
         // per-request instances. The scoped lifetime of this class is for DI composition only.
