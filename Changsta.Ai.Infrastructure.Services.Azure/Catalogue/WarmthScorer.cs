@@ -31,7 +31,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 if (!same)
                 {
                     changed = true;
-                    result[i] = WithWarmth(mix, warmth);
+                    result[i] = mix with { Warmth = warmth };
                 }
                 else
                 {
@@ -86,29 +86,6 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             double avg = votes.Sum() / votes.Count;
             double raw = (avg + energyNudge) / Normalizer;
             return Math.Clamp(raw, -1.0, 1.0);
-        }
-
-        private static Mix WithWarmth(Mix mix, double? warmth)
-        {
-            return new Mix
-            {
-                Id = mix.Id,
-                Title = mix.Title,
-                Url = mix.Url,
-                Description = mix.Description,
-                Intro = mix.Intro,
-                Duration = mix.Duration,
-                ImageUrl = mix.ImageUrl,
-                Tracklist = mix.Tracklist,
-                Genre = mix.Genre,
-                Energy = mix.Energy,
-                BpmMin = mix.BpmMin,
-                BpmMax = mix.BpmMax,
-                Moods = mix.Moods,
-                RelatedMixes = mix.RelatedMixes,
-                PublishedAt = mix.PublishedAt,
-                Warmth = warmth,
-            };
         }
     }
 }

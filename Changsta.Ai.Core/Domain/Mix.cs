@@ -4,7 +4,7 @@ using Changsta.Ai.Core.Normalization;
 
 namespace Changsta.Ai.Core.Domain
 {
-    public sealed class Mix
+    public sealed record Mix
     {
         required public string Id { get; init; }
 
