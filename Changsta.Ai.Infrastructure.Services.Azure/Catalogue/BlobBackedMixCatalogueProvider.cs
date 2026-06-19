@@ -209,7 +209,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 if (!string.Equals(mix.Genre, genre, StringComparison.Ordinal))
                 {
                     changed = true;
-                    normalized[i] = WithGenre(mix, genre);
+                    normalized[i] = mix with { Genre = genre };
                 }
                 else
                 {
@@ -244,56 +244,10 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 }
 
                 changed = true;
-                result[i] = WithIntro(mix, intro);
+                result[i] = mix with { Intro = intro };
             }
 
             return result;
-        }
-
-        private static Mix WithGenre(Mix mix, string genre)
-        {
-            return new Mix
-            {
-                Id = mix.Id,
-                Title = mix.Title,
-                Url = mix.Url,
-                Description = mix.Description,
-                Intro = mix.Intro,
-                Duration = mix.Duration,
-                ImageUrl = mix.ImageUrl,
-                Tracklist = mix.Tracklist,
-                Genre = genre,
-                Energy = mix.Energy,
-                BpmMin = mix.BpmMin,
-                BpmMax = mix.BpmMax,
-                Moods = mix.Moods,
-                RelatedMixes = mix.RelatedMixes,
-                PublishedAt = mix.PublishedAt,
-                Warmth = mix.Warmth,
-            };
-        }
-
-        private static Mix WithIntro(Mix mix, string? intro)
-        {
-            return new Mix
-            {
-                Id = mix.Id,
-                Title = mix.Title,
-                Url = mix.Url,
-                Description = mix.Description,
-                Intro = intro,
-                Duration = mix.Duration,
-                ImageUrl = mix.ImageUrl,
-                Tracklist = mix.Tracklist,
-                Genre = mix.Genre,
-                Energy = mix.Energy,
-                BpmMin = mix.BpmMin,
-                BpmMax = mix.BpmMax,
-                Moods = mix.Moods,
-                RelatedMixes = mix.RelatedMixes,
-                PublishedAt = mix.PublishedAt,
-                Warmth = mix.Warmth,
-            };
         }
 
         private static IReadOnlyList<Mix> MergeCatalogs(
@@ -328,11 +282,12 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                     bool rssHasSchema = !string.IsNullOrEmpty(mix.Genre);
                     bool syncSchema = descriptionChanged && rssHasSchema;
 
-                    byUrl[mix.Url] = new Mix
+                    // Base = existing (blob) so computed fields (Url, RelatedMixes, Warmth)
+                    // carry forward by default; only RSS-sourced/synced fields are overridden.
+                    byUrl[mix.Url] = existing with
                     {
                         Id = ResolveStableId(existing.Id, mix.Id),
                         Title = mix.Title,
-                        Url = existing.Url,
                         Description = mix.Description,
                         Intro = mix.Intro,
                         Duration = mix.Duration ?? existing.Duration,
@@ -343,9 +298,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                         BpmMin = syncSchema ? mix.BpmMin : existing.BpmMin,
                         BpmMax = syncSchema ? mix.BpmMax : existing.BpmMax,
                         Moods = syncSchema ? mix.Moods : existing.Moods,
-                        RelatedMixes = existing.RelatedMixes,
                         PublishedAt = mix.PublishedAt ?? existing.PublishedAt,
-                        Warmth = existing.Warmth,
                     };
 
                     if (TryFindLegacyMovedEntry(mix, blobMixes, out Mix? legacyEntry))
@@ -365,7 +318,9 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                     bool rssHasSchema = !string.IsNullOrEmpty(mix.Genre);
                     bool syncSchema = descriptionChanged && rssHasSchema;
 
-                    byUrl[mix.Url] = new Mix
+                    // Base = priorEntry (blob) so RelatedMixes/Warmth carry forward; the URL
+                    // moved, so Url is overridden to the new RSS permalink.
+                    byUrl[mix.Url] = priorEntry with
                     {
                         Id = ResolveStableId(priorEntry.Id, mix.Id),
                         Title = mix.Title,
@@ -380,9 +335,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                         BpmMin = syncSchema ? mix.BpmMin : priorEntry.BpmMin,
                         BpmMax = syncSchema ? mix.BpmMax : priorEntry.BpmMax,
                         Moods = syncSchema ? mix.Moods : priorEntry.Moods,
-                        RelatedMixes = priorEntry.RelatedMixes,
                         PublishedAt = mix.PublishedAt ?? priorEntry.PublishedAt,
-                        Warmth = priorEntry.Warmth,
                     };
                 }
                 else if (TryFindLegacyMovedEntry(mix, blobMixes, out Mix? legacyEntry))
@@ -398,7 +351,9 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                     bool syncSchema = descriptionChanged && rssHasSchema;
                     bool syncTracklist = syncSchema && SameTracklist(legacyEntry.Tracklist, mix.Tracklist);
 
-                    byUrl[mix.Url] = new Mix
+                    // Base = legacyEntry (blob) so RelatedMixes/Warmth carry forward; the URL
+                    // moved, so Url is overridden to the new RSS permalink.
+                    byUrl[mix.Url] = legacyEntry with
                     {
                         Id = ResolveStableId(legacyEntry.Id, mix.Id),
                         Title = mix.Title,
@@ -413,9 +368,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                         BpmMin = syncSchema ? mix.BpmMin : legacyEntry.BpmMin,
                         BpmMax = syncSchema ? mix.BpmMax : legacyEntry.BpmMax,
                         Moods = syncSchema ? mix.Moods : legacyEntry.Moods,
-                        RelatedMixes = legacyEntry.RelatedMixes,
                         PublishedAt = mix.PublishedAt ?? legacyEntry.PublishedAt,
-                        Warmth = legacyEntry.Warmth,
                     };
                 }
                 else
