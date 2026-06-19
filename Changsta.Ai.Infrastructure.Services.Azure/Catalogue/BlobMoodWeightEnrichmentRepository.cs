@@ -36,18 +36,9 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             credential = credential ?? throw new ArgumentNullException(nameof(credential));
 
             // BlobCatalogOptions is validated at startup by BlobCatalogOptionsValidator
-            // (ValidateOnStart), so constructor-time re-validation is redundant. See issue #45.
-            if (!string.IsNullOrWhiteSpace(resolved.ServiceEndpoint))
-            {
-                var containerUri = new Uri(
-                    resolved.ServiceEndpoint!.TrimEnd('/') + "/" + resolved.ContainerName);
-                _containerClient = new BlobContainerClient(containerUri, credential);
-            }
-            else
-            {
-                _containerClient = new BlobContainerClient(resolved.ConnectionString, resolved.ContainerName);
-            }
-
+            // (ValidateOnStart), so constructor-time re-validation is redundant (#45). The container
+            // client is built once and held for the lifetime of this singleton (#44).
+            _containerClient = BlobContainerClientFactory.Create(resolved, credential);
             _blobName = resolved.EnrichedMoodWeightsBlobName;
         }
 
