@@ -130,6 +130,17 @@ module webapp 'modules/webapp.bicep' = {
         name: 'RateLimiting__TrustCloudflareHeader'
         value: 'true'
       }
+      // CORS allowed origins. The app validates at startup that non-Development environments
+      // contain only https, non-localhost origins (see CorsOriginResolver / issue #32). Override
+      // per environment by adding more 'Cors__AllowedOrigins__N' settings.
+      {
+        name: 'Cors__AllowedOrigins__0'
+        value: 'https://changsta.com'
+      }
+      {
+        name: 'Cors__AllowedOrigins__1'
+        value: 'https://www.changsta.com'
+      }
       {
         name: 'ApplicationInsights__ConnectionString'
         value: appInsights.properties.ConnectionString
