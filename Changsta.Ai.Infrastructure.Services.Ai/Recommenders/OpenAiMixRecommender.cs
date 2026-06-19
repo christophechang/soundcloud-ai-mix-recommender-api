@@ -31,6 +31,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
         private readonly IMemoryCache _cache;
         private readonly ICatalogCacheInvalidator _catalogVersion;
         private readonly ILogger<OpenAiMixRecommender> _logger;
+        private readonly int _timeoutSeconds;
 
         public OpenAiMixRecommender(
             IOptions<OpenAiOptions> options,
@@ -53,7 +54,8 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 throw new InvalidOperationException("OpenAI:Model is not configured.");
             }
 
-            _chat = new ChatClient(model: resolvedOptions.Model, apiKey: resolvedOptions.ApiKey);
+            _timeoutSeconds = resolvedOptions.TimeoutSeconds;
+            _chat = OpenAiChatClientFactory.Create(resolvedOptions);
         }
 
         public async Task<IReadOnlyList<MixAiRecommendation>> RecommendAsync(
@@ -160,6 +162,26 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                         attemptStopwatch.ElapsedMilliseconds,
                         totalStopwatch.ElapsedMilliseconds);
                     return results;
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    // The caller (request) was cancelled — propagate so the middleware can short-circuit.
+                    throw;
+                }
+                catch (OperationCanceledException ex)
+                {
+                    // Our configured network timeout fired (not a caller cancellation). Surface a
+                    // clean, handled failure rather than retrying — retrying a timeout only doubles
+                    // the stall — and rather than returning an empty 200 that reads like "no matches".
+                    attemptStopwatch.Stop();
+                    totalStopwatch.Stop();
+                    _logger.LogWarning(
+                        ex,
+                        "OpenAI recommendation request timed out after {TimeoutSeconds}s. attempt={Attempt}",
+                        _timeoutSeconds,
+                        attempt);
+                    throw new TimeoutException(
+                        $"OpenAI request timed out after {_timeoutSeconds}s.", ex);
                 }
                 catch (Exception ex) when (ex is InvalidOperationException or JsonException or HttpRequestException)
                 {

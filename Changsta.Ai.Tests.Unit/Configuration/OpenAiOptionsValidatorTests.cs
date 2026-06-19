@@ -67,5 +67,37 @@ namespace Changsta.Ai.Tests.Unit.Configuration
             result.FailureMessage.Should().Contain("OpenAI:ApiKey");
             result.FailureMessage.Should().Contain("OpenAI:Model");
         }
+
+        [Test]
+        public void Validate_passes_with_default_TimeoutSeconds()
+        {
+            // TimeoutSeconds is not set here, so its default (30) must validate.
+            var sut = new OpenAiOptionsValidator();
+
+            ValidateOptionsResult result = sut.Validate(name: null, new OpenAiOptions
+            {
+                ApiKey = "sk-test",
+                Model = "gpt-4.1-mini",
+            });
+
+            result.Succeeded.Should().BeTrue();
+        }
+
+        [TestCase(0)]
+        [TestCase(-5)]
+        public void Validate_fails_when_TimeoutSeconds_is_not_positive(int timeoutSeconds)
+        {
+            var sut = new OpenAiOptionsValidator();
+
+            ValidateOptionsResult result = sut.Validate(name: null, new OpenAiOptions
+            {
+                ApiKey = "sk-test",
+                Model = "gpt-4.1-mini",
+                TimeoutSeconds = timeoutSeconds,
+            });
+
+            result.Failed.Should().BeTrue();
+            result.FailureMessage.Should().Contain("OpenAI:TimeoutSeconds");
+        }
     }
 }

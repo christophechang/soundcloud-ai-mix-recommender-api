@@ -71,7 +71,7 @@ namespace Changsta.Ai.Interface.Api.Middleware
                 return StatusCodes.Status400BadRequest;
             }
 
-            if (ex is HttpRequestException)
+            if (ex is HttpRequestException or TimeoutException)
             {
                 return StatusCodes.Status503ServiceUnavailable;
             }
