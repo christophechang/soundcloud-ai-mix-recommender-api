@@ -23,6 +23,13 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
         private const int MaxRetryAttempts = 2;
         private const int RecommendationCacheTtlMinutes = 60;
 
+        // Empty ("no match") results are cached for a short window so repeated identical queries
+        // don't re-hit OpenAI, while still letting a freshly merged catalogue surface matches soon.
+        private const int EmptyResultCacheTtlMinutes = 5;
+
+        // Small delay between validation-retry attempts so a flapping upstream isn't hammered.
+        private const int RetryBackoffMilliseconds = 250;
+
         // Bump whenever MixPromptBuilder or MixRecommendationQueryAnalyzer change in a way
         // that should invalidate previously-cached AI responses for the same question.
         private const int PromptVersion = 1;
@@ -44,16 +51,9 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             _catalogVersion = catalogVersion ?? throw new ArgumentNullException(nameof(catalogVersion));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-            if (string.IsNullOrWhiteSpace(resolvedOptions.ApiKey))
-            {
-                throw new InvalidOperationException("OpenAI:ApiKey is not configured.");
-            }
-
-            if (string.IsNullOrWhiteSpace(resolvedOptions.Model))
-            {
-                throw new InvalidOperationException("OpenAI:Model is not configured.");
-            }
-
+            // ApiKey / Model / TimeoutSeconds are validated at startup by OpenAiOptionsValidator
+            // (AddOptions<OpenAiOptions>().Validate(...).ValidateOnStart()), so no constructor-time
+            // re-validation is needed here. See issue #40.
             _timeoutSeconds = resolvedOptions.TimeoutSeconds;
             _chat = OpenAiChatClientFactory.Create(resolvedOptions);
         }
@@ -148,10 +148,9 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                         })
                         .ToArray();
 
-                    if (results.Length > 0)
-                    {
-                        _cache.Set(cacheKey, (IReadOnlyList<MixAiRecommendation>)results, TimeSpan.FromMinutes(RecommendationCacheTtlMinutes));
-                    }
+                    // Cache both matches (long TTL) and "no match" results (short TTL) so repeated
+                    // identical queries don't re-hit OpenAI. See issue #92.
+                    _cache.Set(cacheKey, (IReadOnlyList<MixAiRecommendation>)results, ResolveCacheTtl(results.Length));
 
                     attemptStopwatch.Stop();
                     totalStopwatch.Stop();
@@ -209,6 +208,9 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                                 "Your response failed validation: " + ex.Message +
                                 " Fix only the specific problem and respond with strict JSON only."));
                         }
+
+                        // Small backoff before re-asking the model. See issue #92.
+                        await Task.Delay(RetryBackoffMilliseconds, cancellationToken).ConfigureAwait(false);
                     }
                 }
             }
@@ -225,6 +227,13 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
             return Array.Empty<MixAiRecommendation>();
         }
+
+        // Matches get the full TTL; "no match" results get a short TTL so a newly merged catalogue
+        // can surface a match sooner while still sparing OpenAI from repeated identical empty queries.
+        internal static TimeSpan ResolveCacheTtl(int resultCount) =>
+            resultCount > 0
+                ? TimeSpan.FromMinutes(RecommendationCacheTtlMinutes)
+                : TimeSpan.FromMinutes(EmptyResultCacheTtlMinutes);
 
         internal static string BuildCacheKey(string question, int maxResults, int promptVersion, int catalogueVersion) =>
             "recommend:v" + promptVersion.ToString(System.Globalization.CultureInfo.InvariantCulture)

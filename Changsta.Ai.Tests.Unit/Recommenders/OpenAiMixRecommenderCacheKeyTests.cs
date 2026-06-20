@@ -1,3 +1,4 @@
+using System;
 using Changsta.Ai.Infrastructure.Services.Ai.Recommenders;
 using FluentAssertions;
 using NUnit.Framework;
@@ -7,6 +8,17 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
     [TestFixture]
     public sealed class OpenAiMixRecommenderCacheKeyTests
     {
+        [Test]
+        public void ResolveCacheTtl_uses_short_ttl_for_empty_results()
+        {
+            TimeSpan emptyTtl = OpenAiMixRecommender.ResolveCacheTtl(0);
+            TimeSpan matchTtl = OpenAiMixRecommender.ResolveCacheTtl(3);
+
+            emptyTtl.Should().Be(TimeSpan.FromMinutes(5));
+            matchTtl.Should().Be(TimeSpan.FromMinutes(60));
+            emptyTtl.Should().BeLessThan(matchTtl);
+        }
+
         [Test]
         public void BuildCacheKey_includes_prompt_and_catalogue_version()
         {

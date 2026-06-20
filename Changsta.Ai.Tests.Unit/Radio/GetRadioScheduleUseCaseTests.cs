@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -7,6 +8,8 @@ using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Core.Dtos;
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 
 namespace Changsta.Ai.Tests.Unit.Radio
@@ -87,8 +90,49 @@ namespace Changsta.Ai.Tests.Unit.Radio
             }
         }
 
+        [Test]
+        public void ResolveScheduleTimezone_falls_back_to_utc_and_warns_when_id_is_unknown()
+        {
+            var logger = new ListLogger();
+
+            TimeZoneInfo resolved = GetRadioScheduleUseCase.ResolveScheduleTimezone("Not/AZone", logger);
+
+            resolved.Should().Be(TimeZoneInfo.Utc);
+            logger.Entries.Should().ContainSingle(e => e.Level == LogLevel.Warning)
+                .Which.Message.Should().Contain("Not/AZone");
+        }
+
+        [Test]
+        public void ResolveScheduleTimezone_resolves_known_id_without_warning()
+        {
+            var logger = new ListLogger();
+
+            TimeZoneInfo resolved = GetRadioScheduleUseCase.ResolveScheduleTimezone("Europe/London", logger);
+
+            resolved.Should().NotBeNull();
+            logger.Entries.Should().NotContain(e => e.Level == LogLevel.Warning);
+        }
+
+        [Test]
+        public async Task GetAsync_uses_the_injected_scheduler()
+        {
+            var spy = new SpyRadioScheduler();
+            var sut = new GetRadioScheduleUseCase(
+                new StubCatalogue(Catalogue()),
+                NullLogger<GetRadioScheduleUseCase>.Instance,
+                spy);
+
+            RadioScheduleResultDto result = await sut.GetAsync(CancellationToken.None);
+
+            spy.Called.Should().BeTrue();
+            result.Stations.Should().HaveCount(3);
+        }
+
         private static Task<RadioScheduleResultDto> Run(IReadOnlyList<Mix> mixes)
-            => new GetRadioScheduleUseCase(new StubCatalogue(mixes))
+            => new GetRadioScheduleUseCase(
+                    new StubCatalogue(mixes),
+                    NullLogger<GetRadioScheduleUseCase>.Instance,
+                    new RadioScheduler())
                 .GetAsync(CancellationToken.None);
 
         private static IReadOnlyList<Mix> Catalogue()
@@ -132,6 +176,60 @@ namespace Changsta.Ai.Tests.Unit.Radio
 
             public Task<IReadOnlyList<Mix>> GetLatestAsync(int maxItems, CancellationToken ct)
                 => Task.FromResult(_mixes);
+        }
+
+        private sealed class SpyRadioScheduler : IRadioScheduler
+        {
+            private readonly RadioScheduler _inner = new();
+
+            public bool Called { get; private set; }
+
+            public RadioSchedule Build(IReadOnlyList<Mix> catalogue, DateOnly date)
+            {
+                Called = true;
+                return _inner.Build(catalogue, date);
+            }
+        }
+
+        private sealed class ListLogger : ILogger
+        {
+            public List<LogEntry> Entries { get; } = new();
+
+            public IDisposable BeginScope<TState>(TState state)
+                where TState : notnull
+                => NullScope.Instance;
+
+            public bool IsEnabled(LogLevel logLevel) => true;
+
+            public void Log<TState>(
+                LogLevel logLevel,
+                EventId eventId,
+                TState state,
+                Exception? exception,
+                Func<TState, Exception?, string> formatter)
+                => Entries.Add(new LogEntry(logLevel, formatter(state, exception)));
+
+            public sealed class LogEntry
+            {
+                public LogEntry(LogLevel level, string message)
+                {
+                    Level = level;
+                    Message = message;
+                }
+
+                public LogLevel Level { get; }
+
+                public string Message { get; }
+            }
+
+            private sealed class NullScope : IDisposable
+            {
+                public static readonly NullScope Instance = new();
+
+                public void Dispose()
+                {
+                }
+            }
         }
     }
 }

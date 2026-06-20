@@ -49,7 +49,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
             double warmth = mix.Warmth ?? 0.0;
             double warmthScore = Math.Max(0, 4.0 - (Math.Abs(warmth - slot.WarmthTarget) / 0.25));
 
-            int? bpm = ComputeBpm(mix);
+            int? bpm = mix.GetMidBpm();
             double bpmScore = bpm.HasValue
                 ? Math.Max(0, 8.0 - (Math.Abs(bpm.Value - bpmTarget) / 6.0))
                 : 0.0;
@@ -104,16 +104,6 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
         {
             int sep = title.IndexOf(" - ", StringComparison.Ordinal);
             return sep > 0 ? title[..sep].Trim() : title.Trim();
-        }
-
-        private static int? ComputeBpm(Mix mix)
-        {
-            if (mix.BpmMin.HasValue && mix.BpmMax.HasValue)
-            {
-                return (int)Math.Round((mix.BpmMin.Value + mix.BpmMax.Value) / 2.0);
-            }
-
-            return mix.BpmMin ?? mix.BpmMax;
         }
 
         private static bool EnergyMatches(string energy, string[] energyValues)

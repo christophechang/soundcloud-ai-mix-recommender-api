@@ -20,6 +20,15 @@ Tests must be deterministic — no live OpenAI, SoundCloud, or Azure calls. Run 
 dotnet build soundcloud-ai-mix-recommender-api.sln --no-incremental
 dotnet test soundcloud-ai-mix-recommender-api.sln --no-build
 
+## Dependency Updates
+
+Dependabot (`.github/dependabot.yml`) opens weekly PRs for NuGet and GitHub Actions, grouped
+(Microsoft.Extensions.*, Azure.*, OpenTelemetry.*, test deps). To react to a Dependabot PR: let CI
+run (it builds, tests, and runs `dotnet list package --vulnerable` which fails on known
+advisories), review the changelog for breaking changes, then merge into `develop` like any other
+PR. Security-advisory bumps take priority. The CI vulnerability audit also fails any PR that
+introduces a vulnerable transitive package, so keep transitive pins current.
+
 ## Releasing a Version
 
 When asked to "release this version":

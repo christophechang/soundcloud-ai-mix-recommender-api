@@ -29,16 +29,8 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             var resolved = options?.Value ?? throw new ArgumentNullException(nameof(options));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-            if (string.IsNullOrWhiteSpace(resolved.ApiKey))
-            {
-                throw new InvalidOperationException("OpenAI:ApiKey is not configured.");
-            }
-
-            if (string.IsNullOrWhiteSpace(resolved.Model))
-            {
-                throw new InvalidOperationException("OpenAI:Model is not configured.");
-            }
-
+            // OpenAiOptions is validated at startup (OpenAiOptionsValidator + ValidateOnStart), so
+            // constructor-time ApiKey/Model re-validation is redundant. See issue #40.
             _chat = OpenAiChatClientFactory.Create(resolved);
         }
 
@@ -88,7 +80,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
                 return result;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 _logger.LogWarning(ex, "AI mood weight enrichment call failed.");
                 return new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);

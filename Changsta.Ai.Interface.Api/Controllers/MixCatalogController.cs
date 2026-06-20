@@ -7,9 +7,12 @@ using System.Threading.Tasks;
 using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Core.Normalization;
+using Changsta.Ai.Interface.Api.Catalog;
+using Changsta.Ai.Interface.Api.RateLimiting;
+using Changsta.Ai.Interface.Api.Security;
 using Changsta.Ai.Interface.Api.ViewModels;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Changsta.Ai.Interface.Api.Controllers
 {
@@ -27,52 +30,33 @@ namespace Changsta.Ai.Interface.Api.Controllers
         private readonly IMixCatalogueProvider _catalogueProvider;
         private readonly ICatalogFlushUseCase _flushUseCase;
         private readonly IDeleteMixUseCase _deleteMixUseCase;
-        private readonly IConfiguration _configuration;
 
         public MixCatalogController(
             IMixCatalogueProvider catalogueProvider,
             ICatalogFlushUseCase flushUseCase,
-            IDeleteMixUseCase deleteMixUseCase,
-            IConfiguration configuration)
+            IDeleteMixUseCase deleteMixUseCase)
         {
             _catalogueProvider = catalogueProvider;
             _flushUseCase = flushUseCase;
             _deleteMixUseCase = deleteMixUseCase;
-            _configuration = configuration;
         }
 
         [HttpPost("flush")]
+        [EnableRateLimiting(RateLimitPolicies.Privileged)]
+        [BearerSecret("Catalog:FlushSecret")]
         public async Task<IActionResult> FlushCatalogAsync(CancellationToken cancellationToken)
         {
-            string? expectedSecret = _configuration["Catalog:FlushSecret"];
-            if (!string.IsNullOrEmpty(expectedSecret))
-            {
-                if (!Request.Headers.TryGetValue("Authorization", out var authHeader)
-                    || !string.Equals(authHeader.ToString(), $"Bearer {expectedSecret}", StringComparison.Ordinal))
-                {
-                    return Unauthorized(new { error = "Invalid or missing authorization." });
-                }
-            }
-
             await _flushUseCase.FlushAsync(cancellationToken).ConfigureAwait(false);
             return Ok(new { flushed = true });
         }
 
         [HttpDelete("mixes")]
+        [EnableRateLimiting(RateLimitPolicies.Privileged)]
+        [BearerSecret("Catalog:FlushSecret")]
         public async Task<IActionResult> DeleteMixAsync(
             [FromQuery] string slug,
             CancellationToken cancellationToken)
         {
-            string? expectedSecret = _configuration["Catalog:FlushSecret"];
-            if (!string.IsNullOrEmpty(expectedSecret))
-            {
-                if (!Request.Headers.TryGetValue("Authorization", out var authHeader)
-                    || !string.Equals(authHeader.ToString(), $"Bearer {expectedSecret}", StringComparison.Ordinal))
-                {
-                    return Unauthorized(new { error = "Invalid or missing authorization." });
-                }
-            }
-
             if (string.IsNullOrWhiteSpace(slug))
             {
                 return BadRequest(new { error = "slug is required." });
@@ -95,83 +79,20 @@ namespace Changsta.Ai.Interface.Api.Controllers
             [FromQuery] int pageSize = DefaultPageSize,
             CancellationToken cancellationToken = default)
         {
-            if (page < 1 || pageSize < 1 || pageSize > MaxPageSize)
+            if (ValidatePaging(page, pageSize) is IActionResult invalid)
             {
-                return BadRequest(new { error = $"page must be >= 1 and pageSize must be between 1 and {MaxPageSize}." });
+                return invalid;
             }
 
-            IReadOnlyList<Mix> mixes = await _catalogueProvider
-                .GetLatestAsync(CatalogMaxItems, cancellationToken)
-                .ConfigureAwait(false);
-
-            IEnumerable<Mix> filtered = mixes;
-
-            if (!string.IsNullOrWhiteSpace(genre))
-            {
-                string normalisedQuery = NormalizeGenre(genre);
-                filtered = mixes.Where(m =>
-                    string.Equals(NormalizeGenre(m.Genre), normalisedQuery, StringComparison.OrdinalIgnoreCase));
-            }
-
-            var byGenre = new Dictionary<string, Dictionary<string, SortedSet<string>>>(StringComparer.OrdinalIgnoreCase);
-
-            foreach (Mix mix in filtered)
-            {
-                string normalisedGenre = NormalizeGenre(mix.Genre);
-
-                if (!byGenre.TryGetValue(normalisedGenre, out Dictionary<string, SortedSet<string>>? byArtist))
-                {
-                    byArtist = new Dictionary<string, SortedSet<string>>(StringComparer.OrdinalIgnoreCase);
-                    byGenre[normalisedGenre] = byArtist;
-                }
-
-                foreach (Track track in mix.Tracklist)
-                {
-                    if (!byArtist.TryGetValue(track.Artist, out SortedSet<string>? titles))
-                    {
-                        titles = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
-                        byArtist[track.Artist] = titles;
-                    }
-
-                    titles.Add(track.Title);
-                }
-            }
-
-            GenreEntry[] allEntries = byGenre
-                .Where(g => g.Value.Count > 0)
-                .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
-                .Select(g => new GenreEntry
-                {
-                    Genre = g.Key,
-                    Artists = g.Value
-                        .OrderBy(a => a.Key, StringComparer.OrdinalIgnoreCase)
-                        .Select(a => new ArtistEntry
-                        {
-                            Name = a.Key,
-                            Tracks = a.Value.ToArray(),
-                        })
-                        .ToArray(),
-                })
-                .ToArray();
-
-            return Ok(BuildPage(allEntries, page, pageSize));
+            IReadOnlyList<Mix> mixes = await LoadCatalogueAsync(CatalogMaxItems, cancellationToken).ConfigureAwait(false);
+            return Ok(BuildPage(CatalogProjections.GenreTree(mixes, genre), page, pageSize));
         }
 
         [HttpGet("genres")]
         public async Task<IActionResult> GetGenresAsync(CancellationToken cancellationToken = default)
         {
-            IReadOnlyList<Mix> mixes = await _catalogueProvider
-                .GetLatestAsync(CatalogMaxItems, cancellationToken)
-                .ConfigureAwait(false);
-
-            string[] genres = mixes
-                .Where(m => !string.IsNullOrWhiteSpace(m.Genre))
-                .Select(m => NormalizeGenre(m.Genre))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(g => g, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            return Ok(new GenresResponse { Genres = genres });
+            IReadOnlyList<Mix> mixes = await LoadCatalogueAsync(CatalogMaxItems, cancellationToken).ConfigureAwait(false);
+            return Ok(new GenresResponse { Genres = CatalogProjections.GenreNames(mixes) });
         }
 
         [HttpGet("mixes")]
@@ -181,27 +102,13 @@ namespace Changsta.Ai.Interface.Api.Controllers
             [FromQuery] int pageSize = DefaultPageSize,
             CancellationToken cancellationToken = default)
         {
-            if (page < 1 || pageSize < 1 || pageSize > MaxPageSize)
+            if (ValidatePaging(page, pageSize) is IActionResult invalid)
             {
-                return BadRequest(new { error = $"page must be >= 1 and pageSize must be between 1 and {MaxPageSize}." });
+                return invalid;
             }
 
-            IReadOnlyList<Mix> mixes = await _catalogueProvider
-                .GetLatestAsync(CatalogMaxItems, cancellationToken)
-                .ConfigureAwait(false);
-
-            IEnumerable<Mix> filtered = mixes;
-
-            if (!string.IsNullOrWhiteSpace(genre))
-            {
-                string normalisedQuery = NormalizeGenre(genre);
-                filtered = mixes.Where(m =>
-                    string.Equals(NormalizeGenre(m.Genre), normalisedQuery, StringComparison.OrdinalIgnoreCase));
-            }
-
-            Mix[] ordered = filtered
-                .OrderByDescending(m => m.PublishedAt ?? DateTimeOffset.MinValue)
-                .ToArray();
+            IReadOnlyList<Mix> mixes = await LoadCatalogueAsync(CatalogMaxItems, cancellationToken).ConfigureAwait(false);
+            Mix[] ordered = CatalogProjections.MixesOrdered(mixes, genre);
 
             Response.Headers.Append("X-Total-Count", ordered.Length.ToString(CultureInfo.InvariantCulture));
 
@@ -211,18 +118,8 @@ namespace Changsta.Ai.Interface.Api.Controllers
         [HttpGet("artists")]
         public async Task<IActionResult> GetArtistsAsync(CancellationToken cancellationToken = default)
         {
-            IReadOnlyList<Mix> mixes = await _catalogueProvider
-                .GetLatestAsync(CatalogMaxItems, cancellationToken)
-                .ConfigureAwait(false);
-
-            string[] artists = mixes
-                .SelectMany(m => m.Tracklist)
-                .Select(t => t.Artist)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(a => a, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            return Ok(new ArtistNamesResponse { Artists = artists });
+            IReadOnlyList<Mix> mixes = await LoadCatalogueAsync(CatalogMaxItems, cancellationToken).ConfigureAwait(false);
+            return Ok(new ArtistNamesResponse { Artists = CatalogProjections.ArtistNames(mixes) });
         }
 
         [HttpGet("tracks")]
@@ -231,95 +128,33 @@ namespace Changsta.Ai.Interface.Api.Controllers
             [FromQuery] int pageSize = DefaultPageSize,
             CancellationToken cancellationToken = default)
         {
-            if (page < 1 || pageSize < 1 || pageSize > MaxPageSize)
+            if (ValidatePaging(page, pageSize) is IActionResult invalid)
             {
-                return BadRequest(new { error = $"page must be >= 1 and pageSize must be between 1 and {MaxPageSize}." });
+                return invalid;
             }
 
-            IReadOnlyList<Mix> mixes = await _catalogueProvider
-                .GetLatestAsync(CatalogMaxItems, cancellationToken)
-                .ConfigureAwait(false);
-
-            TrackSummary[] allEntries = mixes
-                .SelectMany(m => m.Tracklist.Select(t => (Mix: m, Track: t)))
-                .GroupBy(a => (
-                    Artist: a.Track.Artist.Trim().ToLowerInvariant(),
-                    Title: a.Track.Title.Trim().ToLowerInvariant()))
-                .Select(g =>
-                {
-                    Track first = g.First().Track;
-                    return new TrackSummary
-                    {
-                        Artist = first.Artist.Trim(),
-                        Title = first.Title.Trim(),
-                        RecurrenceCount = g.Count(),
-                        GenresSeen = g
-                            .Select(a => NormalizeGenre(a.Mix.Genre))
-                            .Distinct(StringComparer.OrdinalIgnoreCase)
-                            .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
-                            .ToArray(),
-                    };
-                })
-                .OrderByDescending(t => t.RecurrenceCount)
-                .ThenBy(t => t.Artist, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(t => t.Title, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-
-            return Ok(BuildPage(allEntries, page, pageSize));
+            IReadOnlyList<Mix> mixes = await LoadCatalogueAsync(CatalogMaxItems, cancellationToken).ConfigureAwait(false);
+            return Ok(BuildPage(CatalogProjections.TrackSummaries(mixes), page, pageSize));
         }
 
         [HttpGet("mixes/titles")]
         public async Task<IActionResult> GetMixTitlesAsync(CancellationToken cancellationToken = default)
         {
-            IReadOnlyList<Mix> mixes = await _catalogueProvider
-                .GetLatestAsync(CatalogMaxItems, cancellationToken)
-                .ConfigureAwait(false);
-
-            MixTitleEntry[] titles = mixes
-                .OrderByDescending(m => m.PublishedAt ?? DateTimeOffset.MinValue)
-                .Select(m => new MixTitleEntry
-                {
-                    Title = m.Title,
-                    Slug = MixSlugHelper.ExtractSlug(m.Url),
-                })
-                .ToArray();
+            IReadOnlyList<Mix> mixes = await LoadCatalogueAsync(CatalogMaxItems, cancellationToken).ConfigureAwait(false);
 
             Response.Headers.Append("Cache-Control", "max-age=3600, public");
 
-            return Ok(titles);
+            return Ok(CatalogProjections.MixTitles(mixes));
         }
 
         [HttpGet("compass")]
         public async Task<IActionResult> GetCompassAsync(CancellationToken cancellationToken = default)
         {
-            IReadOnlyList<Mix> mixes = await _catalogueProvider
-                .GetLatestAsync(CatalogMaxItems, cancellationToken)
-                .ConfigureAwait(false);
-
-            CompassEntry[] entries = mixes
-                .Where(m => m.Warmth.HasValue)
-                .Select(m => new CompassEntry
-                {
-                    Slug = MixSlugHelper.ExtractSlug(m.Url),
-                    Title = m.Title,
-                    Url = m.Url,
-                    ImageUrl = m.ImageUrl,
-                    Genre = m.Genre,
-                    Energy = m.Energy,
-                    Bpm = m.BpmMin.HasValue && m.BpmMax.HasValue
-                        ? (m.BpmMin.Value + m.BpmMax.Value) / 2
-                        : m.BpmMin ?? m.BpmMax,
-                    BpmMin = m.BpmMin,
-                    BpmMax = m.BpmMax,
-                    Warmth = m.Warmth!.Value,
-                    Moods = m.Moods,
-                    PublishedAt = m.PublishedAt,
-                })
-                .ToArray();
+            IReadOnlyList<Mix> mixes = await LoadCatalogueAsync(CatalogMaxItems, cancellationToken).ConfigureAwait(false);
 
             Response.Headers.Append("Cache-Control", "max-age=3600, public");
 
-            return Ok(entries);
+            return Ok(CatalogProjections.Compass(mixes));
         }
 
         [HttpGet("mixes/{slug}")]
@@ -349,14 +184,12 @@ namespace Changsta.Ai.Interface.Api.Controllers
             [FromQuery] int pageSize = DefaultPageSize,
             CancellationToken cancellationToken = default)
         {
-            if (page < 1 || pageSize < 1 || pageSize > MaxPageSize)
+            if (ValidatePaging(page, pageSize) is IActionResult invalid)
             {
-                return BadRequest(new { error = $"page must be >= 1 and pageSize must be between 1 and {MaxPageSize}." });
+                return invalid;
             }
 
-            IReadOnlyList<Mix> mixes = await _catalogueProvider
-                .GetLatestAsync(CatalogMaxItems, cancellationToken)
-                .ConfigureAwait(false);
+            IReadOnlyList<Mix> mixes = await LoadCatalogueAsync(CatalogMaxItems, cancellationToken).ConfigureAwait(false);
 
             Mix[] results = mixes
                 .Where(m => m.Tracklist.Any(t =>
@@ -391,6 +224,12 @@ namespace Changsta.Ai.Interface.Api.Controllers
             };
         }
 
-        private static string NormalizeGenre(string? genre) => GenreNormalizer.Normalize(genre);
+        private async Task<IReadOnlyList<Mix>> LoadCatalogueAsync(int maxItems, CancellationToken cancellationToken) =>
+            await _catalogueProvider.GetLatestAsync(maxItems, cancellationToken).ConfigureAwait(false);
+
+        private IActionResult? ValidatePaging(int page, int pageSize) =>
+            page < 1 || pageSize < 1 || pageSize > MaxPageSize
+                ? BadRequest(new { error = $"page must be >= 1 and pageSize must be between 1 and {MaxPageSize}." })
+                : null;
     }
 }

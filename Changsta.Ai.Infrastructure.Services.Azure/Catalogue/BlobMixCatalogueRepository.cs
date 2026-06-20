@@ -8,8 +8,10 @@ using System.Threading.Tasks;
 using Azure;
 using Azure.Core;
 using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
 using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
+using Changsta.Ai.Core.Exceptions;
 using Changsta.Ai.Infrastructure.Services.Azure.Configuration;
 using Changsta.Ai.Infrastructure.Services.Azure.Models;
 using Microsoft.Extensions.Logging;
@@ -39,40 +41,14 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             credential = credential ?? throw new ArgumentNullException(nameof(credential));
 
-            bool hasConnectionString = !string.IsNullOrWhiteSpace(resolved.ConnectionString);
-            bool hasServiceEndpoint = !string.IsNullOrWhiteSpace(resolved.ServiceEndpoint);
-
-            if (!hasConnectionString && !hasServiceEndpoint)
-            {
-                throw new InvalidOperationException(
-                    "Either Azure:BlobCatalog:ConnectionString or Azure:BlobCatalog:ServiceEndpoint must be configured.");
-            }
-
-            if (string.IsNullOrWhiteSpace(resolved.ContainerName))
-            {
-                throw new InvalidOperationException("Azure:BlobCatalog:ContainerName is not configured.");
-            }
-
-            if (string.IsNullOrWhiteSpace(resolved.BlobName))
-            {
-                throw new InvalidOperationException("Azure:BlobCatalog:BlobName is not configured.");
-            }
-
-            if (hasServiceEndpoint)
-            {
-                var containerUri = new Uri(
-                    resolved.ServiceEndpoint!.TrimEnd('/') + "/" + resolved.ContainerName);
-                _containerClient = new BlobContainerClient(containerUri, credential);
-            }
-            else
-            {
-                _containerClient = new BlobContainerClient(resolved.ConnectionString, resolved.ContainerName);
-            }
-
+            // BlobCatalogOptions is validated at startup by BlobCatalogOptionsValidator
+            // (ValidateOnStart), so no constructor-time re-validation is needed here (#45). The
+            // container client is built once and held for the lifetime of this singleton (#44).
+            _containerClient = BlobContainerClientFactory.Create(resolved, credential);
             _blobName = resolved.BlobName;
         }
 
-        public async Task<IReadOnlyList<Mix>> ReadAsync(CancellationToken cancellationToken)
+        public async Task<CatalogReadResult> ReadAsync(CancellationToken cancellationToken)
         {
             try
             {
@@ -85,43 +61,65 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                     download.Value.Content.ToStream(),
                     JsonOptions);
 
-                return document?.Mixes ?? Array.Empty<Mix>();
+                return new CatalogReadResult(
+                    document?.Mixes ?? Array.Empty<Mix>(),
+                    download.Value.Details.ETag.ToString());
             }
             catch (RequestFailedException ex) when (ex.Status == 404)
             {
                 _logger.LogInformation("Blob catalog not found — starting with empty catalog on first run.");
-                return Array.Empty<Mix>();
+                return new CatalogReadResult(Array.Empty<Mix>(), eTag: null);
             }
         }
 
-        public async Task WriteAsync(IReadOnlyList<Mix> mixes, CancellationToken cancellationToken)
+        public async Task WriteAsync(IReadOnlyList<Mix> mixes, string? expectedETag, CancellationToken cancellationToken)
         {
+            await _containerClient
+                .CreateIfNotExistsAsync(cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+
+            var document = new MixCatalogDocument
+            {
+                SchemaVersion = 1,
+                LastUpdatedAt = DateTimeOffset.UtcNow,
+                Mixes = mixes,
+            };
+
+            using var stream = new MemoryStream();
+            await JsonSerializer.SerializeAsync(stream, document, JsonOptions, cancellationToken)
+                .ConfigureAwait(false);
+            stream.Position = 0;
+
+            // Optimistic concurrency: If-Match the read ETag, or create-only (If-None-Match: *)
+            // when there was no prior blob. A 412 (precondition failed) or 409 (blob already
+            // exists on a create-only write) means another writer changed the blob concurrently.
+            var conditions = new BlobRequestConditions();
+            if (expectedETag is null)
+            {
+                conditions.IfNoneMatch = ETag.All;
+            }
+            else
+            {
+                conditions.IfMatch = new ETag(expectedETag);
+            }
+
+            var blobClient = _containerClient.GetBlobClient(_blobName);
+
             try
             {
-                await _containerClient
-                    .CreateIfNotExistsAsync(cancellationToken: cancellationToken)
-                    .ConfigureAwait(false);
-
-                var document = new MixCatalogDocument
-                {
-                    SchemaVersion = 1,
-                    LastUpdatedAt = DateTimeOffset.UtcNow,
-                    Mixes = mixes,
-                };
-
-                using var stream = new MemoryStream();
-                await JsonSerializer.SerializeAsync(stream, document, JsonOptions, cancellationToken)
-                    .ConfigureAwait(false);
-                stream.Position = 0;
-
-                var blobClient = _containerClient.GetBlobClient(_blobName);
                 await blobClient
-                    .UploadAsync(stream, overwrite: true, cancellationToken)
+                    .UploadAsync(stream, new BlobUploadOptions { Conditions = conditions }, cancellationToken)
                     .ConfigureAwait(false);
             }
-            catch (Exception ex)
+            catch (RequestFailedException ex) when (ex.Status == 412 || ex.Status == 409)
             {
-                _logger.LogError(ex, "Failed to write blob catalog — merged result was still returned to caller.");
+                _logger.LogWarning(
+                    ex,
+                    "Blob catalog write conflict (status {Status}) — concurrent modification detected. expectedETag={ExpectedETag}",
+                    ex.Status,
+                    expectedETag ?? "(create-only)");
+                throw new CatalogConcurrencyException(
+                    "Blob catalog write was rejected because the blob changed concurrently.", ex);
             }
         }
 

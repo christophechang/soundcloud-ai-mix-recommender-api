@@ -14,8 +14,11 @@ using Changsta.Ai.Infrastructure.Services.Ai.Configuration;
 using Changsta.Ai.Infrastructure.Services.Ai.Recommenders;
 using Changsta.Ai.Infrastructure.Services.Azure;
 using Changsta.Ai.Infrastructure.Services.Azure.Catalogue;
+using Changsta.Ai.Infrastructure.Services.Azure.Diagnostics;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue;
+using Changsta.Ai.Interface.Api.Cors;
 using Changsta.Ai.Interface.Api.Middleware;
+using Changsta.Ai.Interface.Api.RateLimiting;
 using Changsta.Ai.Interface.Api.Services;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Caching.Memory;
@@ -36,12 +39,9 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     });
 
-var allowedOrigins = new[]
-{
-    "https://changsta.com",
-    "https://www.changsta.com",
-    "http://localhost:8080",
-};
+// Origins come from configuration (Cors:AllowedOrigins); localhost is appended only in
+// Development and production is validated to reject non-https/localhost origins. See issue #32.
+string[] allowedOrigins = CorsOriginResolver.Resolve(builder.Configuration, builder.Environment);
 
 builder.Services.AddCors(options =>
 {
@@ -62,10 +62,12 @@ string? aiConnectionString = builder.Configuration["ApplicationInsights:Connecti
 
 if (!string.IsNullOrEmpty(aiConnectionString))
 {
-    builder.Services.AddOpenTelemetry().UseAzureMonitor(o =>
-    {
-        o.ConnectionString = aiConnectionString;
-    });
+    builder.Services.AddOpenTelemetry()
+        .UseAzureMonitor(o =>
+        {
+            o.ConnectionString = aiConnectionString;
+        })
+        .WithMetrics(m => m.AddMeter(CatalogueMetrics.MeterName));
 }
 
 builder.Services.AddHealthChecks();
@@ -79,36 +81,9 @@ builder.Services.AddMemoryCache();
 
 bool trustCloudflareHeader = builder.Configuration.GetValue<bool>("RateLimiting:TrustCloudflareHeader");
 
-builder.Services.AddRateLimiter(options =>
-{
-    // 10 requests per minute per client IP.
-    // CF-Connecting-IP is only trusted when RateLimiting:TrustCloudflareHeader is true (prod only).
-    // In all other environments the TCP RemoteIpAddress is used directly.
-    options.AddPolicy("recommend", httpContext =>
-        RateLimitPartition.GetFixedWindowLimiter(
-            partitionKey: (trustCloudflareHeader
-                ? httpContext.Request.Headers["CF-Connecting-IP"].FirstOrDefault()
-                : null)
-                ?? httpContext.Connection.RemoteIpAddress?.ToString()
-                ?? "unknown",
-            factory: _ => new FixedWindowRateLimiterOptions
-            {
-                PermitLimit = 10,
-                Window = TimeSpan.FromMinutes(1),
-                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                QueueLimit = 0,
-            }));
-
-    options.OnRejected = async (context, cancellationToken) =>
-    {
-        context.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-        context.HttpContext.Response.ContentType = "application/json";
-        context.HttpContext.Response.Headers["Retry-After"] = "60";
-        await context.HttpContext.Response.WriteAsJsonAsync(
-            new { error = "Too many requests. Please wait a moment and try again." },
-            cancellationToken).ConfigureAwait(false);
-    };
-});
+// Global per-IP default policy on every endpoint, with stricter named policies for the AI
+// recommend endpoint and the privileged mutation/diagnostics endpoints. See issue #35.
+builder.Services.AddRateLimiter(options => RateLimitPolicies.Configure(options, trustCloudflareHeader));
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
@@ -130,10 +105,33 @@ builder.Services.AddSingleton(moodWeights);
 
 builder.Services.AddSingleton<ICatalogCacheInvalidator, CatalogCacheInvalidator>();
 
+// Fail fast at startup if the SoundCloud feed isn't configured. appsettings.json ships an empty
+// default (each operator supplies their own numeric user id via env vars / user-secrets — see
+// README), and warmup swallows exceptions, so without this guard a missing value would only
+// surface as a confusing runtime error on the first request.
+if (string.IsNullOrWhiteSpace(builder.Configuration["SoundCloud:RssUrl"]))
+{
+    throw new InvalidOperationException(
+        "SoundCloud:RssUrl is not configured. Set it via environment variables or user-secrets (see README).");
+}
+
+// Fail closed: the privileged endpoints (catalog flush/delete, diagnostics) are guarded by the
+// Catalog:FlushSecret bearer secret. Outside Development, refuse to start when it is unset so the
+// endpoints can never run unauthenticated. See issues #31 / #85.
+if (!builder.Environment.IsDevelopment()
+    && string.IsNullOrWhiteSpace(builder.Configuration["Catalog:FlushSecret"]))
+{
+    throw new InvalidOperationException(
+        "Catalog:FlushSecret must be configured in non-Development environments; it protects the flush, delete, and diagnostics endpoints.");
+}
+
 // SoundCloudRssMixCatalogueProvider is registered as its concrete type (not as IMixCatalogueProvider)
 // to avoid a circular DI graph: BlobBackedMixCatalogueProvider also implements IMixCatalogueProvider
 // and wraps SoundCloudRssMixCatalogueProvider as its inner provider.
-builder.Services.AddScoped<SoundCloudRssMixCatalogueProvider>(sp =>
+// Singleton: the catalogue providers are stateless apart from the shared cache + the rebuild
+// semaphore, so a single instance per process is correct (and lets the semaphore be an instance
+// field rather than static — see issue #56). All dependencies below are singletons too.
+builder.Services.AddSingleton<SoundCloudRssMixCatalogueProvider>(sp =>
 {
     var httpClientFactory = sp.GetRequiredService<IHttpClientFactory>();
     var configuration = sp.GetRequiredService<IConfiguration>();
@@ -141,8 +139,11 @@ builder.Services.AddScoped<SoundCloudRssMixCatalogueProvider>(sp =>
     var invalidator = sp.GetRequiredService<ICatalogCacheInvalidator>();
     var logger = sp.GetRequiredService<ILogger<SoundCloudRssMixCatalogueProvider>>();
 
-    string rssUrl = configuration["SoundCloud:RssUrl"]
-        ?? throw new InvalidOperationException("SoundCloud:RssUrl is not configured.");
+    string? rssUrl = configuration["SoundCloud:RssUrl"];
+    if (string.IsNullOrWhiteSpace(rssUrl))
+    {
+        throw new InvalidOperationException("SoundCloud:RssUrl is not configured.");
+    }
 
     return new SoundCloudRssMixCatalogueProvider(
         httpClientFactory.CreateClient("SoundCloudRss"),
@@ -152,7 +153,7 @@ builder.Services.AddScoped<SoundCloudRssMixCatalogueProvider>(sp =>
         logger);
 });
 
-builder.Services.AddScoped<IMixCatalogueProvider>(sp =>
+builder.Services.AddSingleton<IMixCatalogueProvider>(sp =>
 {
     var inner = sp.GetRequiredService<SoundCloudRssMixCatalogueProvider>();
     var repo = sp.GetRequiredService<IBlobMixCatalogueRepository>();
@@ -175,10 +176,13 @@ builder.Services.AddScoped<IDeleteMixUseCase>(sp =>
     return new DeleteMixUseCase(deleter, invalidator, provider);
 });
 builder.Services.AddScoped<IMixRecommendationUseCase, MixRecommendationUseCase>();
-builder.Services.AddScoped<IGetRadioScheduleUseCase, GetRadioScheduleUseCase>();
+builder.Services.AddRadioScheduling();
 builder.Services.AddScoped<IGetErrorInsightsUseCase, GetErrorInsightsUseCase>();
 builder.Services.AddScoped<IMixAiRecommender, OpenAiMixRecommender>();
-builder.Services.AddScoped<IMoodWeightEnricher, AiMoodWeightEnricher>();
+
+// Singleton so it can be consumed by the singleton catalogue provider without a captive
+// dependency; AiMoodWeightEnricher holds only a ChatClient and has no per-request state (#56).
+builder.Services.AddSingleton<IMoodWeightEnricher, AiMoodWeightEnricher>();
 builder.Services.AddHostedService<CatalogWarmupService>();
 
 var app = builder.Build();
@@ -205,6 +209,8 @@ app.MapControllers();
 
 app.MapGet("/", () => Results.NoContent());
 
-app.MapHealthChecks("/health");
+// Health probes must not be throttled by the global limiter or the platform may mark the
+// instance unhealthy under load.
+app.MapHealthChecks("/health").DisableRateLimiting();
 
 app.Run();

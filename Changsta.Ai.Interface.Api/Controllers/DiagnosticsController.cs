@@ -1,9 +1,10 @@
-using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Changsta.Ai.Core.Contracts.Diagnostics;
+using Changsta.Ai.Interface.Api.RateLimiting;
+using Changsta.Ai.Interface.Api.Security;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace Changsta.Ai.Interface.Api.Controllers
 {
@@ -16,31 +17,19 @@ namespace Changsta.Ai.Interface.Api.Controllers
         private const int MaxWindowHours = 168;
 
         private readonly IGetErrorInsightsUseCase _getErrorInsightsUseCase;
-        private readonly IConfiguration _configuration;
 
-        public DiagnosticsController(
-            IGetErrorInsightsUseCase getErrorInsightsUseCase,
-            IConfiguration configuration)
+        public DiagnosticsController(IGetErrorInsightsUseCase getErrorInsightsUseCase)
         {
             _getErrorInsightsUseCase = getErrorInsightsUseCase;
-            _configuration = configuration;
         }
 
         [HttpGet("errors")]
+        [EnableRateLimiting(RateLimitPolicies.Privileged)]
+        [BearerSecret("Catalog:FlushSecret")]
         public async Task<IActionResult> GetErrorsAsync(
             [FromQuery] int hours = DefaultWindowHours,
             CancellationToken cancellationToken = default)
         {
-            string? expectedSecret = _configuration["Catalog:FlushSecret"];
-            if (!string.IsNullOrEmpty(expectedSecret))
-            {
-                if (!Request.Headers.TryGetValue("Authorization", out var authHeader)
-                    || !string.Equals(authHeader.ToString(), $"Bearer {expectedSecret}", StringComparison.Ordinal))
-                {
-                    return Unauthorized(new { error = "Invalid or missing authorization." });
-                }
-            }
-
             if (hours < 1 || hours > MaxWindowHours)
             {
                 return BadRequest(new { error = $"hours must be between 1 and {MaxWindowHours}." });

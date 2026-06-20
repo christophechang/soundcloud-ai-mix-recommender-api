@@ -16,7 +16,10 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue
     {
         private const string CacheKeyPrefix = "soundcloud_rss_v";
         private const string ItunesNamespace = "http://www.itunes.com/dtds/podcast-1.0.dtd";
-        private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(24);
+
+        // 1-hour RSS cache TTL — matches the documented merged-catalogue contract (README).
+        // See issue #88.
+        private static readonly TimeSpan CacheTtl = TimeSpan.FromHours(1);
 
         private readonly HttpClient _httpClient;
         private readonly string _rssUrl;

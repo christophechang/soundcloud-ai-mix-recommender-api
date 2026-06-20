@@ -5,6 +5,7 @@ using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Contracts.Recommendations;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Core.Dtos;
+using Microsoft.Extensions.Logging;
 
 namespace Changsta.Ai.Core.BusinessProcesses.Recommendations
 {
@@ -17,13 +18,16 @@ namespace Changsta.Ai.Core.BusinessProcesses.Recommendations
         private readonly IMixAiRecommender _mixAiRecommender;
 
         private readonly IMixCatalogueProvider _mixCatalogueProvider;
+        private readonly ILogger<MixRecommendationUseCase> _logger;
 
         public MixRecommendationUseCase(
             IMixCatalogueProvider mixCatalogueProvider,
-            IMixAiRecommender mixAiRecommender)
+            IMixAiRecommender mixAiRecommender,
+            ILogger<MixRecommendationUseCase> logger)
         {
             _mixCatalogueProvider = mixCatalogueProvider ?? throw new ArgumentNullException(nameof(mixCatalogueProvider));
             _mixAiRecommender = mixAiRecommender ?? throw new ArgumentNullException(nameof(mixAiRecommender));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         public async Task<MixRecommendationResponseDto> RecommendAsync(MixRecommendationRequestDto request, CancellationToken cancellationToken)
@@ -42,6 +46,10 @@ namespace Changsta.Ai.Core.BusinessProcesses.Recommendations
                 };
             }
 
+            // Out-of-range maxResults is intentionally clamped (not rejected with a 400):
+            // the response echoes the effective value back as MaxResultsApplied so callers
+            // can see what was used. This keeps the public contract stable for clients that
+            // omit or send a slightly off value. See issue #46.
             int maxResults = Math.Clamp(request.MaxResults, 1, MaxResultsUpperBound);
 
             var mixes = await _mixCatalogueProvider
@@ -62,6 +70,10 @@ namespace Changsta.Ai.Core.BusinessProcesses.Recommendations
             {
                 if (!mixById.TryGetValue(r.MixId, out Mix? mix))
                 {
+                    _logger.LogWarning(
+                        "Dropping AI recommendation for unknown mixId. mixId={MixId} questionLength={QuestionLength}",
+                        r.MixId,
+                        request.Question.Length);
                     continue;
                 }
 

@@ -27,8 +27,10 @@ npm install -g azurite
 azurite --silent --location /tmp/azurite --debug /tmp/azurite-debug.log
 
 # 2. Set secrets
+# SoundCloud:RssUrl ships empty in appsettings.json — the app fails fast at startup until you
+# set your own numeric SoundCloud user ID below.
 dotnet user-secrets set "OpenAI:ApiKey" "your-key-here" --project Changsta.Ai.Interface.Api
-dotnet user-secrets set "OpenAI:Model" "gpt-4.1-mini" --project Changsta.Ai.Interface.Api
+dotnet user-secrets set "OpenAI:Model" "gpt-4o-mini" --project Changsta.Ai.Interface.Api
 dotnet user-secrets set "Azure:BlobCatalog:ConnectionString" "UseDevelopmentStorage=true" --project Changsta.Ai.Interface.Api
 dotnet user-secrets set "SoundCloud:RssUrl" "https://feeds.soundcloud.com/users/soundcloud:users:YOUR_USER_ID/sounds.rss" --project Changsta.Ai.Interface.Api
 
@@ -166,7 +168,7 @@ Before any result is returned:
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `question` | string | yes | Natural language query. Min 1, max 2000 characters. |
-| `maxResults` | integer | no | Default `3`, min `1`, max `20`. Silently clamped if out of range. |
+| `maxResults` | integer | no | Default `3`, min `1`, max `20`. Out-of-range values are clamped to this range; the effective value is returned as `maxResultsApplied`. |
 
 **Response fields:**
 
@@ -236,6 +238,17 @@ Returns a paginated `CatalogPage<Mix>` of all mixes containing a track by the na
 ### `GET /health`
 
 Returns `Healthy` when the process is running. Used by Azure App Service for health probes.
+
+### `DELETE /api/catalog/mixes?slug=...`
+
+Admin-only (bearer secret). Removes a mix from the durable blob catalogue using optimistic
+concurrency (ETag `If-Match`) and invalidates the cache.
+
+**Deletion semantics:** the catalogue is merged from the blob plus the live SoundCloud RSS feed.
+Deleting removes the mix from the blob, but if it is still present in the SoundCloud RSS window it
+will be re-discovered and re-merged on the next refresh — this is expected behaviour, since RSS is
+the source of truth for whether a mix exists. Deletion is durable for mixes that have been removed
+upstream on SoundCloud (or have aged out of the RSS window).
 
 ---
 
@@ -406,7 +419,7 @@ Use user secrets (recommended — keeps secrets out of source control):
 
 ```bash
 dotnet user-secrets set "OpenAI:ApiKey" "your-key-here" --project Changsta.Ai.Interface.Api
-dotnet user-secrets set "OpenAI:Model" "gpt-4.1-mini" --project Changsta.Ai.Interface.Api
+dotnet user-secrets set "OpenAI:Model" "gpt-4o-mini" --project Changsta.Ai.Interface.Api
 dotnet user-secrets set "SoundCloud:RssUrl" "https://feeds.soundcloud.com/users/soundcloud:users:YOUR_NUMERIC_ID/sounds.rss" --project Changsta.Ai.Interface.Api
 dotnet user-secrets set "Azure:BlobCatalog:ConnectionString" "UseDevelopmentStorage=true" --project Changsta.Ai.Interface.Api
 ```

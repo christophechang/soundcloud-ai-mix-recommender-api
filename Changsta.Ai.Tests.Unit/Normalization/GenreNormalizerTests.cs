@@ -22,6 +22,15 @@ namespace Changsta.Ai.Tests.Unit.Normalization
         [TestCase("garage", "ukg")]
         [TestCase("  UK__Bass   Music  ", "uk bass")]
         [TestCase("New Genre", "new genre")]
+
+        // Aliases consolidated from MixRecommendationQueryAnalyzer (issue #37).
+        [TestCase("liquid drum and bass", "dnb")]
+        [TestCase("neurofunk", "dnb")]
+        [TestCase("d&b", "dnb")]
+        [TestCase("ragga jungle", "jungle")]
+        [TestCase("idm", "electronica")]
+        [TestCase("two step", "ukg")]
+        [TestCase("2step", "ukg")]
         public void Normalize_returns_expected_genre(string input, string expected)
         {
             Assert.That(GenreNormalizer.Normalize(input), Is.EqualTo(expected));

@@ -7,6 +7,7 @@ using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Contracts.Radio;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Core.Dtos;
+using Microsoft.Extensions.Logging;
 
 namespace Changsta.Ai.Core.BusinessProcesses.Radio
 {
@@ -15,6 +16,10 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
         private const int CatalogMaxItems = 200;
         private const string ScheduleTimezoneId = "Europe/London";
 
+        // Display-only fold for the schedule UI: deep-house mixes are surfaced under the "house"
+        // genre label/count. This is deliberately distinct from GenreNormalizer (the canonical
+        // source of truth, which keeps "deep-house" as its own canonical genre — see issue #37).
+        // It does not affect station scheduling, which matches the canonical genre directly.
         private static readonly IReadOnlyDictionary<string, string> GenreAliases =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -22,14 +27,20 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
             };
 
         private readonly IMixCatalogueProvider _catalogueProvider;
-        private readonly RadioScheduler _scheduler;
+        private readonly IRadioScheduler _scheduler;
         private readonly TimeZoneInfo _scheduleTimezone;
 
-        public GetRadioScheduleUseCase(IMixCatalogueProvider catalogueProvider)
+        // Internal so the scheduler can be substituted in tests; the public IGetRadioScheduleUseCase
+        // contract is wired through DI via RadioServiceCollectionExtensions.AddRadioScheduling.
+        internal GetRadioScheduleUseCase(
+            IMixCatalogueProvider catalogueProvider,
+            ILogger<GetRadioScheduleUseCase> logger,
+            IRadioScheduler scheduler)
         {
             _catalogueProvider = catalogueProvider ?? throw new ArgumentNullException(nameof(catalogueProvider));
-            _scheduler = new RadioScheduler();
-            _scheduleTimezone = ResolveScheduleTimezone();
+            ArgumentNullException.ThrowIfNull(logger);
+            _scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
+            _scheduleTimezone = ResolveScheduleTimezone(ScheduleTimezoneId, logger);
         }
 
         public async Task<RadioScheduleResultDto> GetAsync(CancellationToken cancellationToken)
@@ -98,6 +109,25 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
             };
         }
 
+        // Resolved per instance (not in a static initialiser) so a host without tzdata
+        // degrades to UTC with a logged warning rather than poisoning the type with a
+        // TypeInitializationException for the rest of the process. See issue #48.
+        internal static TimeZoneInfo ResolveScheduleTimezone(string timezoneId, ILogger logger)
+        {
+            try
+            {
+                return TimeZoneInfo.FindSystemTimeZoneById(timezoneId);
+            }
+            catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException)
+            {
+                logger.LogWarning(
+                    ex,
+                    "Schedule timezone '{TimezoneId}' could not be resolved on this host; falling back to UTC. Radio slot hours may be offset.",
+                    timezoneId);
+                return TimeZoneInfo.Utc;
+            }
+        }
+
         private static RadioHourSlotDto MapSlot(RadioScheduledSlot slot, bool isCurrent) =>
             new RadioHourSlotDto
             {
@@ -107,21 +137,5 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
                 AuditWarnings = slot.AuditWarnings,
                 RelaxedRules = slot.RelaxedRules,
             };
-
-        private static TimeZoneInfo ResolveScheduleTimezone()
-        {
-            try
-            {
-                return TimeZoneInfo.FindSystemTimeZoneById(ScheduleTimezoneId);
-            }
-            catch (TimeZoneNotFoundException)
-            {
-                return TimeZoneInfo.Utc;
-            }
-            catch (InvalidTimeZoneException)
-            {
-                return TimeZoneInfo.Utc;
-            }
-        }
     }
 }

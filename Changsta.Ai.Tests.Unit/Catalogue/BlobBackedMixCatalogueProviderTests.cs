@@ -7,6 +7,7 @@ using Changsta.Ai.Core.Contracts.Ai;
 using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Infrastructure.Services.Azure.Catalogue;
+using Changsta.Ai.Infrastructure.Services.Azure.Diagnostics;
 using FluentAssertions;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -18,6 +19,64 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
     [TestFixture]
     public sealed class BlobBackedMixCatalogueProviderTests
     {
+        [Test]
+        public async Task GetLatestAsync_serialises_concurrent_cold_rebuilds_into_one()
+        {
+            // Two concurrent cold callers on the same (singleton) instance must rebuild only once:
+            // the rebuild semaphore serialises them and the post-acquire cache re-check dedups the
+            // second. See issue #56.
+            var repo = new StubBlobRepository { BlobMixes = new[] { MakeMix("1", "https://sc.test/1") } };
+            var inner = new DelayingMixCatalogueProvider(Array.Empty<Mix>(), TimeSpan.FromMilliseconds(100));
+            var provider = new BlobBackedMixCatalogueProvider(
+                inner,
+                repo,
+                new MemoryCache(new MemoryCacheOptions()),
+                new IncrementingCacheInvalidator(),
+                NullLogger<BlobBackedMixCatalogueProvider>.Instance,
+                new Dictionary<string, double>(),
+                enrichmentRepository: null,
+                moodWeightEnricher: null);
+
+            Task<IReadOnlyList<Mix>> first = provider.GetLatestAsync(200, CancellationToken.None);
+            Task<IReadOnlyList<Mix>> second = provider.GetLatestAsync(200, CancellationToken.None);
+            await Task.WhenAll(first, second);
+
+            repo.ReadCallCount.Should().Be(1);
+            inner.CallCount.Should().Be(1);
+        }
+
+        [Test]
+        public async Task GetLatestAsync_after_delete_does_not_resurrect_mix_absent_from_rss()
+        {
+            // Models the delete-then-refresh flow (issue #89): a mix removed from the blob and no
+            // longer in the RSS window must not reappear after a cache-invalidating refresh.
+            Mix keep = MakeMix("keep", "https://sc.test/keep");
+            Mix doomed = MakeMix("doomed", "https://sc.test/doomed");
+
+            var repo = new StubBlobRepository { BlobMixes = new[] { keep, doomed } };
+            var invalidator = new IncrementingCacheInvalidator();
+            var provider = new BlobBackedMixCatalogueProvider(
+                new StubMixCatalogueProvider(Array.Empty<Mix>()),
+                repo,
+                new MemoryCache(new MemoryCacheOptions()),
+                invalidator,
+                NullLogger<BlobBackedMixCatalogueProvider>.Instance,
+                new Dictionary<string, double>(),
+                enrichmentRepository: null,
+                moodWeightEnricher: null);
+
+            IReadOnlyList<Mix> initial = await provider.GetLatestAsync(200, CancellationToken.None);
+            initial.Select(m => m.Id).Should().Contain(new[] { "keep", "doomed" });
+
+            // Admin delete removes it from the blob and invalidates the cache.
+            repo.BlobMixes = new[] { keep };
+            invalidator.Invalidate();
+
+            IReadOnlyList<Mix> afterDelete = await provider.GetLatestAsync(200, CancellationToken.None);
+            afterDelete.Select(m => m.Id).Should().Contain("keep");
+            afterDelete.Select(m => m.Id).Should().NotContain("doomed");
+        }
+
         [Test]
         public async Task GetLatestAsync_merges_blob_and_rss_rss_wins_on_url_collision()
         {
@@ -94,6 +153,45 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             Assert.That(result, Has.Count.EqualTo(1));
             Assert.That(result[0].Url, Is.EqualTo("https://sc.test/mix-1"));
             Assert.That(blobRepo.WriteCallCount, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void GetLatestAsync_propagates_cancellation_instead_of_swallowing_it()
+        {
+            // Cancellation must not be caught by the 'safe' RSS wrapper and reported as a degraded
+            // service — it should propagate so the request short-circuits cleanly. See issue #55.
+            var sut = BuildSut(
+                blobMixes: new[] { MakeMix("1", "https://sc.test/mix-1") },
+                rssException: new OperationCanceledException());
+
+            Assert.That(
+                async () => await sut.GetLatestAsync(10, CancellationToken.None),
+                Throws.InstanceOf<OperationCanceledException>());
+        }
+
+        [Test]
+        public async Task GetLatestAsync_increments_rss_failure_counter_on_rss_error()
+        {
+            long measured = 0;
+            using var listener = new System.Diagnostics.Metrics.MeterListener();
+            listener.InstrumentPublished = (instrument, l) =>
+            {
+                if (instrument.Meter.Name == CatalogueMetrics.MeterName
+                    && instrument.Name == "catalogue.rss_fetch_failures")
+                {
+                    l.EnableMeasurementEvents(instrument);
+                }
+            };
+            listener.SetMeasurementEventCallback<long>((_, value, _, _) => Interlocked.Add(ref measured, value));
+            listener.Start();
+
+            var sut = BuildSut(
+                blobMixes: new[] { MakeMix("1", "https://sc.test/mix-1") },
+                rssException: new HttpRequestException("RSS down"));
+
+            await sut.GetLatestAsync(10, CancellationToken.None);
+
+            measured.Should().BeGreaterThanOrEqualTo(1);
         }
 
         [Test]
@@ -1066,6 +1164,27 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             }
         }
 
+        private sealed class DelayingMixCatalogueProvider : IMixCatalogueProvider
+        {
+            private readonly IReadOnlyList<Mix> _mixes;
+            private readonly TimeSpan _delay;
+
+            public DelayingMixCatalogueProvider(IReadOnlyList<Mix> mixes, TimeSpan delay)
+            {
+                _mixes = mixes;
+                _delay = delay;
+            }
+
+            public int CallCount { get; private set; }
+
+            public async Task<IReadOnlyList<Mix>> GetLatestAsync(int maxItems, CancellationToken cancellationToken)
+            {
+                CallCount++;
+                await Task.Delay(_delay, cancellationToken).ConfigureAwait(false);
+                return _mixes;
+            }
+        }
+
         private sealed class ThrowingMixCatalogueProvider : IMixCatalogueProvider
         {
             private readonly Exception _exception;
@@ -1090,11 +1209,22 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             }
         }
 
+        private sealed class IncrementingCacheInvalidator : ICatalogCacheInvalidator
+        {
+            public int Version { get; private set; }
+
+            public void Invalidate() => Version++;
+        }
+
         private sealed class StubBlobRepository : IBlobMixCatalogueRepository
         {
             public IReadOnlyList<Mix> BlobMixes { get; set; } = Array.Empty<Mix>();
 
+            public string? ReadETag { get; set; } = "etag-0";
+
             public IReadOnlyList<Mix>? WrittenMixes { get; private set; }
+
+            public string? WrittenETag { get; private set; }
 
             public Exception? WriteException { get; set; }
 
@@ -1102,13 +1232,13 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
 
             public int ReadCallCount { get; private set; }
 
-            public Task<IReadOnlyList<Mix>> ReadAsync(CancellationToken cancellationToken)
+            public Task<CatalogReadResult> ReadAsync(CancellationToken cancellationToken)
             {
                 ReadCallCount++;
-                return Task.FromResult(BlobMixes);
+                return Task.FromResult(new CatalogReadResult(BlobMixes, ReadETag));
             }
 
-            public Task WriteAsync(IReadOnlyList<Mix> mixes, CancellationToken cancellationToken)
+            public Task WriteAsync(IReadOnlyList<Mix> mixes, string? expectedETag, CancellationToken cancellationToken)
             {
                 WriteCallCount++;
                 if (WriteException is not null)
@@ -1117,6 +1247,7 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
                 }
 
                 WrittenMixes = mixes;
+                WrittenETag = expectedETag;
                 return Task.CompletedTask;
             }
         }

@@ -35,7 +35,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 if (!RelatedEquals(mix.RelatedMixes, related))
                 {
                     changed = true;
-                    result[i] = WithRelatedMixes(mix, related);
+                    result[i] = mix with { RelatedMixes = related };
                 }
                 else
                 {
@@ -211,28 +211,6 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             }
 
             return true;
-        }
-
-        private static Mix WithRelatedMixes(Mix mix, IReadOnlyList<RelatedMixRef> related)
-        {
-            return new Mix
-            {
-                Id = mix.Id,
-                Title = mix.Title,
-                Url = mix.Url,
-                Description = mix.Description,
-                Intro = mix.Intro,
-                Duration = mix.Duration,
-                ImageUrl = mix.ImageUrl,
-                Tracklist = mix.Tracklist,
-                Genre = mix.Genre,
-                Energy = mix.Energy,
-                BpmMin = mix.BpmMin,
-                BpmMax = mix.BpmMax,
-                Moods = mix.Moods,
-                RelatedMixes = related,
-                PublishedAt = mix.PublishedAt,
-            };
         }
     }
 }
