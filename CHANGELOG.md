@@ -2,6 +2,41 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.46
+
+Security hardening, operational robustness, and a large internal cleanup. No request/response shapes, routes, or status codes changed. Some intentional new behaviours and stricter startup configuration are called out below.
+
+### Security
+
+- **Global rate limiting.** Throttling previously applied only to `POST /api/mixes/recommend`. There is now a global per-IP default of 60 req/min on every endpoint, the `recommend` endpoint stays at 10 req/min, and the privileged endpoints (`flush`, `delete`, `diagnostics`) are limited to 5 req/min to slow brute force against the bearer secret. Over-limit requests get `429` with `Retry-After: 60`; `/health` is exempt.
+- **Privileged-endpoint auth hardened and centralised.** The copy-pasted bearer-secret checks on catalog flush/delete and diagnostics are replaced by a single `[BearerSecret]` filter using a constant-time comparison. Authorisation now **fails closed**: outside Development the app refuses to start when `Catalog:FlushSecret` is unset, so those endpoints can never run unauthenticated.
+- **Environment-aware CORS.** Allowed origins move to configuration (`Cors:AllowedOrigins`). Production serves only `https://changsta.com` and `https://www.changsta.com`; `http://localhost:8080` is appended in Development only. Startup rejects any non-https or localhost origin outside Development.
+
+### Reliability & operations
+
+- **ETag optimistic concurrency on the blob catalog.** Catalogue reads return the blob ETag and writes use `If-Match` (or create-only for the first write), so concurrent refresh/delete writers can no longer clobber each other. Admin deletes do a bounded read-modify-write retry; the deletion semantics (a mix still in the live RSS window can re-appear on refresh) are now documented.
+- **Catalogue cache TTL corrected to 1 hour.** The merged-catalogue and RSS caches used a 24h TTL while documented as 1h; newly published mixes now appear within the hour as intended.
+- **Cancellation propagates; failure counters added.** The "safe" RSS/blob/AI fallbacks no longer swallow cancellation. New OpenTelemetry counters surface RSS-fetch, blob read/write, mood-load, and AI-enrichment failures to Azure Monitor.
+- **Empty recommendation results are cached** (short 5-minute TTL) so repeated "no match" queries don't re-hit OpenAI; a small backoff was added between AI validation retries.
+- **App Service health check wired up.** `healthCheckPath: /health` is set in the Bicep web-app config so the platform can auto-heal a wedged instance.
+- **Timezone resolution hardened.** The radio schedule's `Europe/London` lookup moved out of a static initialiser, falling back to UTC with a warning if tzdata is unavailable rather than poisoning the type.
+
+### Configuration (action required on deploy)
+
+- **`SoundCloud:RssUrl` is now required.** `appsettings.json` no longer ships a specific operator's feed; the app fails fast at startup until the value is supplied via environment variables or user-secrets. Set it per environment before deploying.
+- **OpenAI model id aligned.** `appsettings.json` and the README now use `gpt-4o-mini`, matching what the deploy workflows already set in every environment. The inline `OpenAI__Model` was removed from the workflows so `appsettings.json` is the single source.
+- CORS production origins are pinned in `infra/main.bicep` (`Cors__AllowedOrigins__*`).
+
+### Validation & API behaviour
+
+- **`maxResults` clamping locked down.** Out-of-range `maxResults` continues to be clamped to 1–20 (the effective value is returned as `maxResultsApplied`); behaviour is now covered by tests and the README wording was corrected.
+- **Genre aliasing single-sourced.** All genre canonicalisation now flows through `GenreNormalizer`; the recommender's query analyser no longer keeps its own table (behaviour preserved).
+
+### Internal / maintainability
+
+- Deploy run-id discovery now filters by `head_sha` server-side instead of paging the latest 50 CI runs.
+- `Mix` is now a record (`with`-expressions replace the shallow-copy helpers); the catalogue provider's `LoadSemaphore` is an instance field with the provider registered as a singleton; `RadioScheduler`, the OpenAI `ChatClient` construction, and the blob `BlobContainerClient` construction are wired through dedicated abstractions/factories; `MixCatalogController` projection logic and the catalogue merge logic were extracted into testable `CatalogProjections` and `MixCatalogueMerger`. The unit suite grew from 407 to 473 tests.
+
 ## v1.45
 
 - **Bounded OpenAI request timeout.** OpenAI calls now use a configurable per-request network timeout (`OpenAI:TimeoutSeconds`, default 30 seconds), applied to both the recommender and the mood-weight enricher. A slow or unresponsive OpenAI endpoint can no longer stall a request indefinitely — previously it could hang for the SDK default and again across a retry, risking thread-pool exhaustion on the single instance. A fired timeout now returns a clean `503 Service Unavailable` instead of hanging or a misleading empty `200`, while genuine client cancellations still propagate. `OpenAI:TimeoutSeconds` is validated as positive at startup.
