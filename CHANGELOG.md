@@ -2,6 +2,24 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.47
+
+Tracklist cue points. The parser now understands numbered and timestamped tracklists, and each track can carry a start offset that surfaces on the per-mix tracklist responses. Purely additive — no routes, request/response shapes, or status codes change for existing data.
+
+### Tracklist parsing
+
+- The tracklist parser now reads **line numbers** (`1. Artist - Title`) and **cue points** — bracketed (`[4:08]`), bare (`04:08`), and `h:mm:ss` — in addition to the original `Artist - Title` format, in any combination. A `Tracklist:` marker with a trailing colon is recognised alongside the existing markers.
+- A leading timestamp is treated as a cue point only when the line still parses as `Artist - Title`, so an artist literally named like a timestamp (e.g. `20:20 - Vision`) is preserved, and out-of-range values (e.g. `4:99`) are not mistaken for cues.
+
+### API & persistence (additive)
+
+- Each track gains an optional `cuePointSeconds` (whole seconds). It is persisted in the blob catalogue (omitted when absent, so existing entries stay byte-identical on rewrite) and surfaced on the per-mix tracklist responses (`GET /api/catalog/mixes`, `/api/catalog/mixes/{slug}`, `/api/catalog/artists/{name}/mixes`), emitted as `null` when a track has no cue point. A tracklist may carry cue points on all, some, or none of its tracks.
+- The cross-mix aggregates (`/api/catalog/tracks`, `/api/catalog`) are unchanged. Existing cached catalogs and legacy tracklist formats continue to deserialise unchanged, and a malformed cue value is tolerated rather than failing the catalog read.
+
+### Internal
+
+- The unit suite grew from 473 to 500 tests.
+
 ## v1.46
 
 Security hardening, operational robustness, and a large internal cleanup. No request/response shapes, routes, or status codes changed. Some intentional new behaviours and stricter startup configuration are called out below.
