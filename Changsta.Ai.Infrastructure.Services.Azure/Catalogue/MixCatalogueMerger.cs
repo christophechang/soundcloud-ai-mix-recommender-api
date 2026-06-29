@@ -47,6 +47,13 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                     bool rssHasSchema = !string.IsNullOrEmpty(mix.Genre);
                     bool syncSchema = descriptionChanged && rssHasSchema;
 
+                    // Backfill a stale empty tracklist: a mix first ingested under an older parser
+                    // can have an empty persisted tracklist that the description-change gate never
+                    // re-syncs (the description text is unchanged). When RSS now parses a non-empty
+                    // tracklist, adopt it so improved parsing heals existing entries. See issue #119.
+                    bool backfillTracklist =
+                        rssHasSchema && existing.Tracklist.Count == 0 && mix.Tracklist.Count > 0;
+
                     // Base = existing (blob) so computed fields (Url, RelatedMixes, Warmth)
                     // carry forward by default; only RSS-sourced/synced fields are overridden.
                     byUrl[mix.Url] = existing with
@@ -57,7 +64,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                         Intro = mix.Intro,
                         Duration = mix.Duration ?? existing.Duration,
                         ImageUrl = mix.ImageUrl ?? existing.ImageUrl,
-                        Tracklist = syncSchema ? mix.Tracklist : existing.Tracklist,
+                        Tracklist = (syncSchema || backfillTracklist) ? mix.Tracklist : existing.Tracklist,
                         Genre = syncSchema ? mix.Genre : existing.Genre,
                         Energy = syncSchema ? mix.Energy : existing.Energy,
                         BpmMin = syncSchema ? mix.BpmMin : existing.BpmMin,
