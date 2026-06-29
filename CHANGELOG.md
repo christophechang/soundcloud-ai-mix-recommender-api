@@ -2,6 +2,18 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.48
+
+Fixes mixes whose tracklists were persisted empty by an older parser and never recovered. No routes, request/response shapes, or status codes change.
+
+### Fixes
+
+- **Stale empty tracklists are backfilled on refresh.** A mix first ingested before the parser understood its tracklist marker (e.g. a `Tracklist:` marker with a trailing colon, as used by timestamped/cue-point tracklists) had an empty tracklist persisted. The catalogue merge only re-synced a tracklist when the description text changed, so the improved parser could never heal those entries — the empty tracklist stayed stuck across every refresh. The merge now adopts the freshly parsed RSS tracklist when the stored one is empty but RSS yields a non-empty one, so affected mixes recover their tracklists (and cue points) on the next refresh.
+
+### Internal
+
+- The unit suite grew from 500 to 502 tests.
+
 ## v1.47
 
 Tracklist cue points. The parser now understands numbered and timestamped tracklists, and each track can carry a start offset that surfaces on the per-mix tracklist responses. Purely additive — no routes, request/response shapes, or status codes change for existing data.
