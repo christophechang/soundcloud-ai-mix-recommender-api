@@ -81,5 +81,24 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             Assert.That(tracks[0].Title, Is.EqualTo("Title"));
             Assert.That(tracks[0].CuePointSeconds, Is.Null);
         }
+
+        [Test]
+        public void Read_MalformedCuePointSeconds_IsToleratedAsNull_WithoutFailingTheRead()
+        {
+            // A float or out-of-Int32 value must not throw and fail the whole catalog read;
+            // it is skipped (cue null) and subsequent tracks still parse.
+            const string json =
+                "[{\"artist\":\"A\",\"title\":\"B\",\"cuePointSeconds\":248.5}," +
+                "{\"artist\":\"C\",\"title\":\"D\",\"cuePointSeconds\":99999999999}]";
+
+            IReadOnlyList<Track> tracks = JsonSerializer.Deserialize<IReadOnlyList<Track>>(json, Options)
+                ?? Array.Empty<Track>();
+
+            Assert.That(tracks, Has.Count.EqualTo(2));
+            Assert.That(tracks[0].CuePointSeconds, Is.Null);
+            Assert.That(tracks[0].Artist, Is.EqualTo("A"));
+            Assert.That(tracks[1].CuePointSeconds, Is.Null);
+            Assert.That(tracks[1].Title, Is.EqualTo("D"));
+        }
     }
 }

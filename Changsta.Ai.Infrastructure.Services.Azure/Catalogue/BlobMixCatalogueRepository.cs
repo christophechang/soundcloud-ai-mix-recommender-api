@@ -181,9 +181,12 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                             }
                             else if (string.Equals(propName, "cuePointSeconds", StringComparison.OrdinalIgnoreCase))
                             {
-                                if (reader.TokenType == JsonTokenType.Number)
+                                // Tolerate a malformed value (float / out-of-Int32) the same way
+                                // artist/title tolerate non-strings: skip it rather than throwing
+                                // and failing the whole catalog read.
+                                if (reader.TokenType == JsonTokenType.Number && reader.TryGetInt32(out int cue))
                                 {
-                                    cuePointSeconds = reader.GetInt32();
+                                    cuePointSeconds = cue;
                                 }
                             }
                         }
