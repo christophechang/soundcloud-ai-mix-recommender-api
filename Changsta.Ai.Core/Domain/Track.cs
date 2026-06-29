@@ -8,6 +8,8 @@ namespace Changsta.Ai.Core.Domain
 
         required public string Title { get; init; }
 
+        public int? CuePointSeconds { get; init; }
+
         public bool Equals(Track? other)
         {
             if (other is null)

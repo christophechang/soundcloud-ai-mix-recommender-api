@@ -21,7 +21,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
 {
     internal sealed class BlobMixCatalogueRepository : IBlobMixCatalogueRepository
     {
-        private static readonly JsonSerializerOptions JsonOptions = new()
+        internal static readonly JsonSerializerOptions JsonOptions = new()
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             PropertyNameCaseInsensitive = true,
@@ -156,9 +156,10 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                     }
                     else if (reader.TokenType == JsonTokenType.StartObject)
                     {
-                        // v2 format: array of { "artist": "...", "title": "..." }
+                        // v2 format: array of { "artist": "...", "title": "...", "cuePointSeconds": 248? }
                         string artist = string.Empty;
                         string title = string.Empty;
+                        int? cuePointSeconds = null;
 
                         while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
                         {
@@ -178,9 +179,19 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                             {
                                 title = reader.GetString() ?? string.Empty;
                             }
+                            else if (string.Equals(propName, "cuePointSeconds", StringComparison.OrdinalIgnoreCase))
+                            {
+                                // Tolerate a malformed value (float / out-of-Int32) the same way
+                                // artist/title tolerate non-strings: skip it rather than throwing
+                                // and failing the whole catalog read.
+                                if (reader.TokenType == JsonTokenType.Number && reader.TryGetInt32(out int cue))
+                                {
+                                    cuePointSeconds = cue;
+                                }
+                            }
                         }
 
-                        tracks.Add(new Track { Artist = artist, Title = title });
+                        tracks.Add(new Track { Artist = artist, Title = title, CuePointSeconds = cuePointSeconds });
                     }
                 }
 
@@ -199,6 +210,13 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                     writer.WriteStartObject();
                     writer.WriteString("artist", value[i].Artist);
                     writer.WriteString("title", value[i].Title);
+
+                    int? cuePointSeconds = value[i].CuePointSeconds;
+                    if (cuePointSeconds.HasValue)
+                    {
+                        writer.WriteNumber("cuePointSeconds", cuePointSeconds.Value);
+                    }
+
                     writer.WriteEndObject();
                 }
 

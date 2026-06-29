@@ -60,7 +60,7 @@ namespace Changsta.Ai.Core.Parsing
         {
             for (int i = 0; i < lines.Length; i++)
             {
-                string line = lines[i].Trim();
+                string line = NormaliseMarkerCandidate(lines[i]);
 
                 for (int j = 0; j < TracklistMarkers.Length; j++)
                 {
@@ -72,6 +72,20 @@ namespace Changsta.Ai.Core.Parsing
             }
 
             return -1;
+        }
+
+        private static string NormaliseMarkerCandidate(string line)
+        {
+            string trimmed = line.Trim();
+
+            // Tolerate a trailing colon, e.g. "Tracklist:" — common in numbered / cue-point
+            // tracklists — so it is recognised the same as the bare "Tracklist" marker.
+            if (trimmed.EndsWith(':'))
+            {
+                trimmed = trimmed[..^1].TrimEnd();
+            }
+
+            return trimmed;
         }
     }
 }
