@@ -150,5 +150,35 @@ namespace Changsta.Ai.Tests.Unit.Parsing
             Assert.That(intro, Is.EqualTo("Intro paragraph."));
             Assert.That(trackSection, Is.EqualTo("Artist A - Track One\nArtist B - Track Two"));
         }
+
+        [Test]
+        public void SplitDescription_WhenMarkerHasTrailingColon_FindsMarker()
+        {
+            const string description =
+                "Intro paragraph.\n" +
+                "\n" +
+                "Tracklist:\n" +
+                "Artist A - Track One\n" +
+                "Artist B - Track Two\n";
+
+            (string? intro, string trackSection) = MixDescriptionParser.SplitDescription(description);
+
+            Assert.That(intro, Is.EqualTo("Intro paragraph."));
+            Assert.That(trackSection, Is.EqualTo("Artist A - Track One\nArtist B - Track Two"));
+        }
+
+        [Test]
+        public void ExtractIntro_WhenMarkerHasTrailingColon_ReturnsIntro()
+        {
+            const string description =
+                "Intro text.\n" +
+                "\n" +
+                "Tracklist:\n" +
+                "Artist A - Track One\n";
+
+            string? result = MixDescriptionParser.ExtractIntro(description);
+
+            Assert.That(result, Is.EqualTo("Intro text."));
+        }
     }
 }
