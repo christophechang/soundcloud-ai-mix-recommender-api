@@ -178,6 +178,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
         }
 
         [HttpGet("artists/{name}/mixes")]
+        [HttpGet("artists/{*name}")]
         public async Task<IActionResult> GetMixesByArtistAsync(
             [FromRoute] string name,
             [FromQuery] int page = 1,
@@ -189,16 +190,17 @@ namespace Changsta.Ai.Interface.Api.Controllers
                 return invalid;
             }
 
+            string artistName = NormalizeArtistRouteName(name);
             IReadOnlyList<Mix> mixes = await LoadCatalogueAsync(CatalogMaxItems, cancellationToken).ConfigureAwait(false);
 
             Mix[] results = mixes
                 .Where(m => m.Tracklist.Any(t =>
-                    string.Equals(t.Artist, name, StringComparison.OrdinalIgnoreCase)))
+                    string.Equals(t.Artist, artistName, StringComparison.OrdinalIgnoreCase)))
                 .ToArray();
 
             if (results.Length == 0)
             {
-                return NotFound(new { error = $"No mixes found for artist '{name}'." });
+                return NotFound(new { error = $"No mixes found for artist '{artistName}'." });
             }
 
             return Ok(BuildPage(results, page, pageSize));
@@ -222,6 +224,15 @@ namespace Changsta.Ai.Interface.Api.Controllers
                 PageSize = pageSize,
                 TotalPages = totalPages,
             };
+        }
+
+        private static string NormalizeArtistRouteName(string name)
+        {
+            const string MixesSuffix = "/mixes";
+
+            return name.EndsWith(MixesSuffix, StringComparison.OrdinalIgnoreCase)
+                ? name[..^MixesSuffix.Length]
+                : name;
         }
 
         private async Task<IReadOnlyList<Mix>> LoadCatalogueAsync(int maxItems, CancellationToken cancellationToken) =>

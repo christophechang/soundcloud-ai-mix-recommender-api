@@ -2,6 +2,18 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.49
+
+Fixes artist mix lookups 404ing for artist names containing a slash (e.g. `A Sides/Trex`). Also patches a known high-severity vulnerability in a transitive dependency. No routes, request/response shapes, or status codes change for existing data.
+
+### Fixes
+
+- **Artist mix lookups now support artist names containing `/`.** `GET /api/catalog/artists/{name}/mixes` and the equivalent catch-all route previously mis-segmented artist names with a slash, returning 404 for real artists like `A Sides/Trex`. The route now accepts the full remaining path as the artist name, stripping a trailing `/mixes` suffix if present.
+
+### Internal
+
+- Pinned `Microsoft.OpenApi` to `2.7.5` to resolve a known high-severity advisory ([GHSA-v5pm-xwqc-g5wc](https://github.com/advisories/GHSA-v5pm-xwqc-g5wc)) pulled in transitively via `Microsoft.AspNetCore.OpenApi` and `Swashbuckle.AspNetCore.Swagger`.
+
 ## v1.48
 
 Fixes mixes whose tracklists were persisted empty by an older parser and never recovered. No routes, request/response shapes, or status codes change.

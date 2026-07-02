@@ -423,6 +423,35 @@ namespace Changsta.Ai.Tests.Unit.Controllers
         }
 
         [Test]
+        public async Task GetMixesByArtistAsync_supports_artist_names_containing_slashes()
+        {
+            var mixes = new[]
+            {
+                MakeMix("1", "dnb", ("A Sides/Trex", "Track 1")),
+                MakeMix("2", "dnb", ("A Sides/MC Fats", "Track 2")),
+            };
+
+            var page = await InvokeMixesByArtistAsync(BuildSut(mixes), "A Sides/Trex/mixes");
+
+            Assert.That(page.Items, Has.Length.EqualTo(1));
+            Assert.That(page.Items[0].Id, Is.EqualTo("1"));
+        }
+
+        [Test]
+        public async Task GetMixesByArtistAsync_supports_slash_artist_path_without_mixes_suffix()
+        {
+            var mixes = new[]
+            {
+                MakeMix("1", "dnb", ("A Sides/Trex", "Track 1")),
+            };
+
+            var page = await InvokeMixesByArtistAsync(BuildSut(mixes), "A Sides/Trex");
+
+            Assert.That(page.Items, Has.Length.EqualTo(1));
+            Assert.That(page.Items[0].Id, Is.EqualTo("1"));
+        }
+
+        [Test]
         public async Task GetMixesByArtistAsync_returns_404_when_artist_not_found()
         {
             var mixes = new[]
