@@ -64,6 +64,29 @@ namespace Changsta.Ai.Tests.Unit.Radio
         }
 
         [Test]
+        public async Task GetStationsAsync_current_slot_mix_includes_tracklist_in_order()
+        {
+            var ok = (OkObjectResult)await MakeController().GetStationsAsync(CancellationToken.None);
+            var response = (RadioResponse)ok.Value!;
+            foreach (RadioStationVm station in response.Stations)
+            {
+                station.CurrentSlot.Mix.Tracklist.Should().SatisfyRespectively(
+                    first =>
+                    {
+                        first.Artist.Should().Be($"Artist 1 for mix-{station.Id}");
+                        first.Title.Should().Be($"Track 1 for mix-{station.Id}");
+                        first.CuePointSeconds.Should().Be(0);
+                    },
+                    second =>
+                    {
+                        second.Artist.Should().Be($"Artist 2 for mix-{station.Id}");
+                        second.Title.Should().Be($"Track 2 for mix-{station.Id}");
+                        second.CuePointSeconds.Should().Be(74);
+                    });
+            }
+        }
+
+        [Test]
         public async Task GetStationsAsync_each_station_has_frequency()
         {
             var ok = (OkObjectResult)await MakeController().GetStationsAsync(CancellationToken.None);
@@ -141,6 +164,11 @@ namespace Changsta.Ai.Tests.Unit.Radio
             Genre = genre,
             Energy = "mid",
             BpmMin = 125,
+            Tracklist = new[]
+            {
+                new Track { Artist = $"Artist 1 for {id}", Title = $"Track 1 for {id}", CuePointSeconds = 0 },
+                new Track { Artist = $"Artist 2 for {id}", Title = $"Track 2 for {id}", CuePointSeconds = 74 },
+            },
         };
 
         private sealed class StubUseCase : IGetRadioScheduleUseCase
