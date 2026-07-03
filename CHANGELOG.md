@@ -2,6 +2,18 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.50
+
+Adds each mix's `tracklist` (with cue points) to the radio stations endpoint so the "now playing" readout can render track cues. Additive and non-breaking — no existing fields, routes, or status codes change.
+
+### Features
+
+- **`GET /api/radio/stations` now returns `tracklist` on each embedded mix.** `stations[].currentSlot.mix` and `stations[].todaySlots[].mix` now include a `tracklist` array of `{ artist, title, cuePointSeconds }` entries, matching the shape the catalogue mix endpoint already emits (camelCase, order preserved, `cuePointSeconds` in integer seconds with `0` valid for the first track). The data was already loaded on the domain mix; the radio serializer simply projects it now. Consumers that ignore `tracklist` are unaffected.
+
+### Internal
+
+- The unit suite grew from 504 to 505 tests.
+
 ## v1.49
 
 Fixes artist mix lookups 404ing for artist names containing a slash (e.g. `A Sides/Trex`). Also patches a known high-severity vulnerability in a transitive dependency. No routes, request/response shapes, or status codes change for existing data.

@@ -20,6 +20,7 @@ namespace Changsta.Ai.Interface.Api.ViewModels
                 Moods = mix.Moods,
                 PublishedAt = mix.PublishedAt,
                 Duration = ParseDurationSeconds(mix.Duration),
+                Tracklist = mix.Tracklist,
             };
         }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Changsta.Ai.Core.Domain;
 
 namespace Changsta.Ai.Interface.Api.ViewModels
 {
@@ -26,5 +27,7 @@ namespace Changsta.Ai.Interface.Api.ViewModels
         public DateTimeOffset? PublishedAt { get; init; }
 
         public int? Duration { get; init; }
+
+        public IReadOnlyList<Track> Tracklist { get; init; } = Array.Empty<Track>();
     }
 }
