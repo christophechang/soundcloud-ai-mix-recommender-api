@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using Changsta.Ai.Interface.Api.Cors;
 using FluentAssertions;
 using Microsoft.AspNetCore.Cors.Infrastructure;
@@ -42,18 +41,11 @@ namespace Changsta.Ai.Tests.Unit.MixLab
         {
             var corsOptions = BuildCorsOptions();
 
-            // Access the policy via reflection to verify it was added
-            var policiesField = typeof(CorsOptions).GetField("_policies", BindingFlags.NonPublic | BindingFlags.Instance);
-            policiesField.Should().NotBeNull();
-
-            var policies = (Dictionary<string, CorsPolicy>?)policiesField !.GetValue(corsOptions);
-            policies.Should().NotBeNull();
-            policies !.Should().ContainKey("ChangstaSite");
-
-            var policy = policies["ChangstaSite"];
+            CorsPolicy? policy = corsOptions.GetPolicy("ChangstaSite");
+            policy.Should().NotBeNull();
 
             // Verify origins
-            policy.Origins.Should().Contain("https://mixlab.changsta.com");
+            policy !.Origins.Should().Contain("https://mixlab.changsta.com");
 
             // Verify methods
             policy.Methods.Should().Contain("GET");
