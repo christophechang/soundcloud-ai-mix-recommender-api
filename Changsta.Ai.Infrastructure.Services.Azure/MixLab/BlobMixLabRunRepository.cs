@@ -475,6 +475,5 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
             throw new MixLabConcurrencyException(
                 $"Could not update the MixLab runs index after {MaxWriteAttempts} attempts because of concurrent writes.");
         }
-
     }
 }
