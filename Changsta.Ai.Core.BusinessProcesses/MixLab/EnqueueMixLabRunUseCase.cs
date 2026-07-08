@@ -235,7 +235,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
                 return false;
             }
 
-            string intent = element.GetString()!;
+            string intent = element.GetString() ?? string.Empty;
             if (intent.Length > MaxIntentLength)
             {
                 error = $"'intent' must be at most {MaxIntentLength} characters.";

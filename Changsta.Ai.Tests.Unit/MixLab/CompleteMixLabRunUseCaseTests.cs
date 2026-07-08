@@ -129,7 +129,8 @@ namespace Changsta.Ai.Tests.Unit.MixLab
 
             result.Outcome.Should().Be(CompleteMixLabRunResult.CompleteOutcome.InvalidSummary);
             gateway.WrittenPaths.Count.Should().Be(writesBefore);
-            (await runs.GetAsync(runId, CancellationToken.None))!.Status.Should().Be(MixLabRunStatus.Running);
+            MixLabRun? runAfter = await runs.GetAsync(runId, CancellationToken.None);
+            runAfter!.Status.Should().Be(MixLabRunStatus.Running);
         }
 
         private static (CompleteMixLabRunUseCase Sut, BlobMixLabRunRepository Runs, BlobMixLabArtifactStore Artifacts, FakeMixLabBlobGateway Gateway) BuildSut()
