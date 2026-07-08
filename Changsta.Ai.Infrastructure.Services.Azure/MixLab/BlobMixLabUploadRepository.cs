@@ -111,6 +111,23 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
             return ReadIndexEntriesAsync(cancellationToken);
         }
 
+        private static string NewUploadId(DateTimeOffset now)
+        {
+            string suffix = Guid.NewGuid().ToString("N").Substring(0, 4);
+            return $"u_{now:yyyyMMdd}_{suffix}";
+        }
+
+        private static ReadOnlyMemory<byte> Serialize<T>(T value)
+        {
+            return JsonSerializer.SerializeToUtf8Bytes(value, MixLabJsonOptions.Options);
+        }
+
+        private static T Deserialize<T>(byte[] content)
+        {
+            return JsonSerializer.Deserialize<T>(content, MixLabJsonOptions.Options)
+                ?? throw new JsonException($"MixLab blob content deserialised to null for type {typeof(T).Name}.");
+        }
+
         private async Task<IReadOnlyList<MixLabUpload>> ReadIndexEntriesAsync(CancellationToken cancellationToken)
         {
             MixLabBlobReadResult? read = await _gateway
@@ -158,21 +175,5 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
                 $"Could not update the MixLab uploads index after {MaxWriteAttempts} attempts because of concurrent writes.");
         }
 
-        private static string NewUploadId(DateTimeOffset now)
-        {
-            string suffix = Guid.NewGuid().ToString("N").Substring(0, 4);
-            return $"u_{now:yyyyMMdd}_{suffix}";
-        }
-
-        private static ReadOnlyMemory<byte> Serialize<T>(T value)
-        {
-            return JsonSerializer.SerializeToUtf8Bytes(value, MixLabJsonOptions.Options);
-        }
-
-        private static T Deserialize<T>(byte[] content)
-        {
-            return JsonSerializer.Deserialize<T>(content, MixLabJsonOptions.Options)
-                ?? throw new JsonException($"MixLab blob content deserialised to null for type {typeof(T).Name}.");
-        }
     }
 }

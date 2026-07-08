@@ -53,6 +53,17 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
                 cancellationToken);
         }
 
+        private static ReadOnlyMemory<byte> Serialize<T>(T value)
+        {
+            return JsonSerializer.SerializeToUtf8Bytes(value, MixLabJsonOptions.Options);
+        }
+
+        private static T Deserialize<T>(byte[] content)
+        {
+            return JsonSerializer.Deserialize<T>(content, MixLabJsonOptions.Options)
+                ?? throw new JsonException($"MixLab blob content deserialised to null for type {typeof(T).Name}.");
+        }
+
         private async Task<IReadOnlyList<MixLabFeedbackEvent>> ReadEntriesAsync(CancellationToken cancellationToken)
         {
             MixLabBlobReadResult? read = await _gateway
@@ -100,15 +111,5 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
                 $"Could not update the MixLab feedback queue after {MaxWriteAttempts} attempts because of concurrent writes.");
         }
 
-        private static ReadOnlyMemory<byte> Serialize<T>(T value)
-        {
-            return JsonSerializer.SerializeToUtf8Bytes(value, MixLabJsonOptions.Options);
-        }
-
-        private static T Deserialize<T>(byte[] content)
-        {
-            return JsonSerializer.Deserialize<T>(content, MixLabJsonOptions.Options)
-                ?? throw new JsonException($"MixLab blob content deserialised to null for type {typeof(T).Name}.");
-        }
     }
 }

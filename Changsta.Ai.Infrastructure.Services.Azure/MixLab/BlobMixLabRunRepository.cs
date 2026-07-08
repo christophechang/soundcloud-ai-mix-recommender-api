@@ -339,6 +339,28 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
                 $"Could not update concept feedback on MixLab run '{runId}' after {MaxWriteAttempts} attempts because of concurrent writes.");
         }
 
+        private static string NewRunId(DateTimeOffset now)
+        {
+            string suffix = Guid.NewGuid().ToString("N").Substring(0, 4);
+            return $"r_{now:yyyyMMdd}_{suffix}";
+        }
+
+        private static string BuildFlagsSummary(MixLabRunFlags flags)
+        {
+            return $"{flags.Mode}/{flags.Risk}/{flags.Directions}";
+        }
+
+        private static ReadOnlyMemory<byte> Serialize<T>(T value)
+        {
+            return JsonSerializer.SerializeToUtf8Bytes(value, MixLabJsonOptions.Options);
+        }
+
+        private static T Deserialize<T>(byte[] content)
+        {
+            return JsonSerializer.Deserialize<T>(content, MixLabJsonOptions.Options)
+                ?? throw new JsonException($"MixLab blob content deserialised to null for type {typeof(T).Name}.");
+        }
+
         private async Task RequeueStaleRunningAsync(TimeSpan staleLease, CancellationToken cancellationToken)
         {
             IReadOnlyList<MixLabRunIndexEntry> entries = await ReadIndexEntriesAsync(cancellationToken).ConfigureAwait(false);
@@ -454,26 +476,5 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
                 $"Could not update the MixLab runs index after {MaxWriteAttempts} attempts because of concurrent writes.");
         }
 
-        private static string NewRunId(DateTimeOffset now)
-        {
-            string suffix = Guid.NewGuid().ToString("N").Substring(0, 4);
-            return $"r_{now:yyyyMMdd}_{suffix}";
-        }
-
-        private static string BuildFlagsSummary(MixLabRunFlags flags)
-        {
-            return $"{flags.Mode}/{flags.Risk}/{flags.Directions}";
-        }
-
-        private static ReadOnlyMemory<byte> Serialize<T>(T value)
-        {
-            return JsonSerializer.SerializeToUtf8Bytes(value, MixLabJsonOptions.Options);
-        }
-
-        private static T Deserialize<T>(byte[] content)
-        {
-            return JsonSerializer.Deserialize<T>(content, MixLabJsonOptions.Options)
-                ?? throw new JsonException($"MixLab blob content deserialised to null for type {typeof(T).Name}.");
-        }
     }
 }
