@@ -155,13 +155,14 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             MixLabHistorySnapshot? getResult = null,
             IPutMixLabHistoryUseCase? putUseCase = null)
         {
+            var defaultPutResult = new PutMixLabHistoryResult
+            {
+                Outcome = PutMixLabHistoryResult.PutOutcome.Written,
+                ETag = "etag-x",
+            };
             var sut = new MixLabHistoryController(
                 new StubGetMixLabHistoryUseCase(getResult),
-                putUseCase ?? new StubPutMixLabHistoryUseCase(new PutMixLabHistoryResult
-                {
-                    Outcome = PutMixLabHistoryResult.PutOutcome.Written,
-                    ETag = "etag-x",
-                }));
+                putUseCase ?? new StubPutMixLabHistoryUseCase(defaultPutResult));
 
             sut.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
             return sut;
