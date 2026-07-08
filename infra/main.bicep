@@ -101,6 +101,16 @@ resource catalogContainer 'Microsoft.Storage/storageAccounts/blobServices/contai
   }
 }
 
+// MixLab Anywhere: dedicated container in the same storage account as the mix catalogue. See
+// docs/architecture/mixlab-anywhere.md §3 and issue #132.
+resource mixLabContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-01-01' = {
+  parent: blobService
+  name: 'mixlab'
+  properties: {
+    publicAccess: 'None'
+  }
+}
+
 module webapp 'modules/webapp.bicep' = {
   name: 'deploy-webapp-${environment}'
   params: {
@@ -149,6 +159,19 @@ module webapp 'modules/webapp.bicep' = {
         name: 'Azure__LogAnalytics__WorkspaceId'
         value: logAnalyticsWorkspace.properties.customerId
       }
+      {
+        name: 'Azure__MixLab__ServiceEndpoint'
+        value: storageAccount.properties.primaryEndpoints.blob
+      }
+      {
+        name: 'Azure__MixLab__ContainerName'
+        value: 'mixlab'
+      }
+      // MixLab__ApiSecret and MixLab__ClaimLeaseMinutes are NOT set here. ApiSecret is a bearer
+      // secret fed to the app service by the deploy workflows (azure/appservice-settings step in
+      // .github/workflows/deploy-*.yml), matching Catalog__FlushSecret's mechanism exactly — see
+      // issue #132 NOTES. ClaimLeaseMinutes uses the shipped appsettings.json default (45) in every
+      // environment, so there is nothing to override here.
     ]
   }
 }

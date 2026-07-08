@@ -18,6 +18,7 @@ using Changsta.Ai.Infrastructure.Services.Azure.Diagnostics;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue;
 using Changsta.Ai.Interface.Api.Cors;
 using Changsta.Ai.Interface.Api.Middleware;
+using Changsta.Ai.Interface.Api.MixLab;
 using Changsta.Ai.Interface.Api.RateLimiting;
 using Changsta.Ai.Interface.Api.Services;
 using Microsoft.AspNetCore.RateLimiting;
@@ -95,6 +96,7 @@ builder.Services.AddOptions<OpenAiOptions>()
 
 builder.Services.AddAzureBlobMixCatalog(builder.Configuration);
 builder.Services.AddAzureDiagnostics(builder.Configuration);
+builder.Services.AddMixLabServices(builder.Configuration);
 
 var rawMoodWeights = builder.Configuration
     .GetSection("MoodWeights")
@@ -123,6 +125,17 @@ if (!builder.Environment.IsDevelopment()
 {
     throw new InvalidOperationException(
         "Catalog:FlushSecret must be configured in non-Development environments; it protects the flush, delete, and diagnostics endpoints.");
+}
+
+// Fail closed: the MixLab Anywhere endpoints (uploads, run queue/worker) are guarded by the
+// MixLab:ApiSecret bearer secret (see BearerSecretAttribute's docstring for the startup-refusal
+// pattern this mirrors). Outside Development, refuse to start when it is unset so those endpoints
+// can never run unauthenticated. See issue #132.
+if (!builder.Environment.IsDevelopment()
+    && string.IsNullOrWhiteSpace(builder.Configuration["MixLab:ApiSecret"]))
+{
+    throw new InvalidOperationException(
+        "MixLab:ApiSecret must be configured in non-Development environments; it protects the MixLab upload and run-queue endpoints.");
 }
 
 // SoundCloudRssMixCatalogueProvider is registered as its concrete type (not as IMixCatalogueProvider)
