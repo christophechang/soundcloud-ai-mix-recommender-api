@@ -130,7 +130,14 @@ namespace Changsta.Ai.Tests.Unit.MixLab
                 .Cast<RequestSizeLimitAttribute>()
                 .Single();
 
-            requestSizeLimitAttribute.Bytes.Should().Be(64 * 1024 * 1024);
+            GetRequestSizeLimitBytes(requestSizeLimitAttribute).Should().Be(64 * 1024 * 1024);
+        }
+
+        private static long GetRequestSizeLimitBytes(RequestSizeLimitAttribute attribute)
+        {
+            return (long)typeof(RequestSizeLimitAttribute)
+                .GetField("_bytes", BindingFlags.NonPublic | BindingFlags.Instance) !
+                .GetValue(attribute) !;
         }
 
         private static string GetConfigurationKey(BearerSecretAttribute attribute)
