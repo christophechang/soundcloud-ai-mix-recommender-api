@@ -92,7 +92,9 @@ jobs:
             [
               { "name": "OpenAI__ApiKey",          "value": "${{ secrets.OPENAI_API_KEY }}",          "slotSetting": false },
               { "name": "Catalog__FlushSecret",     "value": "${{ secrets.CATALOG_FLUSH_SECRET }}",     "slotSetting": false },
-              { "name": "MixLab__ApiSecret",        "value": "${{ secrets.MIXLAB_API_SECRET }}",        "slotSetting": false }
+              { "name": "MixLab__ApiSecret",        "value": "${{ secrets.MIXLAB_API_SECRET }}",        "slotSetting": false },
+              { "name": "Azure__MixLab__ServiceEndpoint", "value": "https://stchangstamixrecprod.blob.core.windows.net/", "slotSetting": false },
+              { "name": "Azure__MixLab__ContainerName",   "value": "mixlab", "slotSetting": false }
             ]
 
       - name: Deploy to Azure Web App (prod)
