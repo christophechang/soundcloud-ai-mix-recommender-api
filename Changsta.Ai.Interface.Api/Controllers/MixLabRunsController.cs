@@ -239,6 +239,8 @@ namespace Changsta.Ai.Interface.Api.Controllers
                 MixLabRunArtifactResult.ArtifactStatus.Found => File(result.Content!, result.ContentType!),
                 MixLabRunArtifactResult.ArtifactStatus.RunNotFound =>
                     NotFound(new { error = $"Run '{id}' not found." }),
+                MixLabRunArtifactResult.ArtifactStatus.ArtifactNotFound when kind == MixLabRunArtifactKind.Export =>
+                    NoContent(),
                 MixLabRunArtifactResult.ArtifactStatus.ArtifactNotFound =>
                     NotFound(new { error = "Artifact not found." }),
                 _ => StatusCode(StatusCodes.Status500InternalServerError),
