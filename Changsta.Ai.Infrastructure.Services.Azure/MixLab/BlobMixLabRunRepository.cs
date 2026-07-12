@@ -22,6 +22,11 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
     {
         private const int MaxWriteAttempts = 3;
 
+        // Every per-run artifact the pipeline writes (see CompleteMixLabRunUseCase). A run delete
+        // removes these plus run.json; any new artifact kind must be added here so a delete stays
+        // complete — the blob gateway has no prefix-delete.
+        private static readonly string[] RunArtifactNames = { "summary.json", "report.html", "export.xml" };
+
         private readonly IMixLabBlobGateway _gateway;
         private readonly TimeProvider _timeProvider;
         private readonly ILogger<BlobMixLabRunRepository> _logger;
@@ -337,6 +342,29 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
 
             throw new MixLabConcurrencyException(
                 $"Could not update concept feedback on MixLab run '{runId}' after {MaxWriteAttempts} attempts because of concurrent writes.");
+        }
+
+        public async Task DeleteAsync(string runId, CancellationToken cancellationToken)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+
+            // Manifest + artifacts. DeleteAsync is delete-if-exists, so an absent optional artifact
+            // (e.g. export.xml for a run that produced no concepts) is a harmless no-op.
+            await _gateway.DeleteAsync(MixLabBlobPaths.RunManifest(runId), cancellationToken).ConfigureAwait(false);
+            foreach (string artifact in RunArtifactNames)
+            {
+                await _gateway
+                    .DeleteAsync(MixLabBlobPaths.RunArtifact(runId, artifact), cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            // Drop the archive-index entry. Idempotent: filtering out a run id that is not present
+            // leaves the index unchanged.
+            await MutateRunIndexWithRetryAsync(
+                entries => entries
+                    .Where(e => !string.Equals(e.RunId, runId, StringComparison.Ordinal))
+                    .ToArray(),
+                cancellationToken).ConfigureAwait(false);
         }
 
         private static string NewRunId(DateTimeOffset now)

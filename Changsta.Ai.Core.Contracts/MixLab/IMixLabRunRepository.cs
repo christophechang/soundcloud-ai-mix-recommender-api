@@ -41,5 +41,13 @@ namespace Changsta.Ai.Core.Contracts.MixLab
             string conceptId,
             MixLabConceptFeedback feedback,
             CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Permanently removes a run: its manifest and every per-run artifact blob
+        /// (<c>runs/{runId}/*</c>) plus its entry in the archive index. Idempotent — deleting a run
+        /// that does not exist (no manifest, no index entry) is a no-op. Does not touch the concept
+        /// history document; the caller purges that separately. See docs/architecture/mixlab-anywhere.md §3.
+        /// </summary>
+        Task DeleteAsync(string runId, CancellationToken cancellationToken);
     }
 }

@@ -37,6 +37,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
         private readonly IFailMixLabRunUseCase _fail;
         private readonly IMixLabRunQueryUseCase _query;
         private readonly IOpenMixLabRunArtifactUseCase _artifacts;
+        private readonly IDeleteMixLabRunUseCase _delete;
 
         public MixLabRunsController(
             IEnqueueMixLabRunUseCase enqueue,
@@ -44,7 +45,8 @@ namespace Changsta.Ai.Interface.Api.Controllers
             ICompleteMixLabRunUseCase complete,
             IFailMixLabRunUseCase fail,
             IMixLabRunQueryUseCase query,
-            IOpenMixLabRunArtifactUseCase artifacts)
+            IOpenMixLabRunArtifactUseCase artifacts,
+            IDeleteMixLabRunUseCase delete)
         {
             _enqueue = enqueue;
             _claim = claim;
@@ -52,6 +54,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
             _fail = fail;
             _query = query;
             _artifacts = artifacts;
+            _delete = delete;
         }
 
         [HttpPost("runs")]
@@ -210,6 +213,22 @@ namespace Changsta.Ai.Interface.Api.Controllers
             }
 
             return new JsonResult(run) { SerializerSettings = ManifestJsonOptions };
+        }
+
+        [HttpDelete("runs/{id}")]
+        public async Task<IActionResult> DeleteRunAsync([FromRoute] string id, CancellationToken cancellationToken)
+        {
+            DeleteMixLabRunResult result = await _delete.DeleteAsync(id, cancellationToken).ConfigureAwait(false);
+
+            return result.Outcome switch
+            {
+                DeleteMixLabRunResult.DeleteOutcome.Deleted => NoContent(),
+                DeleteMixLabRunResult.DeleteOutcome.NotFound =>
+                    NotFound(new { error = $"Run '{id}' not found." }),
+                DeleteMixLabRunResult.DeleteOutcome.Active =>
+                    Conflict(new { error = $"Run '{id}' is still active; only a succeeded or failed run can be deleted." }),
+                _ => StatusCode(StatusCodes.Status500InternalServerError),
+            };
         }
 
         [HttpGet("runs/{id}/report")]

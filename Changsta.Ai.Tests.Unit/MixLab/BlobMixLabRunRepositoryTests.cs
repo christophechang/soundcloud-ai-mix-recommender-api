@@ -227,6 +227,36 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             page.Should().HaveCount(1);
         }
 
+        [Test]
+        public async Task DeleteAsync_removes_manifest_and_index_entry_leaving_other_runs()
+        {
+            var sut = BuildSut(out var gateway, out var time);
+
+            time.UtcNow = new DateTimeOffset(2026, 7, 8, 12, 0, 0, TimeSpan.Zero);
+            MixLabRun kept = await sut.CreateQueuedAsync(MakeFlags(), "u_1", CancellationToken.None);
+            time.UtcNow = time.UtcNow.AddMinutes(1);
+            MixLabRun target = await sut.CreateQueuedAsync(MakeFlags(), "u_2", CancellationToken.None);
+
+            await sut.DeleteAsync(target.RunId, CancellationToken.None);
+
+            (await sut.GetAsync(target.RunId, CancellationToken.None)).Should().BeNull();
+            gateway.DeletedPaths.Should().Contain($"runs/{target.RunId}/run.json");
+
+            IReadOnlyList<MixLabRunIndexEntry> index = await sut.GetIndexAsync(take: 100, skip: 0, CancellationToken.None);
+            index.Should().ContainSingle(e => e.RunId == kept.RunId);
+            index.Should().NotContain(e => e.RunId == target.RunId);
+        }
+
+        [Test]
+        public async Task DeleteAsync_unknown_run_is_a_no_op()
+        {
+            var sut = BuildSut(out _, out _);
+
+            Func<Task> act = () => sut.DeleteAsync("r_does_not_exist", CancellationToken.None);
+
+            await act.Should().NotThrowAsync();
+        }
+
         private static BlobMixLabRunRepository BuildSut(out FakeMixLabBlobGateway gateway, out FakeTimeProvider timeProvider)
         {
             gateway = new FakeMixLabBlobGateway();
