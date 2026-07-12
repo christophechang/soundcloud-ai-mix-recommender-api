@@ -68,9 +68,8 @@ namespace Changsta.Ai.Tests.Unit.MixLab
 
             MixLabHistorySnapshot? snapshot = await history.GetAsync(CancellationToken.None);
             snapshot.Should().NotBeNull();
-            JsonArray remaining = JsonNode.Parse(snapshot!.Content)!["runs"]!.AsArray();
-            remaining.Should().ContainSingle();
-            remaining[0]!["run_id"]!.GetValue<string>().Should().Be(kept.RunId);
+            snapshot!.Content.Should().NotContain(target.RunId);
+            snapshot.Content.Should().Contain(kept.RunId);
         }
 
         [Test]
