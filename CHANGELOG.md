@@ -2,6 +2,18 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.52
+
+Adds a `DELETE /api/mixlab/runs/{id}` endpoint that removes a run and purges its concept-history entry. Additive — no existing routes, DTOs, or status codes change.
+
+### Features
+
+- **`DELETE /api/mixlab/runs/{id}`.** Deletes a run (manifest, artifacts, and archive-index entry) and purges its entry from the concept-history document so it no longer influences future runs' novelty scoring or feedback multipliers. Only a non-active run may be deleted — a `queued` or `running` run returns `409` so the delete never races an in-flight worker claim/complete. History is purged first (ETag + bounded retry, touching only the matching `run_id` entry), then the run blobs; both steps are idempotent so a retry converges.
+
+### Internal
+
+- The unit suite grew from 655 to 662 tests.
+
 ## v1.51
 
 Adds **MixLab Anywhere** — a new set of endpoints under `/api/mixlab` that let the MixLab web client (`mixlab.changsta.com`) upload collections, drive a run queue worked by an external worker, sync history, and collect per-concept feedback, all persisted to Azure Blob storage. Purely additive: no existing routes, DTOs, or status codes change.
