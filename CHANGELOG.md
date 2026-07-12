@@ -2,6 +2,22 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.51
+
+Adds **MixLab Anywhere** — a new set of endpoints under `/api/mixlab` that let the MixLab web client (`mixlab.changsta.com`) upload collections, drive a run queue worked by an external worker, sync history, and collect per-concept feedback, all persisted to Azure Blob storage. Purely additive: no existing routes, DTOs, or status codes change.
+
+### Features
+
+- **New `api/mixlab` endpoint group.** Uploads (`POST/GET uploads`, `GET uploads/{id}`), a run queue with a worker state machine (`POST runs`, `POST worker/claim`, `POST runs/{id}/complete`, `POST runs/{id}/fail`, `GET runs`, `GET runs/{id}`, and the `runs/{id}` `report`/`export`/`summary` reads), history sync (`GET/PUT history`), and concept feedback (`POST runs/{id}/concepts/{conceptId}/feedback`, `GET feedback/pending`, `POST feedback/ack`).
+- **CORS now allows `https://mixlab.changsta.com`.** The shared policy also gains the `PUT` method and `Content-Encoding` request header, and exposes the `ETag` response header, for the MixLab client's history sync.
+
+### Internal
+
+- **Blob persistence layer for MixLab.** New domain models, `Core.Contracts` interfaces, and Azure Blob-backed repositories for uploads, runs, history, and feedback, wired through DI (`AddMixLabServices`) and provisioned by `infra/main.bicep` (a `mixlab` blob container).
+- **New configuration.** `Azure:MixLab` (`ConnectionString`, `ServiceEndpoint`, `ContainerName` = `mixlab`) and `MixLab:ClaimLeaseMinutes` (`45`). The MixLab endpoints are guarded by a `MixLab:ApiSecret` bearer secret; like `Catalog:FlushSecret`, the app fails closed and refuses to start outside Development when it is unset.
+- **Deploy workflows now inject `Azure__MixLab__ServiceEndpoint` and `Azure__MixLab__ContainerName`** (QA/Prod/Dev) so startup no longer depends on a manually-set portal app setting.
+- The unit suite grew from 505 to 655 tests.
+
 ## v1.50
 
 Adds each mix's `tracklist` (with cue points) to the radio stations endpoint so the "now playing" readout can render track cues. Additive and non-breaking — no existing fields, routes, or status codes change.
