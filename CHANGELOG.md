@@ -2,6 +2,14 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.53
+
+Fixes the `DELETE /api/mixlab/runs/{id}` endpoint being unreachable from the browser. The CORS policy never allowed the `DELETE` method, so preflight blocked the request client-side. No route, DTO, or status-code changes.
+
+### Fixes
+
+- **CORS now allows the `DELETE` method.** The `ChangstaSite` policy advertised only `GET`, `POST`, `PUT`, and `OPTIONS`, so the browser's preflight rejected the cross-origin `DELETE` from `mixlab.changsta.com` (surfacing as a generic "Load failed" with no response). Added `DELETE` to the allowed methods so the existing endpoint is reachable.
+
 ## v1.52
 
 Adds a `DELETE /api/mixlab/runs/{id}` endpoint that removes a run and purges its concept-history entry. Additive — no existing routes, DTOs, or status codes change.
