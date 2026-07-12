@@ -51,6 +51,7 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             policy.Methods.Should().Contain("GET");
             policy.Methods.Should().Contain("POST");
             policy.Methods.Should().Contain("PUT");
+            policy.Methods.Should().Contain("DELETE");
 
             // Verify headers
             policy.Headers.Should().Contain("Content-Type");
@@ -73,7 +74,7 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             {
                 policy
                     .WithOrigins(allowedOrigins)
-                    .WithMethods("GET", "POST", "PUT", "OPTIONS")
+                    .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
                     .WithHeaders("Content-Type", "Authorization", "Content-Encoding")
                     .WithExposedHeaders("ETag")
                     .SetPreflightMaxAge(TimeSpan.FromHours(12));

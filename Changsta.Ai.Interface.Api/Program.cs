@@ -50,7 +50,7 @@ builder.Services.AddCors(options =>
     {
         policy
             .WithOrigins(allowedOrigins)
-            .WithMethods("GET", "POST", "PUT", "OPTIONS")
+            .WithMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
             .WithHeaders("Content-Type", "Authorization", "Content-Encoding")
             .WithExposedHeaders("ETag")
             .SetPreflightMaxAge(TimeSpan.FromHours(12));
