@@ -17,7 +17,9 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
     {
         public static IReadOnlyList<string> ReadPlaylistPaths(Stream gzipStream)
         {
-            using var gzip = new GZipStream(gzipStream, CompressionMode.Decompress);
+            // leaveOpen: the caller owns gzipStream (ListUploadPlaylistsUseCase disposes it via
+            // `await using`), so this reader must not dispose it out from under them.
+            using var gzip = new GZipStream(gzipStream, CompressionMode.Decompress, leaveOpen: true);
             var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit, XmlResolver = null };
             using var reader = XmlReader.Create(gzip, settings);
             XDocument document = XDocument.Load(reader);
