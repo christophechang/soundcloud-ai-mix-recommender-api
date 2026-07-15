@@ -25,5 +25,15 @@ namespace Changsta.Ai.Core.Domain.MixLab
         public bool Deep { get; init; }
 
         public int? Stage1Seed { get; init; }
+
+        public string? Playlist { get; init; }
+
+        public double? MinBpm { get; init; }
+
+        public double? MaxBpm { get; init; }
+
+        public int? MinYear { get; init; }
+
+        public int? MaxYear { get; init; }
     }
 }

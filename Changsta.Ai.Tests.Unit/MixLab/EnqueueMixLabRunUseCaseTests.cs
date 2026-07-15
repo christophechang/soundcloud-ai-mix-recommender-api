@@ -194,6 +194,93 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             result.Outcome.Should().Be(EnqueueMixLabRunResult.EnqueueOutcome.InvalidRequest);
         }
 
+        [Test]
+        public async Task EnqueueAsync_persists_playlist_bpm_and_year()
+        {
+            (EnqueueMixLabRunUseCase sut, BlobMixLabRunRepository runs, BlobMixLabUploadRepository uploads, _) = BuildSut();
+            string uploadId = await SeedUploadAsync(uploads);
+            const string flags = "{\"genre\":\"house\",\"mode\":\"unplayed\",\"risk\":\"medium\",\"directions\":\"mixed\","
+                + "\"playlist\":\"DJ CRATES 2025/Eclectic\",\"minBpm\":120.0,\"maxBpm\":130.5,\"minYear\":2000,\"maxYear\":2020}";
+
+            EnqueueMixLabRunResult result = await sut.EnqueueAsync(Json(flags), uploadId, CancellationToken.None);
+
+            result.Outcome.Should().Be(EnqueueMixLabRunResult.EnqueueOutcome.Created);
+            MixLabRun? run = await runs.GetAsync(result.RunId!, CancellationToken.None);
+            run!.Flags.Playlist.Should().Be("DJ CRATES 2025/Eclectic");
+            run.Flags.MinBpm.Should().Be(120.0);
+            run.Flags.MaxBpm.Should().Be(130.5);
+            run.Flags.MinYear.Should().Be(2000);
+            run.Flags.MaxYear.Should().Be(2020);
+        }
+
+        [Test]
+        public async Task EnqueueAsync_leaves_new_fields_null_when_absent()
+        {
+            // Serialized-manifest guard: a run enqueued with only the required flags round-trips through
+            // the blob repository with the new optional fields null (not empty strings / zeros).
+            (EnqueueMixLabRunUseCase sut, BlobMixLabRunRepository runs, BlobMixLabUploadRepository uploads, _) = BuildSut();
+            string uploadId = await SeedUploadAsync(uploads);
+
+            EnqueueMixLabRunResult result = await sut.EnqueueAsync(Json(ValidFlags), uploadId, CancellationToken.None);
+
+            MixLabRun? run = await runs.GetAsync(result.RunId!, CancellationToken.None);
+            run!.Flags.Playlist.Should().BeNull();
+            run.Flags.MinBpm.Should().BeNull();
+            run.Flags.MaxYear.Should().BeNull();
+        }
+
+        [Test]
+        public async Task EnqueueAsync_rejects_bpm_below_range()
+        {
+            (EnqueueMixLabRunUseCase sut, _, BlobMixLabUploadRepository uploads, _) = BuildSut();
+            await SeedUploadAsync(uploads);
+            const string flags = "{\"genre\":\"house\",\"mode\":\"unplayed\",\"risk\":\"medium\",\"directions\":\"mixed\",\"minBpm\":10.0}";
+
+            EnqueueMixLabRunResult result = await sut.EnqueueAsync(Json(flags), "latest", CancellationToken.None);
+
+            result.Outcome.Should().Be(EnqueueMixLabRunResult.EnqueueOutcome.InvalidRequest);
+            result.ErrorMessage.Should().Contain("minBpm");
+        }
+
+        [Test]
+        public async Task EnqueueAsync_rejects_decimal_year()
+        {
+            (EnqueueMixLabRunUseCase sut, _, BlobMixLabUploadRepository uploads, _) = BuildSut();
+            await SeedUploadAsync(uploads);
+            const string flags = "{\"genre\":\"house\",\"mode\":\"unplayed\",\"risk\":\"medium\",\"directions\":\"mixed\",\"minYear\":2000.5}";
+
+            EnqueueMixLabRunResult result = await sut.EnqueueAsync(Json(flags), "latest", CancellationToken.None);
+
+            result.Outcome.Should().Be(EnqueueMixLabRunResult.EnqueueOutcome.InvalidRequest);
+            result.ErrorMessage.Should().Contain("minYear");
+        }
+
+        [Test]
+        public async Task EnqueueAsync_rejects_inverted_bpm_range()
+        {
+            (EnqueueMixLabRunUseCase sut, _, BlobMixLabUploadRepository uploads, _) = BuildSut();
+            await SeedUploadAsync(uploads);
+            const string flags = "{\"genre\":\"house\",\"mode\":\"unplayed\",\"risk\":\"medium\",\"directions\":\"mixed\",\"minBpm\":200.0,\"maxBpm\":100.0}";
+
+            EnqueueMixLabRunResult result = await sut.EnqueueAsync(Json(flags), "latest", CancellationToken.None);
+
+            result.Outcome.Should().Be(EnqueueMixLabRunResult.EnqueueOutcome.InvalidRequest);
+            result.ErrorMessage.Should().Contain("minBpm");
+        }
+
+        [Test]
+        public async Task EnqueueAsync_rejects_empty_playlist()
+        {
+            (EnqueueMixLabRunUseCase sut, _, BlobMixLabUploadRepository uploads, _) = BuildSut();
+            await SeedUploadAsync(uploads);
+            const string flags = "{\"genre\":\"house\",\"mode\":\"unplayed\",\"risk\":\"medium\",\"directions\":\"mixed\",\"playlist\":\"\"}";
+
+            EnqueueMixLabRunResult result = await sut.EnqueueAsync(Json(flags), "latest", CancellationToken.None);
+
+            result.Outcome.Should().Be(EnqueueMixLabRunResult.EnqueueOutcome.InvalidRequest);
+            result.ErrorMessage.Should().Contain("playlist");
+        }
+
         private static (EnqueueMixLabRunUseCase Sut, BlobMixLabRunRepository Runs, BlobMixLabUploadRepository Uploads, FakeTimeProvider Time) BuildSut()
         {
             var gateway = new FakeMixLabBlobGateway();
