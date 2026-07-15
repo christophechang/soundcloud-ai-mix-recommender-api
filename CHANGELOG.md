@@ -2,6 +2,19 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.54
+
+Adds API support for MixLab's playlist-completion mode and BPM/year collection filters, plus a read endpoint that lists the playlist names inside a stored Rekordbox upload. Additive — no existing routes, DTOs, or status codes change, and `genre` remains required.
+
+### Features
+
+- **Five new run flags accepted at enqueue.** `MixLabRunFlags` gains `Playlist` (string), `MinBpm`/`MaxBpm` (double), and `MinYear`/`MaxYear` (int), persisted verbatim into the run manifest so the worker can rebuild the `./mixlab` argv. `POST /api/mixlab/runs` validates them against the same limits the web app enforces: BPM `40–260`, year `1900–2100`, `playlist` non-empty when present. Inverted ranges (`minBpm > maxBpm`, `minYear > maxYear`) are rejected, and a non-integral year (e.g. `2000.5`) is rejected rather than silently truncated.
+- **`GET /api/mixlab/uploads/{id}/playlists`.** Returns the playlist paths inside a stored collection so the web app can autocomplete a seed playlist instead of asking the user to type an exact Rekordbox name. Resolves the literal id `latest` via the existing upload-open path, gunzips the stored blob, and parses the `<PLAYLISTS>` tree with a hardened reader (`DtdProcessing.Prohibit`, no external resolver). Paths are returned as `folder/name` with Rekordbox's outer `ROOT` wrapper stripped, exactly mirroring the CLI's own `parse_playlists` — a mismatch here would produce names the engine cannot resolve. Unknown upload → `404`; unreadable or non-Rekordbox content → `400` rather than an unhandled exception.
+
+### Internal
+
+- The unit suite grew from 662 to 677 tests.
+
 ## v1.53
 
 Fixes the `DELETE /api/mixlab/runs/{id}` endpoint being unreachable from the browser. The CORS policy never allowed the `DELETE` method, so preflight blocked the request client-side. No route, DTO, or status-code changes.

@@ -100,6 +100,51 @@ namespace Changsta.Ai.Tests.Unit.MixLab
         }
 
         [Test]
+        public async Task GetUploadPlaylistsAsync_returns_ok_with_paths_when_found()
+        {
+            var stub = new StubListUploadPlaylistsUseCase(new ListUploadPlaylistsResult
+            {
+                Outcome = ListUploadPlaylistsResult.ListOutcome.Found,
+                Playlists = new[] { "Crates/Eclectic" },
+            });
+            var sut = BuildSut(listPlaylistsUseCase: stub);
+
+            IActionResult result = await sut.GetUploadPlaylistsAsync("u_1", CancellationToken.None);
+
+            var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+            ok.Value.Should().BeEquivalentTo(new[] { "Crates/Eclectic" });
+        }
+
+        [Test]
+        public async Task GetUploadPlaylistsAsync_returns_404_when_upload_not_found()
+        {
+            var stub = new StubListUploadPlaylistsUseCase(new ListUploadPlaylistsResult
+            {
+                Outcome = ListUploadPlaylistsResult.ListOutcome.UploadNotFound,
+            });
+            var sut = BuildSut(listPlaylistsUseCase: stub);
+
+            IActionResult result = await sut.GetUploadPlaylistsAsync("missing", CancellationToken.None);
+
+            result.Should().BeOfType<NotFoundObjectResult>();
+        }
+
+        [Test]
+        public async Task GetUploadPlaylistsAsync_returns_400_when_parse_failed()
+        {
+            var stub = new StubListUploadPlaylistsUseCase(new ListUploadPlaylistsResult
+            {
+                Outcome = ListUploadPlaylistsResult.ListOutcome.ParseFailed,
+                ErrorMessage = "bad xml",
+            });
+            var sut = BuildSut(listPlaylistsUseCase: stub);
+
+            IActionResult result = await sut.GetUploadPlaylistsAsync("u_1", CancellationToken.None);
+
+            result.Should().BeOfType<BadRequestObjectResult>();
+        }
+
+        [Test]
         public void Route_is_api_mixlab()
         {
             var routeAttribute = typeof(MixLabUploadsController)
@@ -167,14 +212,16 @@ namespace Changsta.Ai.Tests.Unit.MixLab
         private static MixLabUploadsController BuildSut(
             IUploadCollectionUseCase? uploadUseCase = null,
             IGetUploadsUseCase? getUploadsUseCase = null,
-            IOpenUploadUseCase? openUploadUseCase = null)
+            IOpenUploadUseCase? openUploadUseCase = null,
+            IListUploadPlaylistsUseCase? listPlaylistsUseCase = null)
         {
             var defaultUpload = new MixLabUpload { UploadId = "u_1", UploadedAt = DateTimeOffset.UtcNow, SizeBytes = 0 };
 
             var sut = new MixLabUploadsController(
                 uploadUseCase ?? new StubUploadCollectionUseCase(defaultUpload),
                 getUploadsUseCase ?? new StubGetUploadsUseCase(Array.Empty<MixLabUpload>()),
-                openUploadUseCase ?? new StubOpenUploadUseCase(null));
+                openUploadUseCase ?? new StubOpenUploadUseCase(null),
+                listPlaylistsUseCase ?? new StubListUploadPlaylistsUseCase(new ListUploadPlaylistsResult { Outcome = ListUploadPlaylistsResult.ListOutcome.Found }));
 
             sut.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
 
@@ -230,6 +277,19 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             }
 
             public Task<MixLabUploadContent?> OpenAsync(string uploadId, CancellationToken cancellationToken) => Task.FromResult(_content);
+        }
+
+        private sealed class StubListUploadPlaylistsUseCase : IListUploadPlaylistsUseCase
+        {
+            private readonly ListUploadPlaylistsResult _result;
+
+            public StubListUploadPlaylistsUseCase(ListUploadPlaylistsResult result)
+            {
+                _result = result;
+            }
+
+            public Task<ListUploadPlaylistsResult> ListAsync(string uploadId, CancellationToken cancellationToken) =>
+                Task.FromResult(_result);
         }
     }
 }

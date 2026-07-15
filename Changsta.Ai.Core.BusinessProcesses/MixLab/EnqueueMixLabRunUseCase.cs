@@ -24,6 +24,14 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
 
         private const int MaxIntentLength = 500;
 
+        private const double MinBpmValue = 40;
+
+        private const double MaxBpmValue = 260;
+
+        private const int MinYearValue = 1900;
+
+        private const int MaxYearValue = 2100;
+
         private static readonly HashSet<string> AllowedKeys = new(StringComparer.Ordinal)
         {
             "genre",
@@ -35,6 +43,11 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
             "resequence",
             "deep",
             "stage1Seed",
+            "playlist",
+            "minBpm",
+            "maxBpm",
+            "minYear",
+            "maxYear",
         };
 
         private static readonly HashSet<string> Modes = new(StringComparer.Ordinal) { "unplayed", "all", "played" };
@@ -161,6 +174,27 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
                 return false;
             }
 
+            if (!TryReadOptionalNonEmptyString(flags, "playlist", out string? playlist, out error)
+                || !TryReadOptionalBoundedDouble(flags, "minBpm", MinBpmValue, MaxBpmValue, out double? minBpm, out error)
+                || !TryReadOptionalBoundedDouble(flags, "maxBpm", MinBpmValue, MaxBpmValue, out double? maxBpm, out error)
+                || !TryReadOptionalBoundedInt(flags, "minYear", MinYearValue, MaxYearValue, out int? minYear, out error)
+                || !TryReadOptionalBoundedInt(flags, "maxYear", MinYearValue, MaxYearValue, out int? maxYear, out error))
+            {
+                return false;
+            }
+
+            if (minBpm is double lo && maxBpm is double hi && lo > hi)
+            {
+                error = "'minBpm' must be less than or equal to 'maxBpm'.";
+                return false;
+            }
+
+            if (minYear is int loYear && maxYear is int hiYear && loYear > hiYear)
+            {
+                error = "'minYear' must be less than or equal to 'maxYear'.";
+                return false;
+            }
+
             built = new MixLabRunFlags
             {
                 Genre = genre!,
@@ -172,6 +206,11 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
                 Resequence = resequence,
                 Deep = deep,
                 Stage1Seed = stage1Seed,
+                Playlist = playlist,
+                MinBpm = minBpm,
+                MaxBpm = maxBpm,
+                MinYear = minYear,
+                MaxYear = maxYear,
             };
             return true;
         }
@@ -306,6 +345,58 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
             }
 
             value = element.GetBoolean();
+            return true;
+        }
+
+        private static bool TryReadOptionalNonEmptyString(JsonElement flags, string key, out string? value, out string? error)
+        {
+            value = null;
+            error = null;
+
+            if (!flags.TryGetProperty(key, out JsonElement element) || element.ValueKind == JsonValueKind.Null)
+            {
+                return true;
+            }
+
+            if (element.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(element.GetString()))
+            {
+                error = $"'{key}' must be a non-empty string.";
+                return false;
+            }
+
+            value = element.GetString();
+            return true;
+        }
+
+        private static bool TryReadOptionalBoundedDouble(
+            JsonElement flags,
+            string key,
+            double min,
+            double max,
+            out double? value,
+            out string? error)
+        {
+            value = null;
+            error = null;
+
+            if (!flags.TryGetProperty(key, out JsonElement element) || element.ValueKind == JsonValueKind.Null)
+            {
+                return true;
+            }
+
+            if (element.ValueKind != JsonValueKind.Number || !element.TryGetDouble(out double parsed))
+            {
+                error = $"'{key}' must be a number.";
+                return false;
+            }
+
+            if (parsed < min || parsed > max)
+            {
+                error = $"'{key}' must be between {min} and {max}.";
+                return false;
+            }
+
+            value = parsed;
             return true;
         }
 

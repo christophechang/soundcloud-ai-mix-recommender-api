@@ -25,15 +25,18 @@ namespace Changsta.Ai.Interface.Api.Controllers
         private readonly IUploadCollectionUseCase _uploadCollectionUseCase;
         private readonly IGetUploadsUseCase _getUploadsUseCase;
         private readonly IOpenUploadUseCase _openUploadUseCase;
+        private readonly IListUploadPlaylistsUseCase _listUploadPlaylistsUseCase;
 
         public MixLabUploadsController(
             IUploadCollectionUseCase uploadCollectionUseCase,
             IGetUploadsUseCase getUploadsUseCase,
-            IOpenUploadUseCase openUploadUseCase)
+            IOpenUploadUseCase openUploadUseCase,
+            IListUploadPlaylistsUseCase listUploadPlaylistsUseCase)
         {
             _uploadCollectionUseCase = uploadCollectionUseCase ?? throw new ArgumentNullException(nameof(uploadCollectionUseCase));
             _getUploadsUseCase = getUploadsUseCase ?? throw new ArgumentNullException(nameof(getUploadsUseCase));
             _openUploadUseCase = openUploadUseCase ?? throw new ArgumentNullException(nameof(openUploadUseCase));
+            _listUploadPlaylistsUseCase = listUploadPlaylistsUseCase ?? throw new ArgumentNullException(nameof(listUploadPlaylistsUseCase));
         }
 
         [HttpPost("uploads")]
@@ -80,6 +83,24 @@ namespace Changsta.Ai.Interface.Api.Controllers
             }
 
             return File(content.Content, "application/gzip");
+        }
+
+        [HttpGet("uploads/{id}/playlists")]
+        public async Task<IActionResult> GetUploadPlaylistsAsync(
+            [FromRoute] string id,
+            CancellationToken cancellationToken)
+        {
+            ListUploadPlaylistsResult result = await _listUploadPlaylistsUseCase
+                .ListAsync(id, cancellationToken)
+                .ConfigureAwait(false);
+
+            return result.Outcome switch
+            {
+                ListUploadPlaylistsResult.ListOutcome.Found => Ok(result.Playlists),
+                ListUploadPlaylistsResult.ListOutcome.UploadNotFound =>
+                    NotFound(new { error = result.ErrorMessage }),
+                _ => BadRequest(new { error = result.ErrorMessage }),
+            };
         }
     }
 }

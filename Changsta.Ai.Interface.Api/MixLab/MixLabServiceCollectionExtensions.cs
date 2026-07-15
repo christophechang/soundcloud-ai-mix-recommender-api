@@ -35,6 +35,7 @@ namespace Changsta.Ai.Interface.Api.MixLab
             services.AddScoped<IUploadCollectionUseCase, UploadCollectionUseCase>();
             services.AddScoped<IGetUploadsUseCase, GetUploadsUseCase>();
             services.AddScoped<IOpenUploadUseCase, OpenUploadUseCase>();
+            services.AddScoped<IListUploadPlaylistsUseCase, ListUploadPlaylistsUseCase>();
 
             // Run-queue use cases (A3).
             services.AddScoped<IEnqueueMixLabRunUseCase, EnqueueMixLabRunUseCase>();
