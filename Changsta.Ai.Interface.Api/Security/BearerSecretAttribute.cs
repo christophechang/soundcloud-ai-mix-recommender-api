@@ -1,6 +1,7 @@
 using System;
 using System.Security.Cryptography;
 using System.Text;
+using Changsta.Ai.Interface.Api.Errors;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -59,7 +60,7 @@ namespace Changsta.Ai.Interface.Api.Security
         }
 
         private static IActionResult Unauthorized() =>
-            new UnauthorizedObjectResult(new { error = "Invalid or missing authorization." });
+            ApiProblem.Unauthorized("Invalid or missing authorization.");
 
         private static bool TryGetBearerToken(HttpRequest request, out string token)
         {

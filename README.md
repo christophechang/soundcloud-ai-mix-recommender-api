@@ -252,6 +252,42 @@ upstream on SoundCloud (or have aged out of the RSS window).
 
 ---
 
+### Error responses
+
+Every non-2xx response uses one shape: RFC 7807 [`ProblemDetails`](https://datatracker.ietf.org/doc/html/rfc7807),
+served as `application/problem+json` with camelCase property names.
+
+```json
+{
+  "title": "Not Found",
+  "status": 404,
+  "detail": "No mix found with slug 'deep-house-sessions-1'.",
+  "instance": "/api/catalog/mixes/deep-house-sessions-1",
+  "error": "No mix found with slug 'deep-house-sessions-1'.",
+  "correlationId": "0HN7A2C4E9G1K:00000003"
+}
+```
+
+| Field | Notes |
+|---|---|
+| `title` | Short, status-derived label (`Bad Request`, `Not Found`, `Service Unavailable`, …) |
+| `status` | Repeats the HTTP status code |
+| `detail` | Human-readable description of this specific failure |
+| `instance` | Request path. Present on middleware- and model-validation responses |
+| `error` | Same text as `detail`. Retained so existing clients keep working |
+| `correlationId` | Present on middleware- and rate-limiter-generated responses; matches the App Insights operation id |
+
+Two responses carry extra fields:
+
+- **`400` from model validation** also includes the standard `errors` dictionary, keyed by field name.
+- **`503` from `GET /api/radio/stations`** also includes `stationId`, naming the station that has no eligible mixes.
+
+`429` responses additionally send a `Retry-After` header (60 seconds).
+
+`GET /health` is the one exception: it is a plain-text probe endpoint and returns `Healthy`, not JSON.
+
+---
+
 ## Tech Stack
 
 - .NET 10 / ASP.NET Core Web API

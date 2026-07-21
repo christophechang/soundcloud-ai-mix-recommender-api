@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Net.Http;
+using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Changsta.Ai.Interface.Api.Middleware;
 using FluentAssertions;
@@ -75,6 +77,60 @@ namespace Changsta.Ai.Tests.Unit.Middleware
             Func<Task> act = () => middleware.InvokeAsync(context);
 
             await act.Should().ThrowAsync<InvalidOperationException>().WithMessage("boom");
+        }
+
+        [Test]
+        public async Task Writes_problem_details_with_camelCase_and_the_legacy_fields()
+        {
+            RequestDelegate next = _ => throw new InvalidOperationException("boom");
+            var middleware = new GlobalExceptionMiddleware(next, NullLogger<GlobalExceptionMiddleware>.Instance);
+
+            var context = new DefaultHttpContext();
+            context.Request.Path = "/api/catalog/mixes";
+            context.Response.Body = new MemoryStream();
+
+            await middleware.InvokeAsync(context);
+
+            context.Response.ContentType.Should().Be("application/problem+json");
+
+            context.Response.Body.Seek(0, SeekOrigin.Begin);
+            string body = await new StreamReader(context.Response.Body, Encoding.UTF8).ReadToEndAsync();
+
+            using JsonDocument document = JsonDocument.Parse(body);
+            JsonElement root = document.RootElement;
+
+            root.GetProperty("status").GetInt32().Should().Be(StatusCodes.Status500InternalServerError);
+            root.GetProperty("title").GetString().Should().Be("Error");
+            root.GetProperty("detail").GetString().Should().Be("An unexpected error occurred.");
+            root.GetProperty("instance").GetString().Should().Be("/api/catalog/mixes");
+
+            // These two were PascalCase before the ProblemDetails move; clients read them at the root.
+            root.GetProperty("error").GetString().Should().Be("An unexpected error occurred.");
+            root.TryGetProperty("correlationId", out _).Should().BeTrue();
+            root.TryGetProperty("Error", out _).Should().BeFalse();
+        }
+
+        [Test]
+        public async Task Maps_service_unavailable_to_a_safe_message()
+        {
+            RequestDelegate next = _ => throw new HttpRequestException("upstream refused");
+            var middleware = new GlobalExceptionMiddleware(next, NullLogger<GlobalExceptionMiddleware>.Instance);
+
+            var context = new DefaultHttpContext();
+            context.Response.Body = new MemoryStream();
+
+            await middleware.InvokeAsync(context);
+
+            context.Response.Body.Seek(0, SeekOrigin.Begin);
+            string body = await new StreamReader(context.Response.Body, Encoding.UTF8).ReadToEndAsync();
+
+            using JsonDocument document = JsonDocument.Parse(body);
+
+            document.RootElement.GetProperty("error").GetString()
+                .Should().Be("Service temporarily unavailable.");
+
+            // The upstream exception message must not reach the caller.
+            body.Should().NotContain("upstream refused");
         }
 
         private static async Task<int> InvokeWithException(Exception thrown)

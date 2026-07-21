@@ -21,6 +21,7 @@ using Changsta.Ai.Interface.Api.Middleware;
 using Changsta.Ai.Interface.Api.MixLab;
 using Changsta.Ai.Interface.Api.RateLimiting;
 using Changsta.Ai.Interface.Api.Services;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -38,6 +39,30 @@ builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    })
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        // [ApiController] model validation would otherwise emit ValidationProblemDetails without
+        // the `error` field the rest of the API returns. Keep the per-field `errors` dictionary and
+        // add `error`/`correlationId` so one client-side handler covers every non-2xx response.
+        options.InvalidModelStateResponseFactory = context =>
+        {
+            var problem = new ValidationProblemDetails(context.ModelState)
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Bad Request",
+                Detail = "The request failed validation.",
+                Instance = context.HttpContext.Request.Path,
+            };
+
+            problem.Extensions["error"] = problem.Detail;
+            problem.Extensions["correlationId"] = context.HttpContext.TraceIdentifier;
+
+            var result = new BadRequestObjectResult(problem);
+            result.ContentTypes.Add("application/problem+json");
+
+            return result;
+        };
     });
 
 // Origins come from configuration (Cors:AllowedOrigins); localhost is appended only in

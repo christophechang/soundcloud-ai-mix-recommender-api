@@ -4,6 +4,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Changsta.Ai.Core.Contracts.MixLab;
+using Changsta.Ai.Interface.Api.Errors;
 using Changsta.Ai.Interface.Api.Security;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -44,7 +45,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
 
             if (snapshot is null)
             {
-                return NotFound(new { error = "MixLab history has not been written yet." });
+                return ApiProblem.NotFound("MixLab history has not been written yet.");
             }
 
             Response.Headers[ETagHeaderName] = snapshot.ETag;
@@ -70,10 +71,10 @@ namespace Changsta.Ai.Interface.Api.Controllers
             return result.Outcome switch
             {
                 PutMixLabHistoryResult.PutOutcome.Written => Ok(new { etag = result.ETag }),
-                PutMixLabHistoryResult.PutOutcome.InvalidJson => BadRequest(new { error = result.ErrorMessage }),
+                PutMixLabHistoryResult.PutOutcome.InvalidJson => ApiProblem.BadRequest(result.ErrorMessage),
                 PutMixLabHistoryResult.PutOutcome.PreconditionFailed =>
-                    StatusCode(StatusCodes.Status412PreconditionFailed, new { error = result.ErrorMessage }),
-                _ => StatusCode(StatusCodes.Status500InternalServerError),
+                    ApiProblem.Status(StatusCodes.Status412PreconditionFailed, result.ErrorMessage),
+                _ => ApiProblem.Status(StatusCodes.Status500InternalServerError, "An unexpected error occurred."),
             };
         }
 

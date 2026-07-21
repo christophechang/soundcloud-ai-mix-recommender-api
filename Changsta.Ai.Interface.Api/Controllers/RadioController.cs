@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Changsta.Ai.Core.Contracts.Radio;
 using Changsta.Ai.Core.Dtos;
 using Changsta.Ai.Core.Exceptions;
+using Changsta.Ai.Interface.Api.Errors;
 using Changsta.Ai.Interface.Api.ViewModels;
 using Microsoft.AspNetCore.Mvc;
 
@@ -12,7 +13,6 @@ namespace Changsta.Ai.Interface.Api.Controllers
 {
     [ApiController]
     [Route("api/radio")]
-    [Produces("application/json")]
     public sealed class RadioController : ControllerBase
     {
         private readonly IGetRadioScheduleUseCase _useCase;
@@ -36,7 +36,10 @@ namespace Changsta.Ai.Interface.Api.Controllers
             }
             catch (RadioStationUnavailableException ex)
             {
-                return StatusCode(503, new { error = ex.Message, stationId = ex.StationId });
+                return ApiProblem.Status(
+                    StatusCodes.Status503ServiceUnavailable,
+                    ex.Message,
+                    new Dictionary<string, object?> { ["stationId"] = ex.StationId });
             }
         }
 
