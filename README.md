@@ -276,6 +276,7 @@ served as `application/problem+json` with camelCase property names.
 | `instance` | Request path. Present on middleware- and model-validation responses |
 | `error` | Same text as `detail`. Retained so existing clients keep working |
 | `correlationId` | Present on middleware- and rate-limiter-generated responses; matches the App Insights operation id |
+| `traceId` | W3C trace-context id, on model-validation responses |
 
 Two responses carry extra fields:
 

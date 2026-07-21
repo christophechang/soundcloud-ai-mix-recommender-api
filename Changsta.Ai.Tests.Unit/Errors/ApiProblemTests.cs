@@ -4,6 +4,8 @@ using Changsta.Ai.Interface.Api.Errors;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Routing;
 using NUnit.Framework;
 
 namespace Changsta.Ai.Tests.Unit.Errors
@@ -59,6 +61,35 @@ namespace Changsta.Ai.Tests.Unit.Errors
             root.GetProperty("stationId").GetString().Should().Be("crucial-fm");
             root.GetProperty("correlationId").GetString().Should().Be("trace-123");
             root.GetProperty("error").GetString().Should().Contain("crucial-fm");
+        }
+
+        [Test]
+        public void ValidationFailed_keeps_traceId_and_the_per_field_errors()
+        {
+            var httpContext = new DefaultHttpContext();
+            httpContext.Request.Path = "/api/mixes/recommend";
+
+            var actionContext = new ActionContext(
+                httpContext,
+                new RouteData(),
+                new ActionDescriptor());
+
+            actionContext.ModelState.AddModelError("Question", "The Question field is required.");
+
+            BadRequestObjectResult result = ApiProblem.ValidationFailed(actionContext);
+            var problem = (ValidationProblemDetails)result.Value!;
+
+            // traceId is what the framework default emitted; dropping it would silently break
+            // anything already correlating on it.
+            problem.Extensions.Should().ContainKey("traceId");
+            problem.Extensions["traceId"].Should().NotBeNull();
+
+            problem.Errors.Should().ContainKey("Question");
+            problem.Status.Should().Be(StatusCodes.Status400BadRequest);
+            problem.Instance.Should().Be("/api/mixes/recommend");
+            problem.Extensions["error"].Should().Be("The request failed validation.");
+            problem.Extensions.Should().ContainKey("correlationId");
+            result.ContentTypes.Should().Contain("application/problem+json");
         }
 
         [Test]

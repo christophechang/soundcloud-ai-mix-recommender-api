@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
@@ -49,6 +51,33 @@ namespace Changsta.Ai.Interface.Api.Errors
             }
 
             return problem;
+        }
+
+        /// <summary>
+        /// Builds the automatic 400 for <c>[ApiController]</c> model validation. Keeps the
+        /// per-field <c>errors</c> dictionary and the framework's <c>traceId</c> — dropping
+        /// traceId would silently break anything already correlating on it — and adds the
+        /// <c>error</c>/<c>correlationId</c> pair the rest of the API returns.
+        /// </summary>
+        public static BadRequestObjectResult ValidationFailed(ActionContext context)
+        {
+            ArgumentNullException.ThrowIfNull(context);
+
+            string traceId = Activity.Current?.Id ?? context.HttpContext.TraceIdentifier;
+
+            var problem = new ValidationProblemDetails(context.ModelState)
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = TitleFor(StatusCodes.Status400BadRequest),
+                Detail = "The request failed validation.",
+                Instance = context.HttpContext.Request.Path,
+            };
+
+            problem.Extensions["traceId"] = traceId;
+            problem.Extensions["error"] = problem.Detail;
+            problem.Extensions["correlationId"] = context.HttpContext.TraceIdentifier;
+
+            return AsProblem(new BadRequestObjectResult(problem));
         }
 
         public static BadRequestObjectResult BadRequest(string? detail) =>
