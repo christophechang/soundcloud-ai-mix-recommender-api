@@ -32,7 +32,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
         // Bump whenever MixPromptBuilder or MixRecommendationQueryAnalyzer change in a way
         // that should invalidate previously-cached AI responses for the same question.
-        private const int PromptVersion = 2;
+        private const int PromptVersion = 3;
 
         private readonly ChatClient _chat;
         private readonly IMemoryCache _cache;
