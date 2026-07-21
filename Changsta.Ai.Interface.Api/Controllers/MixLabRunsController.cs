@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Changsta.Ai.Core.Contracts.MixLab;
 using Changsta.Ai.Core.Domain.MixLab;
+using Changsta.Ai.Interface.Api.Errors;
 using Changsta.Ai.Interface.Api.Security;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -62,7 +63,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
         {
             if (body.ValueKind != JsonValueKind.Object)
             {
-                return BadRequest(new { error = "Request body must be a JSON object." });
+                return ApiProblem.BadRequest("Request body must be a JSON object.");
             }
 
             JsonElement flags = body.TryGetProperty("flags", out JsonElement flagsElement) ? flagsElement : default;
@@ -80,12 +81,12 @@ namespace Changsta.Ai.Interface.Api.Controllers
                 EnqueueMixLabRunResult.EnqueueOutcome.Created =>
                     StatusCode(StatusCodes.Status202Accepted, new { runId = result.RunId }),
                 EnqueueMixLabRunResult.EnqueueOutcome.InvalidRequest =>
-                    BadRequest(new { error = result.ErrorMessage }),
+                    ApiProblem.BadRequest(result.ErrorMessage),
                 EnqueueMixLabRunResult.EnqueueOutcome.NoUploadsAvailable =>
-                    BadRequest(new { error = result.ErrorMessage }),
+                    ApiProblem.BadRequest(result.ErrorMessage),
                 EnqueueMixLabRunResult.EnqueueOutcome.UnknownUpload =>
-                    NotFound(new { error = result.ErrorMessage }),
-                _ => StatusCode(StatusCodes.Status500InternalServerError),
+                    ApiProblem.NotFound(result.ErrorMessage),
+                _ => ApiProblem.Status(StatusCodes.Status500InternalServerError, "An unexpected error occurred."),
             };
         }
 
@@ -100,7 +101,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
 
             if (string.IsNullOrWhiteSpace(workerId))
             {
-                return BadRequest(new { error = "workerId is required." });
+                return ApiProblem.BadRequest("workerId is required.");
             }
 
             MixLabRun? claimed = await _claim.ClaimAsync(workerId, cancellationToken).ConfigureAwait(false);
@@ -124,7 +125,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
         {
             if (summary is null || report is null)
             {
-                return BadRequest(new { error = "summary and report files are required." });
+                return ApiProblem.BadRequest("summary and report files are required.");
             }
 
             await using Stream summaryStream = summary.OpenReadStream();
@@ -142,12 +143,12 @@ namespace Changsta.Ai.Interface.Api.Controllers
                 CompleteMixLabRunResult.CompleteOutcome.AlreadyCompleted =>
                     Ok(new { runId = id, status = "succeeded" }),
                 CompleteMixLabRunResult.CompleteOutcome.Conflict =>
-                    Conflict(new { error = $"Run '{id}' is not running." }),
+                    ApiProblem.Status(StatusCodes.Status409Conflict, $"Run '{id}' is not running."),
                 CompleteMixLabRunResult.CompleteOutcome.NotFound =>
-                    NotFound(new { error = $"Run '{id}' not found." }),
+                    ApiProblem.NotFound($"Run '{id}' not found."),
                 CompleteMixLabRunResult.CompleteOutcome.InvalidSummary =>
-                    BadRequest(new { error = result.ErrorMessage }),
-                _ => StatusCode(StatusCodes.Status500InternalServerError),
+                    ApiProblem.BadRequest(result.ErrorMessage),
+                _ => ApiProblem.Status(StatusCodes.Status500InternalServerError, "An unexpected error occurred."),
             };
         }
 
@@ -165,7 +166,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
 
             if (string.IsNullOrWhiteSpace(error))
             {
-                return BadRequest(new { error = "error is required." });
+                return ApiProblem.BadRequest("error is required.");
             }
 
             string? logTail = body.TryGetProperty("logTail", out JsonElement logTailElement)
@@ -182,10 +183,10 @@ namespace Changsta.Ai.Interface.Api.Controllers
                 FailMixLabRunResult.FailOutcome.Failed => Ok(new { runId = id, status = "failed" }),
                 FailMixLabRunResult.FailOutcome.AlreadyFailed => Ok(new { runId = id, status = "failed" }),
                 FailMixLabRunResult.FailOutcome.Conflict =>
-                    Conflict(new { error = $"Run '{id}' is not running." }),
+                    ApiProblem.Status(StatusCodes.Status409Conflict, $"Run '{id}' is not running."),
                 FailMixLabRunResult.FailOutcome.NotFound =>
-                    NotFound(new { error = $"Run '{id}' not found." }),
-                _ => StatusCode(StatusCodes.Status500InternalServerError),
+                    ApiProblem.NotFound($"Run '{id}' not found."),
+                _ => ApiProblem.Status(StatusCodes.Status500InternalServerError, "An unexpected error occurred."),
             };
         }
 
@@ -209,7 +210,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
 
             if (run is null)
             {
-                return NotFound(new { error = $"Run '{id}' not found." });
+                return ApiProblem.NotFound($"Run '{id}' not found.");
             }
 
             return new JsonResult(run) { SerializerSettings = ManifestJsonOptions };
@@ -224,10 +225,10 @@ namespace Changsta.Ai.Interface.Api.Controllers
             {
                 DeleteMixLabRunResult.DeleteOutcome.Deleted => NoContent(),
                 DeleteMixLabRunResult.DeleteOutcome.NotFound =>
-                    NotFound(new { error = $"Run '{id}' not found." }),
+                    ApiProblem.NotFound($"Run '{id}' not found."),
                 DeleteMixLabRunResult.DeleteOutcome.Active =>
-                    Conflict(new { error = $"Run '{id}' is still active; only a succeeded or failed run can be deleted." }),
-                _ => StatusCode(StatusCodes.Status500InternalServerError),
+                    ApiProblem.Status(StatusCodes.Status409Conflict, $"Run '{id}' is still active; only a succeeded or failed run can be deleted."),
+                _ => ApiProblem.Status(StatusCodes.Status500InternalServerError, "An unexpected error occurred."),
             };
         }
 
@@ -257,10 +258,10 @@ namespace Changsta.Ai.Interface.Api.Controllers
             {
                 MixLabRunArtifactResult.ArtifactStatus.Found => File(result.Content!, result.ContentType!),
                 MixLabRunArtifactResult.ArtifactStatus.RunNotFound =>
-                    NotFound(new { error = $"Run '{id}' not found." }),
+                    ApiProblem.NotFound($"Run '{id}' not found."),
                 MixLabRunArtifactResult.ArtifactStatus.ArtifactNotFound =>
-                    NotFound(new { error = "Artifact not found." }),
-                _ => StatusCode(StatusCodes.Status500InternalServerError),
+                    ApiProblem.NotFound("Artifact not found."),
+                _ => ApiProblem.Status(StatusCodes.Status500InternalServerError, "An unexpected error occurred."),
             };
         }
     }

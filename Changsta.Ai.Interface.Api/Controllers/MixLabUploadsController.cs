@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Changsta.Ai.Core.Contracts.MixLab;
 using Changsta.Ai.Core.Domain.MixLab;
+using Changsta.Ai.Interface.Api.Errors;
 using Changsta.Ai.Interface.Api.Security;
 using Microsoft.AspNetCore.Mvc;
 
@@ -16,7 +17,6 @@ namespace Changsta.Ai.Interface.Api.Controllers
     /// </summary>
     [ApiController]
     [Route("api/mixlab")]
-    [Produces("application/json")]
     [BearerSecret("MixLab:ApiSecret")]
     public sealed class MixLabUploadsController : ControllerBase
     {
@@ -79,7 +79,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
 
             if (content is null)
             {
-                return NotFound(new { error = $"No MixLab upload found with id '{id}'." });
+                return ApiProblem.NotFound($"No MixLab upload found with id '{id}'.");
             }
 
             return File(content.Content, "application/gzip");
@@ -98,8 +98,8 @@ namespace Changsta.Ai.Interface.Api.Controllers
             {
                 ListUploadPlaylistsResult.ListOutcome.Found => Ok(result.Playlists),
                 ListUploadPlaylistsResult.ListOutcome.UploadNotFound =>
-                    NotFound(new { error = result.ErrorMessage }),
-                _ => BadRequest(new { error = result.ErrorMessage }),
+                    ApiProblem.NotFound(result.ErrorMessage),
+                _ => ApiProblem.BadRequest(result.ErrorMessage),
             };
         }
     }

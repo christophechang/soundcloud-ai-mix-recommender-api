@@ -2,6 +2,29 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.56
+
+Collapses three incompatible error shapes into one. Every non-2xx response is now an RFC 7807 `ProblemDetails` served as `application/problem+json` with camelCase property names. Success responses are unchanged.
+
+### Changed
+
+- **One error contract across the whole API.** The exception middleware returned PascalCase `{Error, CorrelationId}`, controllers and the auth filter and the rate limiter returned camelCase `{error}`, and `[ApiController]` model validation returned framework `ValidationProblemDetails` — three shapes a client had to branch on. All ~40 error sites now return the same body: `title`, `status`, `detail`, plus `error` and `correlationId` carried as ProblemDetails extensions, which serialise at the JSON root. Seven sites that previously returned a bare `500` with no body at all now return one.
+- **Model-validation failures keep both `traceId` and the per-field `errors` dictionary**, and gain `error`/`correlationId` to match every other response.
+- **The radio `503` keeps `stationId`** as an extension.
+- **`429` responses** are `ProblemDetails` and still carry `Retry-After: 60`.
+
+### Breaking
+
+- **The PascalCase `Error` and `CorrelationId` fields are gone**, replaced by camelCase `error` and `correlationId`. Only the global exception middleware emitted the PascalCase form. The three known consumers (changsta.com, mixlab-web, the MixLab worker) are unaffected — two never parse the error body, and changsta.com already read camelCase `correlationId`, so this fixes a latent bug there rather than causing one.
+
+### Internal
+
+- Error bodies are built by a single `ApiProblem` factory whose result helpers return the same result types the actions returned before, so no caller changed.
+- Dropped `[Produces("application/json")]` from the controllers: its filter overwrote the result's content type, which is why error responses were still being served as `application/json`. Success responses are unaffected.
+- Removed the now-unused `ErrorResponse` model.
+- The error contract is documented in the README API reference.
+- The unit suite grew from 691 to 701 tests.
+
 ## v1.55
 
 Hardens two error paths found by working through the open bug reports against production telemetry. No route, DTO, or status-code changes.

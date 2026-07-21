@@ -8,6 +8,7 @@ using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Core.Normalization;
 using Changsta.Ai.Interface.Api.Catalog;
+using Changsta.Ai.Interface.Api.Errors;
 using Changsta.Ai.Interface.Api.RateLimiting;
 using Changsta.Ai.Interface.Api.Security;
 using Changsta.Ai.Interface.Api.ViewModels;
@@ -18,7 +19,6 @@ namespace Changsta.Ai.Interface.Api.Controllers
 {
     [ApiController]
     [Route("api/catalog")]
-    [Produces("application/json")]
     public sealed class MixCatalogController : ControllerBase
     {
         private const int CatalogMaxItems = 200;
@@ -59,14 +59,14 @@ namespace Changsta.Ai.Interface.Api.Controllers
         {
             if (string.IsNullOrWhiteSpace(slug))
             {
-                return BadRequest(new { error = "slug is required." });
+                return ApiProblem.BadRequest("slug is required.");
             }
 
             bool deleted = await _deleteMixUseCase.DeleteAsync(slug, cancellationToken).ConfigureAwait(false);
 
             if (!deleted)
             {
-                return NotFound(new { error = $"No mix found with slug '{slug}'." });
+                return ApiProblem.NotFound($"No mix found with slug '{slug}'.");
             }
 
             return NoContent();
@@ -171,7 +171,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
 
             if (match is null)
             {
-                return NotFound(new { error = $"No mix found with slug '{slug}'." });
+                return ApiProblem.NotFound($"No mix found with slug '{slug}'.");
             }
 
             return Ok(match);
@@ -200,7 +200,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
 
             if (results.Length == 0)
             {
-                return NotFound(new { error = $"No mixes found for artist '{artistName}'." });
+                return ApiProblem.NotFound($"No mixes found for artist '{artistName}'.");
             }
 
             return Ok(BuildPage(results, page, pageSize));
@@ -240,7 +240,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
 
         private IActionResult? ValidatePaging(int page, int pageSize) =>
             page < 1 || pageSize < 1 || pageSize > MaxPageSize
-                ? BadRequest(new { error = $"page must be >= 1 and pageSize must be between 1 and {MaxPageSize}." })
+                ? ApiProblem.BadRequest($"page must be >= 1 and pageSize must be between 1 and {MaxPageSize}.")
                 : null;
     }
 }

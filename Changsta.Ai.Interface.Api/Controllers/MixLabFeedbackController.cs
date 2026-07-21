@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Changsta.Ai.Core.Contracts.MixLab;
 using Changsta.Ai.Core.Domain.MixLab;
+using Changsta.Ai.Interface.Api.Errors;
 using Changsta.Ai.Interface.Api.Security;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -48,7 +49,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
         {
             if (body.ValueKind != JsonValueKind.Object)
             {
-                return BadRequest(new { error = "Request body must be a JSON object." });
+                return ApiProblem.BadRequest("Request body must be a JSON object.");
             }
 
             string? verdict = ReadOptionalString(body, "verdict");
@@ -64,12 +65,12 @@ namespace Changsta.Ai.Interface.Api.Controllers
             {
                 SubmitMixLabConceptFeedbackResult.SubmitOutcome.Recorded => Ok(new { runId = id, conceptId }),
                 SubmitMixLabConceptFeedbackResult.SubmitOutcome.InvalidRequest =>
-                    BadRequest(new { error = result.ErrorMessage }),
+                    ApiProblem.BadRequest(result.ErrorMessage),
                 SubmitMixLabConceptFeedbackResult.SubmitOutcome.RunNotFound =>
-                    NotFound(new { error = $"Run '{id}' not found." }),
+                    ApiProblem.NotFound($"Run '{id}' not found."),
                 SubmitMixLabConceptFeedbackResult.SubmitOutcome.ConceptNotFound =>
-                    NotFound(new { error = $"Concept '{conceptId}' not found on run '{id}'." }),
-                _ => StatusCode(StatusCodes.Status500InternalServerError),
+                    ApiProblem.NotFound($"Concept '{conceptId}' not found on run '{id}'."),
+                _ => ApiProblem.Status(StatusCodes.Status500InternalServerError, "An unexpected error occurred."),
             };
         }
 
@@ -90,7 +91,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
         {
             if (!TryReadEventIds(body, out IReadOnlyList<string>? eventIds, out string? error))
             {
-                return BadRequest(new { error });
+                return ApiProblem.BadRequest(error);
             }
 
             await _ackFeedback.AckAsync(eventIds!, cancellationToken).ConfigureAwait(false);
