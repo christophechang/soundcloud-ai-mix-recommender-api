@@ -15,6 +15,8 @@ Two internal refactors that remove long-standing maintenance traps, plus the bac
 
 - **The recommender prompt cache is invalidated for the v1.55 prompt change.** v1.55 changed `MixPromptBuilder` (rule 10b) without bumping `PromptVersion`, so responses cached under the previous prompt were still being served. Prompt rule 10d additionally covers slot/energy request wording such as `mid-high`.
 
+- **Hyphenated energy values are no longer forbidden as `why` anchors.** v1.55 added `low-mid` and `mid-high` to the prompt's list of "invented adjective phrases" and told the model that an energy anchor is "never a compound of two energy values". Both are in fact canonical energy values — 5 mixes in the live catalogue are `mid-high` and 1 is `low-mid` — so the rule instructed the model not to use those mixes' own energy as evidence. Rule 10b now names the hyphenated values as real and tells the model to use them when, and only when, they are the block's energy. `PromptVersion` bumped again to invalidate anything cached under the bad rule.
+
 ### Dependencies
 
 - `OpenAI` 2.1.0 → 2.12.0; `Azure.Identity` 1.13.2 → 1.21.0; `Azure.Storage.Blobs` 12.24.0 → 12.29.1; `Microsoft.AspNetCore.OpenApi` 10.0.2 → 10.0.9.
@@ -23,7 +25,7 @@ Two internal refactors that remove long-standing maintenance traps, plus the bac
 
 ### Internal
 
-- The unit suite grew from 701 to 737 tests.
+- The unit suite grew from 701 to 739 tests.
 
 ## v1.56
 

@@ -654,6 +654,52 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
 
         // ── dropUnverifiableAnchors (final attempt) ───────────────────────────
         [Test]
+        public void BuildPrompt_DoesNotForbidRealHyphenatedEnergyValues()
+        {
+            // "mid-high", "low-mid" and "mid-peak" are canonical energy values used by real mixes
+            // in the catalogue. v1.55 listed them as invented phrases, which told the model not to
+            // use a mix's own energy as evidence.
+            string prompt = MixPromptBuilder.BuildPrompt("dark rolling dnb", DefaultCatalogue, 3);
+
+            Assert.That(prompt, Does.Contain("are real energy values"));
+            Assert.That(prompt, Does.Not.Contain("never a compound of two energy values"));
+        }
+
+        [Test]
+        public void ParseAndValidate_RealHyphenatedEnergyAnchor_IsAccepted()
+        {
+            var catalogue = new[]
+            {
+                new Mix
+                {
+                    Id = "mix-9",
+                    Title = "Mid High Mix",
+                    Url = "https://soundcloud.com/test/mid-high",
+                    Genre = "dnb",
+                    Energy = "mid-high",
+                    Tracklist = Array.Empty<Track>(),
+                },
+            };
+
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-9",
+                    "reason": "Sits at mid-high energy.",
+                    "why": ["\"mid-high\""],
+                    "confidence": 0.8
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            AiRecommendationResponse response =
+                AiRecommendationResponseValidator.ParseAndValidate(json, catalogue, maxResults: 3);
+
+            Assert.That(response.Results[0].Why, Is.EqualTo(new[] { "\"mid-high\"" }));
+        }
+
+        [Test]
         public void ParseAndValidate_CompoundEnergyAnchor_ThrowsWhenStrict()
         {
             // Reproduces issue #121 — the AI emitted "mid-high" for a mix whose energy is "peak".
