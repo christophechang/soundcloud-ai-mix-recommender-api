@@ -120,7 +120,8 @@ namespace Changsta.Ai.Tests.Unit.Radio
             var sut = new GetRadioScheduleUseCase(
                 new StubCatalogue(Catalogue()),
                 NullLogger<GetRadioScheduleUseCase>.Instance,
-                spy);
+                spy,
+                RadioTestConfig.Definitions);
 
             RadioScheduleResultDto result = await sut.GetAsync(CancellationToken.None);
 
@@ -132,7 +133,8 @@ namespace Changsta.Ai.Tests.Unit.Radio
             => new GetRadioScheduleUseCase(
                     new StubCatalogue(mixes),
                     NullLogger<GetRadioScheduleUseCase>.Instance,
-                    new RadioScheduler())
+                    new RadioScheduler(RadioTestConfig.Definitions),
+                    RadioTestConfig.Definitions)
                 .GetAsync(CancellationToken.None);
 
         private static IReadOnlyList<Mix> Catalogue()
@@ -180,7 +182,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
 
         private sealed class SpyRadioScheduler : IRadioScheduler
         {
-            private readonly RadioScheduler _inner = new();
+            private readonly RadioScheduler _inner = new(RadioTestConfig.Definitions);
 
             public bool Called { get; private set; }
 

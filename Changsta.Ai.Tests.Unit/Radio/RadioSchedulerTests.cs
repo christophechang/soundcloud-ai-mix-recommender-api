@@ -120,7 +120,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
             {
                 foreach (RadioScheduledSlot slot in kvp.Value)
                 {
-                    RadioStationDefinitions.TryGetStationForGenre(slot.Mix.Genre, out string ownerStation);
+                    RadioTestConfig.Definitions.TryGetStationForGenre(slot.Mix.Genre, out string ownerStation);
                     ownerStation.Should().Be(
                         kvp.Key,
                         because: $"{kvp.Key} hour {slot.Hour} must only play its genres");
@@ -167,7 +167,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
         }
 
         private static RadioSchedule Build(DateOnly date, IEnumerable<Mix> mixes)
-            => new RadioScheduler().Build(mixes.ToList(), date);
+            => new RadioScheduler(RadioTestConfig.Definitions).Build(mixes.ToList(), date);
 
         private static IReadOnlyList<Mix> Catalogue(int td, int ds, int jp)
         {

@@ -12,6 +12,13 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
         private const int RecentGenreWindow = 3;
         private const int RecentArtistWindow = 3;
 
+        private readonly RadioDefinitions _definitions;
+
+        public RadioScheduler(RadioDefinitions definitions)
+        {
+            _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
+        }
+
         public RadioSchedule Build(IReadOnlyList<Mix> catalogue, DateOnly date)
         {
             DayBucket dayBucket = SlotDefinitions.ResolveDayBucket(
@@ -20,9 +27,9 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
             var crossScheduleUsed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var stationSlots = new Dictionary<string, IReadOnlyList<RadioScheduledSlot>>();
 
-            for (int si = 0; si < RadioStationDefinitions.Stations.Count; si++)
+            for (int si = 0; si < _definitions.Stations.Count; si++)
             {
-                RadioStation station = RadioStationDefinitions.Stations[si];
+                RadioStation station = _definitions.Stations[si];
                 var stationGenres = new HashSet<string>(station.Genres, StringComparer.OrdinalIgnoreCase);
                 List<Mix> eligible = catalogue.Where(m => stationGenres.Contains(m.Genre)).ToList();
 
@@ -33,7 +40,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
                     throw new RadioStationUnavailableException(station.Id, msg);
                 }
 
-                int bpmOffset = RadioStationDefinitions.GetBpmOffset(station.Id);
+                int bpmOffset = _definitions.GetBpmOffset(station.Id);
 
                 stationSlots[station.Id] = BuildStationSchedule(
                     eligible,
@@ -50,56 +57,6 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
             }
 
             return new RadioSchedule { ScheduleDate = date, StationSlots = stationSlots };
-        }
-
-        private static IReadOnlyList<RadioScheduledSlot> BuildStationSchedule(
-            List<Mix> eligible,
-            DateOnly date,
-            int stationIndex,
-            DayBucket dayBucket,
-            int bpmOffset,
-            IReadOnlySet<string> crossScheduleUsed)
-        {
-            var usedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var recentGenres = new List<string>(RecentGenreWindow);
-            var recentArtists = new List<string>(RecentArtistWindow);
-            var slots = new List<RadioScheduledSlot>(24);
-
-            for (int hour = 0; hour < 24; hour++)
-            {
-                SlotKey slotKey = SlotDefinitions.ResolveSlot(hour);
-                SlotConfig slotConfig = SlotDefinitions.Slots[slotKey];
-                int bpmTarget = SlotDefinitions.GetBpmTarget(slotKey, dayBucket) + bpmOffset;
-
-                RadioScheduledSlot slot = SelectSlot(
-                    eligible,
-                    hour,
-                    date,
-                    stationIndex,
-                    slotConfig,
-                    bpmTarget,
-                    usedIds,
-                    recentGenres,
-                    recentArtists,
-                    crossScheduleUsed);
-
-                slots.Add(slot);
-                usedIds.Add(slot.Mix.Id);
-
-                recentGenres.Add(slot.Mix.Genre);
-                if (recentGenres.Count > RecentGenreWindow)
-                {
-                    recentGenres.RemoveAt(0);
-                }
-
-                recentArtists.Add(RadioSlotScorer.ExtractArtistKey(slot.Mix.Title));
-                if (recentArtists.Count > RecentArtistWindow)
-                {
-                    recentArtists.RemoveAt(0);
-                }
-            }
-
-            return slots;
         }
 
         private static RadioScheduledSlot SelectSlot(
@@ -253,6 +210,56 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
                 AuditWarnings = warnings,
                 RelaxedRules = relaxedRules ?? Array.Empty<string>(),
             };
+        }
+
+        private IReadOnlyList<RadioScheduledSlot> BuildStationSchedule(
+            List<Mix> eligible,
+            DateOnly date,
+            int stationIndex,
+            DayBucket dayBucket,
+            int bpmOffset,
+            IReadOnlySet<string> crossScheduleUsed)
+        {
+            var usedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var recentGenres = new List<string>(RecentGenreWindow);
+            var recentArtists = new List<string>(RecentArtistWindow);
+            var slots = new List<RadioScheduledSlot>(24);
+
+            for (int hour = 0; hour < 24; hour++)
+            {
+                SlotKey slotKey = SlotDefinitions.ResolveSlot(hour);
+                SlotConfig slotConfig = _definitions.Slots[slotKey];
+                int bpmTarget = _definitions.GetBpmTarget(slotKey, dayBucket) + bpmOffset;
+
+                RadioScheduledSlot slot = SelectSlot(
+                    eligible,
+                    hour,
+                    date,
+                    stationIndex,
+                    slotConfig,
+                    bpmTarget,
+                    usedIds,
+                    recentGenres,
+                    recentArtists,
+                    crossScheduleUsed);
+
+                slots.Add(slot);
+                usedIds.Add(slot.Mix.Id);
+
+                recentGenres.Add(slot.Mix.Genre);
+                if (recentGenres.Count > RecentGenreWindow)
+                {
+                    recentGenres.RemoveAt(0);
+                }
+
+                recentArtists.Add(RadioSlotScorer.ExtractArtistKey(slot.Mix.Title));
+                if (recentArtists.Count > RecentArtistWindow)
+                {
+                    recentArtists.RemoveAt(0);
+                }
+            }
+
+            return slots;
         }
     }
 }
