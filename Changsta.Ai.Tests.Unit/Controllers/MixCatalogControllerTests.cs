@@ -533,6 +533,42 @@ namespace Changsta.Ai.Tests.Unit.Controllers
             Assert.That(mix.Id, Is.EqualTo("201"));
         }
 
+        // ── GET /api/catalog/mixes/titles ─────────────────────────────────────
+        [Test]
+        public async Task GetMixTitlesAsync_returns_title_and_slug_for_every_mix()
+        {
+            var mixes = new[]
+            {
+                MakeMixWithUrl("1", "https://soundcloud.com/changsta/fault-lines", "breaks"),
+                MakeMixWithUrl("2", "https://soundcloud.com/changsta/deep-dive", "dnb"),
+            };
+
+            MixTitleEntry[] titles = await InvokeMixTitlesAsync(BuildSut(mixes));
+
+            Assert.That(titles, Has.Length.EqualTo(2));
+            Assert.That(titles.Select(t => t.Slug), Is.EquivalentTo(new[] { "fault-lines", "deep-dive" }));
+        }
+
+        [Test]
+        public async Task GetMixTitlesAsync_sets_a_single_cache_control_header()
+        {
+            MixCatalogController sut = BuildSut(new[] { MakeMix("1", "dnb") });
+            sut.Response.Headers.CacheControl = "no-store";
+
+            await sut.GetMixTitlesAsync(CancellationToken.None);
+
+            Assert.That(sut.Response.Headers.CacheControl.Count, Is.EqualTo(1));
+            Assert.That(sut.Response.Headers.CacheControl.ToString(), Is.EqualTo("max-age=3600, public"));
+        }
+
+        [Test]
+        public async Task GetMixTitlesAsync_with_empty_catalogue_returns_empty_list()
+        {
+            MixTitleEntry[] titles = await InvokeMixTitlesAsync(BuildSut(Array.Empty<Mix>()));
+
+            Assert.That(titles, Is.Empty);
+        }
+
         // ── NormalizeGenre null safety ────────────────────────────────────────
         [Test]
         public async Task GetCatalogAsync_mix_with_null_genre_does_not_throw()
@@ -595,6 +631,12 @@ namespace Changsta.Ai.Tests.Unit.Controllers
         {
             IActionResult result = await sut.GetMixesByArtistAsync(name, 1, 20, CancellationToken.None);
             return (CatalogPage<Mix>)((OkObjectResult)result).Value!;
+        }
+
+        private static async Task<MixTitleEntry[]> InvokeMixTitlesAsync(MixCatalogController sut)
+        {
+            IActionResult result = await sut.GetMixTitlesAsync(CancellationToken.None);
+            return (MixTitleEntry[])((OkObjectResult)result).Value!;
         }
 
         private static MixCatalogController BuildSut(IReadOnlyList<Mix> mixes)

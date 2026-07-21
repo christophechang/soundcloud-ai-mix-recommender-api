@@ -23,7 +23,17 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             "confidence",
         };
 
-        internal static AiRecommendationResponse ParseAndValidate(string json, IReadOnlyList<Mix> mixes, int maxResults)
+        /// <param name="dropUnverifiableAnchors">
+        /// When true, a why anchor that cannot be verified against the MIX block is discarded
+        /// instead of failing the whole response, and a result is dropped only once no verified
+        /// anchor remains. The caller uses this on its final attempt so one hallucinated anchor
+        /// cannot cost the user every result. Anchors are never rewritten to make them fit.
+        /// </param>
+        internal static AiRecommendationResponse ParseAndValidate(
+            string json,
+            IReadOnlyList<Mix> mixes,
+            int maxResults,
+            bool dropUnverifiableAnchors = false)
         {
             json = NormalizeAiJson(json);
 
@@ -51,6 +61,8 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
             var allowedById = mixes.ToDictionary(m => m.Id, StringComparer.Ordinal);
 
+            var validatedResults = new List<AiRecommendationResult>(dedupedResults.Count);
+
             foreach (var r in dedupedResults)
             {
                 if (string.IsNullOrWhiteSpace(r.MixId)) throw new InvalidOperationException("AI returned a result with no mixId.");
@@ -60,16 +72,26 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 if (r.Why is null || r.Why.Count < 1 || r.Why.Count > 4) throw new InvalidOperationException("AI returned invalid why list.");
                 if (r.Why.Any(string.IsNullOrWhiteSpace)) throw new InvalidOperationException("AI returned an empty why string.");
 
-                List<string> normalizedWhy = ValidateWhyAnchors(r.Why, mix);
+                List<string> normalizedWhy = ValidateWhyAnchors(r.Why, mix, dropUnverifiableAnchors);
+
+                if (normalizedWhy.Count == 0)
+                {
+                    // Only reachable when dropping unverifiable anchors — nothing survived, so the
+                    // mix has no evidence to stand on and is left out rather than shown unsupported.
+                    continue;
+                }
+
                 r.Why.Clear();
                 r.Why.AddRange(normalizedWhy);
 
                 if (r.Confidence < 0 || r.Confidence > 1) throw new InvalidOperationException("AI returned invalid confidence.");
+
+                validatedResults.Add(r);
             }
 
             return new AiRecommendationResponse
             {
-                Results = dedupedResults,
+                Results = validatedResults,
                 ClarifyingQuestion = response.ClarifyingQuestion,
             };
         }
@@ -116,7 +138,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             return content;
         }
 
-        private static List<string> ValidateWhyAnchors(List<string> why, Mix mix)
+        private static List<string> ValidateWhyAnchors(List<string> why, Mix mix, bool dropUnverifiableAnchors)
         {
             string genre = (mix.Genre ?? string.Empty).Trim();
             string energy = (mix.Energy ?? string.Empty).Trim();
@@ -146,8 +168,15 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
                 if (TryExtractQuotedAnchor(original, out var anchor))
                 {
-                    EnsureAnchorIsValid(anchor, genre, energy, bpmAnchor, moodTokens, artists, trackLines, mix.Id);
-                    normalized.Add(original);
+                    if (IsAnchorVerifiable(anchor, genre, energy, bpmAnchor, moodTokens, artists, trackLines))
+                    {
+                        normalized.Add(original);
+                    }
+                    else if (!dropUnverifiableAnchors)
+                    {
+                        throw AnchorNotFound(anchor, genre, energy, bpmAnchor, moodTokens, artists, trackLines, mix.Id);
+                    }
+
                     continue;
                 }
 
@@ -157,8 +186,20 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
 
                 if (IsAllowedUnquotedAnchor(candidate, genre, energy, bpmAnchor, moodTokens))
                 {
-                    EnsureAnchorIsValid(candidate, genre, energy, bpmAnchor, moodTokens, artists, trackLines, mix.Id);
-                    normalized.Add("\"" + candidate + "\"");
+                    if (IsAnchorVerifiable(candidate, genre, energy, bpmAnchor, moodTokens, artists, trackLines))
+                    {
+                        normalized.Add("\"" + candidate + "\"");
+                    }
+                    else if (!dropUnverifiableAnchors)
+                    {
+                        throw AnchorNotFound(candidate, genre, energy, bpmAnchor, moodTokens, artists, trackLines, mix.Id);
+                    }
+
+                    continue;
+                }
+
+                if (dropUnverifiableAnchors)
+                {
                     continue;
                 }
 
@@ -190,7 +231,19 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             return false;
         }
 
-        private static void EnsureAnchorIsValid(
+        private static bool IsAnchorVerifiable(
+            string anchor,
+            string genre,
+            string energy,
+            string bpmAnchor,
+            HashSet<string> moodTokens,
+            string[] artists,
+            string[] trackLines)
+        {
+            return FindAnchor(anchor, genre, energy, bpmAnchor, moodTokens, artists, trackLines).Any;
+        }
+
+        private static InvalidOperationException AnchorNotFound(
             string anchor,
             string genre,
             string energy,
@@ -200,26 +253,52 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
             string[] trackLines,
             string mixId)
         {
-            bool foundInGenre = genre.Length > 0 && GenresEquivalent(anchor, genre);
-            bool foundInEnergy = energy.Length > 0 && string.Equals(anchor, energy, StringComparison.OrdinalIgnoreCase);
+            AnchorMatch match = FindAnchor(anchor, genre, energy, bpmAnchor, moodTokens, artists, trackLines);
 
-            bool foundInBpm =
-                bpmAnchor.Length > 0 &&
-                (string.Equals(anchor, bpmAnchor, StringComparison.OrdinalIgnoreCase) ||
-                 string.Equals(anchor, "bpm: " + bpmAnchor, StringComparison.OrdinalIgnoreCase));
+            return new InvalidOperationException(
+                "Why anchor not found in MIX block. " +
+                $"mixId='{mixId}', anchor='{anchor}', " +
+                $"foundInGenre={match.Genre}, foundInEnergy={match.Energy}, foundInBpm={match.Bpm}, foundInMoods={match.Moods}, foundInArtists={match.Artists}, foundInTracklist={match.Tracklist}.");
+        }
 
-            bool foundInMoods = moodTokens.Contains(anchor);
-            bool foundInArtists = artists.Any(artist => string.Equals(anchor, artist, StringComparison.OrdinalIgnoreCase));
-
-            bool foundInTracklist = trackLines.Any(line => line.Contains(anchor, StringComparison.Ordinal));
-
-            if (!(foundInGenre || foundInEnergy || foundInBpm || foundInMoods || foundInArtists || foundInTracklist))
+        private static AnchorMatch FindAnchor(
+            string anchor,
+            string genre,
+            string energy,
+            string bpmAnchor,
+            HashSet<string> moodTokens,
+            string[] artists,
+            string[] trackLines)
+        {
+            return new AnchorMatch
             {
-                throw new InvalidOperationException(
-                    "Why anchor not found in MIX block. " +
-                    $"mixId='{mixId}', anchor='{anchor}', " +
-                    $"foundInGenre={foundInGenre}, foundInEnergy={foundInEnergy}, foundInBpm={foundInBpm}, foundInMoods={foundInMoods}, foundInArtists={foundInArtists}, foundInTracklist={foundInTracklist}.");
-            }
+                Genre = genre.Length > 0 && GenresEquivalent(anchor, genre),
+                Energy = energy.Length > 0 && string.Equals(anchor, energy, StringComparison.OrdinalIgnoreCase),
+                Bpm =
+                    bpmAnchor.Length > 0 &&
+                    (string.Equals(anchor, bpmAnchor, StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(anchor, "bpm: " + bpmAnchor, StringComparison.OrdinalIgnoreCase)),
+                Moods = moodTokens.Contains(anchor),
+                Artists = artists.Any(artist => string.Equals(anchor, artist, StringComparison.OrdinalIgnoreCase)),
+                Tracklist = trackLines.Any(line => line.Contains(anchor, StringComparison.Ordinal)),
+            };
+        }
+
+        private readonly struct AnchorMatch
+        {
+            public bool Genre { get; init; }
+
+            public bool Energy { get; init; }
+
+            public bool Bpm { get; init; }
+
+            public bool Moods { get; init; }
+
+            public bool Artists { get; init; }
+
+            public bool Tracklist { get; init; }
+
+            public bool Any => Genre || Energy || Bpm || Moods || Artists || Tracklist;
         }
 
         private static bool GenresEquivalent(string anchor, string genre)
