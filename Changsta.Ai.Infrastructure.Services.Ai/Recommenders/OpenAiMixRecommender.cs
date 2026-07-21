@@ -130,7 +130,15 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                         : string.Empty;
 
                     string content = AiRecommendationResponseValidator.NormalizeAiJson(rawContent);
-                    AiRecommendationResponse parsed = AiRecommendationResponseValidator.ParseAndValidate(content, promptMixes, maxResults);
+
+                    // Earlier attempts stay strict so the model gets told exactly what it got wrong.
+                    // On the last attempt a single unverifiable anchor would otherwise discard every
+                    // result, so drop the anchor instead and keep the mixes that still have evidence.
+                    AiRecommendationResponse parsed = AiRecommendationResponseValidator.ParseAndValidate(
+                        content,
+                        promptMixes,
+                        maxResults,
+                        dropUnverifiableAnchors: attempt == MaxRetryAttempts);
 
                     MixAiRecommendation[] results = parsed.Results
                         .Select(r =>
