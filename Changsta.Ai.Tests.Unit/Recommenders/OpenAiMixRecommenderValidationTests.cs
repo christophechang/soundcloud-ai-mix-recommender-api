@@ -401,6 +401,15 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
         }
 
         [Test]
+        public void BuildPrompt_MidHighQuery_InstructsModelNotToCopyAbsentEnergyWordAsAnchor()
+        {
+            string prompt = MixPromptBuilder.BuildPrompt("mid-high jungle", DefaultCatalogue, 3);
+
+            Assert.That(prompt, Does.Contain("\"mid-high\""));
+            Assert.That(prompt, Does.Contain("unless the chosen MIX block literally has that exact energy or mood value"));
+        }
+
+        [Test]
         public void ParseAndValidate_AnchorWithTrailingPeriod_Succeeds()
         {
             // "\"dnb\"." — trailing period should be stripped before validation
