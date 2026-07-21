@@ -16,6 +16,7 @@ Hardens two error paths found by working through the open bug reports against pr
 
 - Prompt rule 10b now names compound energy values (`low-mid`, `mid-high`) explicitly.
 - First test coverage for `CatalogProjections.MixTitles` and `GetMixTitlesAsync`. The unit suite grew from 677 to 691 tests.
+- `infra/shared/plan-prod.bicep` carries a header explaining that it documents an existing plan and is for idempotent redeployment only — the API's web apps run on it.
 
 ## v1.54
 
