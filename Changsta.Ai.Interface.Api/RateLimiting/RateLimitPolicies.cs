@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.RateLimiting;
 using System.Threading.Tasks;
+using Changsta.Ai.Interface.Api.Errors;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.RateLimiting;
 
@@ -77,10 +78,17 @@ namespace Changsta.Ai.Interface.Api.RateLimiting
             ArgumentNullException.ThrowIfNull(httpContext);
 
             httpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-            httpContext.Response.ContentType = "application/json";
             httpContext.Response.Headers["Retry-After"] = RetryAfterSeconds.ToString(CultureInfo.InvariantCulture);
+
+            // WriteAsJsonAsync resets ContentType, so the problem+json type is passed in rather
+            // than assigned beforehand.
             await httpContext.Response.WriteAsJsonAsync(
-                new { error = "Too many requests. Please wait a moment and try again." },
+                ApiProblem.Create(
+                    StatusCodes.Status429TooManyRequests,
+                    "Too many requests. Please wait a moment and try again.",
+                    httpContext.TraceIdentifier),
+                options: null,
+                contentType: "application/problem+json",
                 cancellationToken).ConfigureAwait(false);
         }
     }

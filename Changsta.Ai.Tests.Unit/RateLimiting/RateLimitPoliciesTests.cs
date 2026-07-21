@@ -1,6 +1,7 @@
 using System.IO;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.RateLimiting;
 using System.Threading.Tasks;
@@ -62,6 +63,29 @@ namespace Changsta.Ai.Tests.Unit.RateLimiting
             httpContext.Response.Body.Seek(0, SeekOrigin.Begin);
             string body = await new StreamReader(httpContext.Response.Body, Encoding.UTF8).ReadToEndAsync();
             body.Should().Contain("Too many requests");
+        }
+
+        [Test]
+        public async Task WriteRejectionAsync_writes_problem_details()
+        {
+            var httpContext = new DefaultHttpContext();
+            httpContext.Response.Body = new MemoryStream();
+
+            await RateLimitPolicies.WriteRejectionAsync(httpContext, CancellationToken.None);
+
+            httpContext.Response.ContentType.Should().StartWith("application/problem+json");
+
+            httpContext.Response.Body.Seek(0, SeekOrigin.Begin);
+            string body = await new StreamReader(httpContext.Response.Body, Encoding.UTF8).ReadToEndAsync();
+
+            using JsonDocument document = JsonDocument.Parse(body);
+            JsonElement root = document.RootElement;
+
+            root.GetProperty("status").GetInt32().Should().Be(StatusCodes.Status429TooManyRequests);
+            root.GetProperty("title").GetString().Should().Be("Too Many Requests");
+
+            // `error` is the field existing clients read; it must survive at the JSON root.
+            root.GetProperty("error").GetString().Should().Contain("Too many requests");
         }
 
         [TestCase(RateLimitPolicies.RecommendPermitLimit)]

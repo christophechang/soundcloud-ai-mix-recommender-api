@@ -1,6 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Changsta.Ai.Core.Contracts.Diagnostics;
+using Changsta.Ai.Interface.Api.Errors;
 using Changsta.Ai.Interface.Api.RateLimiting;
 using Changsta.Ai.Interface.Api.Security;
 using Microsoft.AspNetCore.Mvc;
@@ -10,7 +11,6 @@ namespace Changsta.Ai.Interface.Api.Controllers
 {
     [ApiController]
     [Route("api/diagnostics")]
-    [Produces("application/json")]
     public sealed class DiagnosticsController : ControllerBase
     {
         private const int DefaultWindowHours = 24;
@@ -32,7 +32,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
         {
             if (hours < 1 || hours > MaxWindowHours)
             {
-                return BadRequest(new { error = $"hours must be between 1 and {MaxWindowHours}." });
+                return ApiProblem.BadRequest($"hours must be between 1 and {MaxWindowHours}.");
             }
 
             var result = await _getErrorInsightsUseCase

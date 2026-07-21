@@ -17,10 +17,12 @@ using Changsta.Ai.Infrastructure.Services.Azure.Catalogue;
 using Changsta.Ai.Infrastructure.Services.Azure.Diagnostics;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Catalogue;
 using Changsta.Ai.Interface.Api.Cors;
+using Changsta.Ai.Interface.Api.Errors;
 using Changsta.Ai.Interface.Api.Middleware;
 using Changsta.Ai.Interface.Api.MixLab;
 using Changsta.Ai.Interface.Api.RateLimiting;
 using Changsta.Ai.Interface.Api.Services;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -38,6 +40,12 @@ builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
         options.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+    })
+    .ConfigureApiBehaviorOptions(options =>
+    {
+        // [ApiController] model validation would otherwise emit ValidationProblemDetails without
+        // the `error` field the rest of the API returns. See ApiProblem.ValidationFailed.
+        options.InvalidModelStateResponseFactory = ApiProblem.ValidationFailed;
     });
 
 // Origins come from configuration (Cors:AllowedOrigins); localhost is appended only in

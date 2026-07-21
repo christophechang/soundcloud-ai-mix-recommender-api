@@ -3,14 +3,22 @@ using System.Collections.Generic;
 using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Changsta.Ai.Interface.Api.Models;
+using Changsta.Ai.Interface.Api.Errors;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 
 namespace Changsta.Ai.Interface.Api.Middleware
 {
     public sealed class GlobalExceptionMiddleware
     {
+        // The middleware writes the body itself rather than going through MVC, so it needs its own
+        // camelCase policy to match the casing controllers emit.
+        private static readonly JsonSerializerOptions ProblemJsonOptions = new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        };
+
         private readonly RequestDelegate _next;
         private readonly ILogger<GlobalExceptionMiddleware> _logger;
 
@@ -56,15 +64,16 @@ namespace Changsta.Ai.Interface.Api.Middleware
                     int statusCode = GetStatusCode(ex);
 
                     context.Response.StatusCode = statusCode;
-                    context.Response.ContentType = "application/json";
+                    context.Response.ContentType = "application/problem+json";
 
-                    var error = new ErrorResponse
-                    {
-                        Error = GetSafeMessage(statusCode),
-                        CorrelationId = correlationId,
-                    };
+                    ProblemDetails problem = ApiProblem.Create(
+                        statusCode,
+                        GetSafeMessage(statusCode),
+                        correlationId);
 
-                    string json = JsonSerializer.Serialize(error);
+                    problem.Instance = context.Request.Path;
+
+                    string json = JsonSerializer.Serialize(problem, ProblemJsonOptions);
 
                     await context.Response.WriteAsync(json).ConfigureAwait(false);
                 }
