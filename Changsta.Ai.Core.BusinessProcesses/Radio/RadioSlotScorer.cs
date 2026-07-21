@@ -21,6 +21,12 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
             "peak",
         };
 
+        /// <summary>
+        /// The energy vocabulary the scorer understands. Configuration is validated against this
+        /// at startup so an unknown value fails fast rather than silently matching nothing.
+        /// </summary>
+        internal static bool IsKnownEnergyValue(string energy) => KnownEnergyValues.Contains(energy);
+
         internal static RadioSlotScore Score(
             Mix mix,
             SlotConfig slot,

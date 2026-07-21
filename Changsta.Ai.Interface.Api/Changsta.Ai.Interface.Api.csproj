@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <Content Update="config\mood_weights.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="config\radio.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

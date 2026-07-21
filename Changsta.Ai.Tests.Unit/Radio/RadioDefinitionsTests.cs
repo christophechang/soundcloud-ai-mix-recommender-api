@@ -6,7 +6,7 @@ using NUnit.Framework;
 namespace Changsta.Ai.Tests.Unit.Radio
 {
     [TestFixture]
-    public sealed class RadioStationDefinitionsTests
+    public sealed class RadioDefinitionsTests
     {
         [TestCase("uk bass", "140")]
         [TestCase("breakbeat", "140")]
@@ -23,7 +23,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
         [TestCase("dnb", "170")]
         public void Genre_maps_to_correct_station(string genre, string expectedStationId)
         {
-            bool found = RadioStationDefinitions.TryGetStationForGenre(genre, out string stationId);
+            bool found = RadioTestConfig.Definitions.TryGetStationForGenre(genre, out string stationId);
             found.Should().BeTrue();
             stationId.Should().Be(expectedStationId);
         }
@@ -31,34 +31,34 @@ namespace Changsta.Ai.Tests.Unit.Radio
         [Test]
         public void Unknown_genre_returns_false()
         {
-            bool found = RadioStationDefinitions.TryGetStationForGenre("ambient", out _);
+            bool found = RadioTestConfig.Definitions.TryGetStationForGenre("ambient", out _);
             found.Should().BeFalse();
         }
 
         [Test]
         public void Genre_lookup_is_case_insensitive()
         {
-            RadioStationDefinitions.TryGetStationForGenre("UK Bass", out string stationId).Should().BeTrue();
+            RadioTestConfig.Definitions.TryGetStationForGenre("UK Bass", out string stationId).Should().BeTrue();
             stationId.Should().Be("140");
         }
 
         [Test]
         public void Touchdown_FM_is_default_station()
         {
-            RadioStationDefinitions.DefaultStationId.Should().Be("140");
+            RadioTestConfig.Definitions.DefaultStationId.Should().Be("140");
         }
 
         [Test]
         public void Exactly_three_stations_defined()
         {
-            RadioStationDefinitions.Stations.Should().HaveCount(3);
+            RadioTestConfig.Definitions.Stations.Should().HaveCount(3);
         }
 
         [Test]
         public void Only_one_station_is_default()
         {
             int count = 0;
-            foreach (var s in RadioStationDefinitions.Stations)
+            foreach (var s in RadioTestConfig.Definitions.Stations)
             {
                 if (s.IsDefault)
                 {
@@ -72,7 +72,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
         [Test]
         public void Each_station_has_non_empty_frequency()
         {
-            foreach (var s in RadioStationDefinitions.Stations)
+            foreach (var s in RadioTestConfig.Definitions.Stations)
             {
                 s.Frequency.Should().NotBeNullOrWhiteSpace(because: $"{s.Id} must have a frequency");
             }
@@ -82,7 +82,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
         public void Each_genre_belongs_to_exactly_one_station()
         {
             var all = new System.Collections.Generic.List<string>();
-            foreach (var s in RadioStationDefinitions.Stations)
+            foreach (var s in RadioTestConfig.Definitions.Stations)
             {
                 foreach (string g in s.Genres)
                 {
@@ -96,21 +96,21 @@ namespace Changsta.Ai.Tests.Unit.Radio
         [Test]
         public void Jungle_pressure_bpm_offset_is_positive()
         {
-            int offset = RadioStationDefinitions.GetBpmOffset("170");
+            int offset = RadioTestConfig.Definitions.GetBpmOffset("170");
             offset.Should().BeGreaterThan(0, because: "DNB/Jungle BPM is much higher than the global slot targets");
         }
 
         [Test]
         public void Deep_signal_fm_bpm_offset_is_negative()
         {
-            int offset = RadioStationDefinitions.GetBpmOffset("4x4");
+            int offset = RadioTestConfig.Definitions.GetBpmOffset("4x4");
             offset.Should().BeLessThan(0, because: "House runs slower than the global slot targets");
         }
 
         [Test]
         public void Unknown_station_bpm_offset_returns_zero()
         {
-            int offset = RadioStationDefinitions.GetBpmOffset("unknown-station");
+            int offset = RadioTestConfig.Definitions.GetBpmOffset("unknown-station");
             offset.Should().Be(0);
         }
     }

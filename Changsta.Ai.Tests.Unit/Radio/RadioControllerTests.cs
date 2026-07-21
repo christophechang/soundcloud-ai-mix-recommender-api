@@ -125,7 +125,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
         private static RadioScheduleResultDto MakeResult()
         {
             var now = DateTimeOffset.UtcNow;
-            var stations = RadioStationDefinitions.Stations
+            var stations = RadioTestConfig.Definitions.Stations
                 .Select(s => new RadioStationScheduleDto
                 {
                     Id = s.Id,
@@ -150,7 +150,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
                 ScheduleDate = DateOnly.FromDateTime(now.UtcDateTime).ToString("yyyy-MM-dd"),
                 Timezone = "UTC",
                 CurrentHour = now.Hour,
-                DefaultStationId = RadioStationDefinitions.DefaultStationId,
+                DefaultStationId = RadioTestConfig.Definitions.DefaultStationId,
                 Stations = stations,
             };
         }

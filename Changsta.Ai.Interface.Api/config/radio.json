@@ -1,0 +1,83 @@
+{
+  "Radio": {
+    "Stations": [
+      {
+        "Id": "140",
+        "Slug": "tooz-fm",
+        "Strapline": "For the Breaks Headz",
+        "Name": "Tooz FM",
+        "Frequency": "103.5 FM",
+        "Description": "UK Bass, Garage, Breaks, Hip-Hop and Hardcore",
+        "IsDefault": true,
+        "BpmOffset": 0,
+        "Genres": [ "uk bass", "breakbeat", "ukg", "hip-hop", "hardcore" ]
+      },
+      {
+        "Id": "4x4",
+        "Slug": "origin-fm",
+        "Strapline": "From House to Electronica",
+        "Name": "Origin FM",
+        "Frequency": "97.2 FM",
+        "Description": "House, Deep House, Electronica, Techno, Disco and Funk",
+        "IsDefault": false,
+        "BpmOffset": -15,
+        "Genres": [ "house", "deep-house", "electronica", "techno", "disco", "funk" ]
+      },
+      {
+        "Id": "170",
+        "Slug": "killa-fm",
+        "Strapline": "Killa, No Filla",
+        "Name": "Killa FM",
+        "Frequency": "107.7 FM",
+        "Description": "Jungle and Drum & Bass",
+        "IsDefault": false,
+        "BpmOffset": 38,
+        "Genres": [ "jungle", "dnb" ]
+      }
+    ],
+    "Slots": [
+      {
+        "Key": "Dead",
+        "Label": "dead of night",
+        "BaseBpmTarget": 172,
+        "WarmthTarget": -0.6,
+        "EnergyValues": [ "peak", "high" ]
+      },
+      {
+        "Key": "Comedown",
+        "Label": "comedown",
+        "BaseBpmTarget": 110,
+        "WarmthTarget": 0.4,
+        "EnergyValues": [ "chilled", "low-mid", "low" ]
+      },
+      {
+        "Key": "Morning",
+        "Label": "morning",
+        "BaseBpmTarget": 122,
+        "WarmthTarget": 0.5,
+        "EnergyValues": [ "low-mid", "mid", "chilled", "low" ]
+      },
+      {
+        "Key": "Afternoon",
+        "Label": "afternoon",
+        "BaseBpmTarget": 125,
+        "WarmthTarget": 0.3,
+        "EnergyValues": [ "mid", "journey" ]
+      },
+      {
+        "Key": "EarlyEve",
+        "Label": "evening",
+        "BaseBpmTarget": 128,
+        "WarmthTarget": 0.0,
+        "EnergyValues": [ "mid", "mid-peak", "journey", "mid-high" ]
+      },
+      {
+        "Key": "Primetime",
+        "Label": "primetime",
+        "BaseBpmTarget": 138,
+        "WarmthTarget": -0.3,
+        "EnergyValues": [ "peak", "high", "mid-peak", "mid-high" ]
+      }
+    ]
+  }
+}

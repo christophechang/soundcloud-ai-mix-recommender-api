@@ -14,13 +14,13 @@ namespace Changsta.Ai.Tests.Unit.Radio
         [Test]
         public void Valid_schedule_produces_no_violations()
         {
-            RadioScheduleValidator.Validate(ValidSchedule()).Should().BeEmpty();
+            RadioScheduleValidator.Validate(ValidSchedule(), RadioTestConfig.Definitions).Should().BeEmpty();
         }
 
         [Test]
         public void Missing_slots_produces_SlotCountMismatch()
         {
-            var violations = RadioScheduleValidator.Validate(ScheduleWithMissingSlot("140"));
+            var violations = RadioScheduleValidator.Validate(ScheduleWithMissingSlot("140"), RadioTestConfig.Definitions);
             violations.Should().Contain(v =>
                 v.StationId == "140" &&
                 v.Rule == RadioScheduleRule.SlotCountMismatch);
@@ -29,7 +29,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
         [Test]
         public void Wrong_genre_on_station_produces_GenreMismatch()
         {
-            var violations = RadioScheduleValidator.Validate(ScheduleWithWrongGenre("140", "house"));
+            var violations = RadioScheduleValidator.Validate(ScheduleWithWrongGenre("140", "house"), RadioTestConfig.Definitions);
             violations.Should().Contain(v =>
                 v.StationId == "140" &&
                 v.Rule == RadioScheduleRule.GenreMismatch);
@@ -38,7 +38,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
         [Test]
         public void Repeated_mix_on_same_station_produces_SameStationSameDayRepeat()
         {
-            var violations = RadioScheduleValidator.Validate(ScheduleWithRepeat("140"));
+            var violations = RadioScheduleValidator.Validate(ScheduleWithRepeat("140"), RadioTestConfig.Definitions);
             violations.Should().Contain(v =>
                 v.StationId == "140" &&
                 v.Rule == RadioScheduleRule.SameStationSameDayRepeat);
@@ -47,7 +47,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
         [Test]
         public void Same_mix_in_same_hour_across_stations_produces_SameHourCrossStation()
         {
-            var violations = RadioScheduleValidator.Validate(ScheduleWithCrossStationConflict());
+            var violations = RadioScheduleValidator.Validate(ScheduleWithCrossStationConflict(), RadioTestConfig.Definitions);
             violations.Should().Contain(v =>
                 v.Rule == RadioScheduleRule.SameHourCrossStationDuplicate);
         }
@@ -56,7 +56,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
         {
             int counter = 0;
             var slots = new Dictionary<string, IReadOnlyList<RadioScheduledSlot>>();
-            foreach (RadioStation station in RadioStationDefinitions.Stations)
+            foreach (RadioStation station in RadioTestConfig.Definitions.Stations)
             {
                 string genre = station.Genres[0];
                 var list = new List<RadioScheduledSlot>();
@@ -75,7 +75,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
         {
             int counter = 0;
             var slots = new Dictionary<string, IReadOnlyList<RadioScheduledSlot>>();
-            foreach (RadioStation station in RadioStationDefinitions.Stations)
+            foreach (RadioStation station in RadioTestConfig.Definitions.Stations)
             {
                 string genre = station.Genres[0];
                 var list = new List<RadioScheduledSlot>();
@@ -95,7 +95,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
         {
             int counter = 0;
             var slots = new Dictionary<string, IReadOnlyList<RadioScheduledSlot>>();
-            foreach (RadioStation station in RadioStationDefinitions.Stations)
+            foreach (RadioStation station in RadioTestConfig.Definitions.Stations)
             {
                 string genre = station.Genres[0];
                 var list = new List<RadioScheduledSlot>();
@@ -116,7 +116,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
             int counter = 0;
             Mix repeated = Mix("repeated", "uk bass");
             var slots = new Dictionary<string, IReadOnlyList<RadioScheduledSlot>>();
-            foreach (RadioStation station in RadioStationDefinitions.Stations)
+            foreach (RadioStation station in RadioTestConfig.Definitions.Stations)
             {
                 string genre = station.Genres[0];
                 var list = new List<RadioScheduledSlot>();
@@ -137,7 +137,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
             Mix shared = Mix("shared", "uk bass");
             int counter = 0;
             var slots = new Dictionary<string, IReadOnlyList<RadioScheduledSlot>>();
-            foreach (RadioStation station in RadioStationDefinitions.Stations)
+            foreach (RadioStation station in RadioTestConfig.Definitions.Stations)
             {
                 string genre = station.Genres[0];
                 var list = new List<RadioScheduledSlot>();
