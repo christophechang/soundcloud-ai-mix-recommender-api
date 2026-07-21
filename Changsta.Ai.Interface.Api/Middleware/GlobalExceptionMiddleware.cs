@@ -44,7 +44,14 @@ namespace Changsta.Ai.Interface.Api.Middleware
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Unhandled exception.");
+                    LogUnhandledException(ex);
+
+                    if (context.Response.HasStarted)
+                    {
+                        // The response is already on the wire — rethrow so the server aborts
+                        // rather than emitting a truncated body with a misleading status.
+                        throw;
+                    }
 
                     int statusCode = GetStatusCode(ex);
 
@@ -92,6 +99,32 @@ namespace Changsta.Ai.Interface.Api.Middleware
             }
 
             return "An unexpected error occurred.";
+        }
+
+        private void LogUnhandledException(Exception ex)
+        {
+            try
+            {
+                _logger.LogError(ex, "Unhandled exception.");
+            }
+            catch (Exception loggingFailure)
+            {
+                // Capturing exception detail can itself fail — production has produced a
+                // BadImageFormatException raised inside this handler, which suppressed the
+                // log line entirely. Fall back to a detail-free record so the failure is
+                // never silent, and never let logging cost the caller its error response.
+                try
+                {
+                    _logger.LogError(
+                        "Unhandled exception could not be logged with detail. Original type: {OriginalType}. Logging failure: {LoggingFailureType}.",
+                        ex.GetType().FullName,
+                        loggingFailure.GetType().FullName);
+                }
+                catch (Exception)
+                {
+                    // Logging is unavailable; returning a correlated error response matters more.
+                }
+            }
         }
     }
 }

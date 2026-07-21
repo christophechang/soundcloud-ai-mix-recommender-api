@@ -71,6 +71,51 @@ namespace Changsta.Ai.Tests.Unit.Catalog
             summaries[0].GenresSeen.Should().BeEquivalentTo(new[] { "house", "dnb" });
         }
 
+        [Test]
+        public void MixTitles_orders_newest_first_and_extracts_slug()
+        {
+            var mixes = new[]
+            {
+                MakeMixWithUrl("1", "https://soundcloud.com/changsta/older", new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)),
+                MakeMixWithUrl("2", "https://soundcloud.com/changsta/newer", new DateTimeOffset(2026, 6, 1, 0, 0, 0, TimeSpan.Zero)),
+            };
+
+            MixTitleEntry[] titles = CatalogProjections.MixTitles(mixes);
+
+            titles.Select(t => t.Slug).Should().Equal("newer", "older");
+        }
+
+        [Test]
+        public void MixTitles_places_mixes_without_a_publish_date_last()
+        {
+            var mixes = new[]
+            {
+                MakeMixWithUrl("1", "https://soundcloud.com/changsta/undated", publishedAt: null),
+                MakeMixWithUrl("2", "https://soundcloud.com/changsta/dated", new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero)),
+            };
+
+            MixTitleEntry[] titles = CatalogProjections.MixTitles(mixes);
+
+            titles.Select(t => t.Slug).Should().Equal("dated", "undated");
+        }
+
+        [Test]
+        public void MixTitles_with_no_mixes_returns_empty()
+        {
+            CatalogProjections.MixTitles(Array.Empty<Mix>()).Should().BeEmpty();
+        }
+
+        private static Mix MakeMixWithUrl(string id, string url, DateTimeOffset? publishedAt) => new Mix
+        {
+            Id = id,
+            Title = $"Mix {id}",
+            Url = url,
+            Genre = "dnb",
+            Energy = "mid",
+            PublishedAt = publishedAt,
+            Tracklist = Array.Empty<Track>(),
+        };
+
         private static Mix MakeMix(string id, string genre, params (string Artist, string Title)[] tracks) => new Mix
         {
             Id = id,

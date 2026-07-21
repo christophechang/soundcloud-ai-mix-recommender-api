@@ -142,7 +142,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
         {
             IReadOnlyList<Mix> mixes = await LoadCatalogueAsync(CatalogMaxItems, cancellationToken).ConfigureAwait(false);
 
-            Response.Headers.Append("Cache-Control", "max-age=3600, public");
+            Response.Headers.CacheControl = "max-age=3600, public";
 
             return Ok(CatalogProjections.MixTitles(mixes));
         }
@@ -152,7 +152,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
         {
             IReadOnlyList<Mix> mixes = await LoadCatalogueAsync(CatalogMaxItems, cancellationToken).ConfigureAwait(false);
 
-            Response.Headers.Append("Cache-Control", "max-age=3600, public");
+            Response.Headers.CacheControl = "max-age=3600, public";
 
             return Ok(CatalogProjections.Compass(mixes));
         }
