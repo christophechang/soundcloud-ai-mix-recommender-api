@@ -5,11 +5,11 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
 {
     internal static class RadioScheduleValidator
     {
-        internal static IReadOnlyList<RadioScheduleViolation> Validate(RadioSchedule schedule)
+        internal static IReadOnlyList<RadioScheduleViolation> Validate(RadioSchedule schedule, RadioDefinitions definitions)
         {
             var v = new List<RadioScheduleViolation>();
             CheckSlotCounts(schedule, v);
-            CheckGenreOwnership(schedule, v);
+            CheckGenreOwnership(schedule, v, definitions);
             CheckSameStationRepeats(schedule, v);
             CheckCrossStationHourConflicts(schedule, v);
             return v;
@@ -31,13 +31,13 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
             }
         }
 
-        private static void CheckGenreOwnership(RadioSchedule s, List<RadioScheduleViolation> v)
+        private static void CheckGenreOwnership(RadioSchedule s, List<RadioScheduleViolation> v, RadioDefinitions definitions)
         {
             foreach (var kvp in s.StationSlots)
             {
                 foreach (RadioScheduledSlot slot in kvp.Value)
                 {
-                    if (!RadioStationDefinitions.TryGetStationForGenre(slot.Mix.Genre, out string ownerStation)
+                    if (!definitions.TryGetStationForGenre(slot.Mix.Genre, out string ownerStation)
                         || !string.Equals(ownerStation, kvp.Key, StringComparison.OrdinalIgnoreCase))
                     {
                         v.Add(new RadioScheduleViolation

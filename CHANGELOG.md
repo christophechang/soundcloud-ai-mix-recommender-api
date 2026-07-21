@@ -2,6 +2,29 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.57
+
+Two internal refactors that remove long-standing maintenance traps, plus the backlog of dependency updates. No route, DTO, or status-code changes.
+
+### Changed
+
+- **Radio stations and slot targets moved into configuration.** The three stations and their per-slot BPM/energy/warmth targets were static readonly fields, so tuning a target or swapping a genre meant a code change and a redeploy for what is product tuning. They now come from `config/radio.json`, bound to `RadioOptions` and resolved into `RadioDefinitions`. Startup validation rejects the failure modes that are otherwise silent — an empty station list, a station with no genres, a non-canonical genre (scheduling matches normalised values, so `Drum & Bass` would schedule nothing), duplicate station ids, anything other than exactly one default station, unknown or missing slot keys, and energy values the scorer does not know. The scoring algorithm itself stays in code: slot hour boundaries, day-of-week BPM adjustments, and the energy vocabulary.
+- **`BlobBackedMixCatalogueProvider` split into collaborators.** It owned blob read, RSS fetch, genre normalisation, intro hydration, related-mix scoring, mood enrichment, warmth scoring and write-back in a single method. It is now a coordinator — cache, rebuild lock, and a load → merge → hydrate → persist sequence — at 145 lines, down from 347. Write-back was previously gated on six separate booleans, so adding a derived field meant remembering to add a seventh or it would silently never persist; the hydrator now returns one aggregated flag. The two optional mood-enrichment dependencies became required on a single collaborator, with null implementations for environments running without AI enrichment.
+
+### Fixes
+
+- **The recommender prompt cache is invalidated for the v1.55 prompt change.** v1.55 changed `MixPromptBuilder` (rule 10b) without bumping `PromptVersion`, so responses cached under the previous prompt were still being served. Prompt rule 10d additionally covers slot/energy request wording such as `mid-high`.
+
+### Dependencies
+
+- `OpenAI` 2.1.0 → 2.12.0; `Azure.Identity` 1.13.2 → 1.21.0; `Azure.Storage.Blobs` 12.24.0 → 12.29.1; `Microsoft.AspNetCore.OpenApi` 10.0.2 → 10.0.9.
+- CI/deploy actions: `actions/upload-artifact` v4 → v7, `actions/download-artifact` v4 → v8 (a matched pair — v8 adds the direct-download support for v7's direct uploads), `azure/login` v2 → v3.
+- Dependabot now targets `develop` on both ecosystems. It was opening against the default branch, so every dependency PR bypassed the `develop → main` release flow.
+
+### Internal
+
+- The unit suite grew from 701 to 737 tests.
+
 ## v1.56
 
 Collapses three incompatible error shapes into one. Every non-2xx response is now an RFC 7807 `ProblemDetails` served as `application/problem+json` with camelCase property names. Success responses are unchanged.

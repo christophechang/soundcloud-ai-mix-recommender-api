@@ -6,6 +6,9 @@ updates:
   # under the listed directory, so a single root entry covers every project in the solution.
   - package-ecosystem: "nuget"
     directory: "/"
+    # Releases flow develop -> main, so updates must land on develop like any other change.
+    # Without this Dependabot targets the default branch (main) and bypasses that flow.
+    target-branch: "develop"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -37,6 +40,8 @@ updates:
   # GitHub Actions workflows.
   - package-ecosystem: "github-actions"
     directory: "/"
+    # Same reason as the nuget block above: land on develop, not the default branch.
+    target-branch: "develop"
     schedule:
       interval: "weekly"
       day: "monday"

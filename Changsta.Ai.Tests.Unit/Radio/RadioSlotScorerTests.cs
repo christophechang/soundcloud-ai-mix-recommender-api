@@ -9,7 +9,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
     [TestFixture]
     public sealed class RadioSlotScorerTests
     {
-        private static readonly SlotConfig Primetime = SlotDefinitions.Slots[SlotKey.Primetime];
+        private static readonly SlotConfig Primetime = RadioTestConfig.Definitions.Slots[SlotKey.Primetime];
 
         [Test]
         public void Known_matching_energy_gives_5_points()

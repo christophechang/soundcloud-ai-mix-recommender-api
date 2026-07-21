@@ -252,6 +252,46 @@ upstream on SoundCloud (or have aged out of the RSS window).
 
 ---
 
+### Radio configuration
+
+The three stations and their per-slot targets live in
+[`Changsta.Ai.Interface.Api/config/radio.json`](Changsta.Ai.Interface.Api/config/radio.json), bound
+to `RadioOptions`. Tuning a BPM target, swapping a genre, or adding a station is a config edit, not
+a code change.
+
+```jsonc
+{
+  "Radio": {
+    "Stations": [
+      {
+        "Id": "170", "Slug": "killa-fm", "Name": "Killa FM",
+        "Frequency": "107.7 FM", "Strapline": "Killa, No Filla",
+        "Description": "Jungle and Drum & Bass",
+        "IsDefault": false,
+        "BpmOffset": 38,              // applied on top of the slot's base BPM target
+        "Genres": [ "jungle", "dnb" ] // canonical, post-normalisation values
+      }
+    ],
+    "Slots": [
+      { "Key": "Primetime", "Label": "primetime", "BaseBpmTarget": 138,
+        "WarmthTarget": -0.3, "EnergyValues": [ "peak", "high", "mid-peak", "mid-high" ] }
+    ]
+  }
+}
+```
+
+**The file is validated at startup and the app refuses to boot if it is wrong**, because every
+failure mode here is otherwise silent — a station with a non-canonical genre simply schedules
+nothing. Rejected: an empty station list, a station with no genres, a non-canonical genre (use
+`dnb`, not `Drum & Bass`), duplicate station ids, anything other than exactly one `IsDefault`
+station, an unknown or missing slot key, and an energy value the scorer does not know.
+
+What deliberately stays in code, because it is part of the scoring algorithm rather than product
+tuning: the slot hour boundaries, the day-of-week BPM adjustments, and the energy vocabulary
+itself (`RadioSlotScorer`).
+
+---
+
 ### Error responses
 
 Every non-2xx response uses one shape: RFC 7807 [`ProblemDetails`](https://datatracker.ietf.org/doc/html/rfc7807),

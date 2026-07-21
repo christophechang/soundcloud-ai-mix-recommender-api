@@ -35,6 +35,13 @@ builder.Configuration.AddJsonFile(
     optional: true,
     reloadOnChange: false);
 
+// Radio stations and per-slot targets. Not optional: the radio endpoints have no sensible
+// default station list, and startup validation is what catches a bad edit. See issue #43.
+builder.Configuration.AddJsonFile(
+    Path.Combine(builder.Environment.ContentRootPath, "config", "radio.json"),
+    optional: false,
+    reloadOnChange: false);
+
 // Add services to the container.
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
@@ -198,7 +205,8 @@ builder.Services.AddScoped<IDeleteMixUseCase>(sp =>
     return new DeleteMixUseCase(deleter, invalidator, provider);
 });
 builder.Services.AddScoped<IMixRecommendationUseCase, MixRecommendationUseCase>();
-builder.Services.AddRadioScheduling();
+builder.Services.AddRadioScheduling(
+    builder.Configuration.GetSection(RadioOptions.SectionName).Get<RadioOptions>() ?? new RadioOptions());
 builder.Services.AddScoped<IGetErrorInsightsUseCase, GetErrorInsightsUseCase>();
 builder.Services.AddScoped<IMixAiRecommender, OpenAiMixRecommender>();
 

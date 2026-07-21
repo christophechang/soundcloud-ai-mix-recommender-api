@@ -28,6 +28,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
 
         private readonly IMixCatalogueProvider _catalogueProvider;
         private readonly IRadioScheduler _scheduler;
+        private readonly RadioDefinitions _definitions;
         private readonly TimeZoneInfo _scheduleTimezone;
 
         // Internal so the scheduler can be substituted in tests; the public IGetRadioScheduleUseCase
@@ -35,11 +36,13 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
         internal GetRadioScheduleUseCase(
             IMixCatalogueProvider catalogueProvider,
             ILogger<GetRadioScheduleUseCase> logger,
-            IRadioScheduler scheduler)
+            IRadioScheduler scheduler,
+            RadioDefinitions definitions)
         {
             _catalogueProvider = catalogueProvider ?? throw new ArgumentNullException(nameof(catalogueProvider));
             ArgumentNullException.ThrowIfNull(logger);
             _scheduler = scheduler ?? throw new ArgumentNullException(nameof(scheduler));
+            _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
             _scheduleTimezone = ResolveScheduleTimezone(ScheduleTimezoneId, logger);
         }
 
@@ -56,7 +59,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
 
             RadioSchedule schedule = _scheduler.Build(mixes, scheduleDate);
 
-            IReadOnlyList<RadioScheduleViolation> violations = RadioScheduleValidator.Validate(schedule);
+            IReadOnlyList<RadioScheduleViolation> violations = RadioScheduleValidator.Validate(schedule, _definitions);
 
             var genreCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             foreach (Mix mix in mixes)
@@ -65,9 +68,9 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
                 genreCounts[normalized] = genreCounts.TryGetValue(normalized, out int existing) ? existing + 1 : 1;
             }
 
-            var stations = new List<RadioStationScheduleDto>(RadioStationDefinitions.Stations.Count);
+            var stations = new List<RadioStationScheduleDto>(_definitions.Stations.Count);
 
-            foreach (RadioStation station in RadioStationDefinitions.Stations)
+            foreach (RadioStation station in _definitions.Stations)
             {
                 IReadOnlyList<RadioScheduledSlot> stationSlots = schedule.StationSlots[station.Id];
 
@@ -103,7 +106,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
                 ScheduleDate = scheduleDate.ToString("yyyy-MM-dd"),
                 Timezone = ScheduleTimezoneId,
                 CurrentHour = currentHour,
-                DefaultStationId = RadioStationDefinitions.DefaultStationId,
+                DefaultStationId = _definitions.DefaultStationId,
                 Stations = stations,
                 ValidationWarnings = violations.Select(v => v.Description).ToArray(),
             };

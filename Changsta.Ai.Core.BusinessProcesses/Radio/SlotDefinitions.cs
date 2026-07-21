@@ -15,17 +15,6 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
             SlotKey.Primetime,
         };
 
-        internal static readonly IReadOnlyDictionary<SlotKey, SlotConfig> Slots =
-            new Dictionary<SlotKey, SlotConfig>
-            {
-                [SlotKey.Dead] = new SlotConfig(SlotKey.Dead, "dead of night", 172, -0.6, new[] { "peak", "high" }),
-                [SlotKey.Comedown] = new SlotConfig(SlotKey.Comedown, "comedown", 110, 0.4, new[] { "chilled", "low-mid", "low" }),
-                [SlotKey.Morning] = new SlotConfig(SlotKey.Morning, "morning", 122, 0.5, new[] { "low-mid", "mid", "chilled", "low" }),
-                [SlotKey.Afternoon] = new SlotConfig(SlotKey.Afternoon, "afternoon", 125, 0.3, new[] { "mid", "journey" }),
-                [SlotKey.EarlyEve] = new SlotConfig(SlotKey.EarlyEve, "evening", 128, 0.0, new[] { "mid", "mid-peak", "journey", "mid-high" }),
-                [SlotKey.Primetime] = new SlotConfig(SlotKey.Primetime, "primetime", 138, -0.3, new[] { "peak", "high", "mid-peak", "mid-high" }),
-            };
-
         internal static SlotKey ResolveSlot(int localHour) => localHour switch
         {
             < 4 => SlotKey.Dead,
@@ -62,17 +51,17 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
             _ => "primetime",
         };
 
-        internal static int GetBpmTarget(SlotKey slot, DayBucket day)
+        /// <summary>
+        /// Day-of-week BPM nudge. Part of the scoring algorithm rather than product tuning, so it
+        /// stays in code while the per-slot base targets come from configuration.
+        /// </summary>
+        internal static int GetDayBpmAdjustment(DayBucket day) => day switch
         {
-            int adjustment = day switch
-            {
-                DayBucket.Sunday => -10,
-                DayBucket.Friday => +4,
-                DayBucket.Saturday => +8,
-                _ => 0,
-            };
-            return Slots[slot].BaseBpmTarget + adjustment;
-        }
+            DayBucket.Sunday => -10,
+            DayBucket.Friday => +4,
+            DayBucket.Saturday => +8,
+            _ => 0,
+        };
 
         internal static SlotKey AdjacentSlot(SlotKey slot)
         {
