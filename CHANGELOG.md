@@ -2,6 +2,21 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.55
+
+Hardens two error paths found by working through the open bug reports against production telemetry. No route, DTO, or status-code changes.
+
+### Fixes
+
+- **A failure to log can no longer cost the caller its error response.** Production returned two 500s with no `Unhandled exception.` log line: capturing the original exception's detail threw inside `GlobalExceptionMiddleware`, which suppressed both the log and the response body. The log call is now wrapped, falling back to a detail-free record so the failure is never silent, and the middleware rethrows when the response has already started rather than writing a truncated body under a misleading status.
+- **One unverifiable `why` anchor no longer discards every recommendation.** An anchor that could not be matched to the MIX block threw out of `ParseAndValidate`, which the retry loop caught — discarding the whole AI response and spending another paid OpenAI completion. Production hit this with anchor `mid-high` on a mix whose energy is `peak`. Early attempts stay strict so the model is still told what it got wrong; on the final attempt an unverifiable anchor is dropped instead, and a result is excluded only once no verified anchor remains. Anchors are never rewritten to fit, so every anchor returned to a caller is still server-verified.
+- **`Cache-Control` is assigned rather than appended** on the catalog titles and compass endpoints, so a value set upstream cannot produce a duplicate header.
+
+### Internal
+
+- Prompt rule 10b now names compound energy values (`low-mid`, `mid-high`) explicitly.
+- First test coverage for `CatalogProjections.MixTitles` and `GetMixTitlesAsync`. The unit suite grew from 677 to 691 tests.
+
 ## v1.54
 
 Adds API support for MixLab's playlist-completion mode and BPM/year collection filters, plus a read endpoint that lists the playlist names inside a stored Rekordbox upload. Additive — no existing routes, DTOs, or status codes change, and `genre` remains required.
