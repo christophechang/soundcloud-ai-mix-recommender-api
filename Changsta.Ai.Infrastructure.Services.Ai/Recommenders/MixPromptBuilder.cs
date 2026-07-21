@@ -91,7 +91,7 @@ namespace Changsta.Ai.Infrastructure.Services.Ai.Recommenders
                 ? "9) Anchors may be genre, energy, one mood token, one artist name, bpm, or a tracklist substring."
                 : "9) Anchors may be genre, energy, one mood token, one artist name, or bpm.");
             AppendLine("10) Never normalize or rewrite anchors, never output full moods or artists lists, and never use prefixes like \"genre:\".");
-            AppendLine("10b) Do not invent adjective phrases like \"classic anthemic\", \"late-night energy\", \"low-mid\", or \"mid-high\". Energy anchors must be the mix's energy value exactly — never a compound of two energy values.");
+            AppendLine("10b) Do not invent adjective phrases like \"classic anthemic\" or \"late-night energy\". Energy anchors must be the MIX block's energy value copied exactly — note that hyphenated values such as \"low-mid\", \"mid-high\" and \"mid-peak\" are real energy values, so use them when that is the block's energy, and never when it is not.");
             AppendLine("10c) Never copy words or phrases from the user question into why anchors. The user question is context only — why anchors must come exclusively from the MIX block fields (genre, energy, bpm, moods, artists, tracklist). For example, if the user says 'something driving' and a MIX block does not have 'driving' in its moods field, do not use 'driving' as an anchor.");
             AppendLine("10d) Treat slot or energy request words such as \"mid-high\" exactly the same way: use them for ranking only, unless the chosen MIX block literally has that exact energy or mood value.");
             AppendLine("11) If you cannot produce at least one valid why anchor for a mix, exclude it.");
