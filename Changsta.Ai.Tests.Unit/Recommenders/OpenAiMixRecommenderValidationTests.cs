@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Core.Normalization;
 using Changsta.Ai.Infrastructure.Services.Ai.Recommenders;
@@ -640,6 +641,156 @@ namespace Changsta.Ai.Tests.Unit.Recommenders
 
             Assert.Throws<InvalidOperationException>(() =>
                 AiRecommendationResponseValidator.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        // ── dropUnverifiableAnchors (final attempt) ───────────────────────────
+        [Test]
+        public void ParseAndValidate_CompoundEnergyAnchor_ThrowsWhenStrict()
+        {
+            // Reproduces issue #121 — the AI emitted "mid-high" for a mix whose energy is "peak".
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
+                    "reason": "Great dnb mix.",
+                    "why": ["\"dnb\"", "\"mid-high\""],
+                    "confidence": 0.9
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.Throws<InvalidOperationException>(() =>
+                AiRecommendationResponseValidator.ParseAndValidate(json, DefaultCatalogue, maxResults: 3));
+        }
+
+        [Test]
+        public void ParseAndValidate_DropUnverifiableAnchors_KeepsResultWithoutTheBadAnchor()
+        {
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
+                    "reason": "Great dnb mix.",
+                    "why": ["\"dnb\"", "\"mid-high\""],
+                    "confidence": 0.9
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            AiRecommendationResponse response = AiRecommendationResponseValidator.ParseAndValidate(
+                json, DefaultCatalogue, maxResults: 3, dropUnverifiableAnchors: true);
+
+            Assert.That(response.Results, Has.Count.EqualTo(1));
+            Assert.That(response.Results[0].Why, Is.EqualTo(new[] { "\"dnb\"" }));
+        }
+
+        [Test]
+        public void ParseAndValidate_DropUnverifiableAnchors_DropsResultWithNoSurvivingAnchor()
+        {
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
+                    "reason": "Great dnb mix.",
+                    "why": ["\"mid-high\""],
+                    "confidence": 0.9
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            AiRecommendationResponse response = AiRecommendationResponseValidator.ParseAndValidate(
+                json, DefaultCatalogue, maxResults: 3, dropUnverifiableAnchors: true);
+
+            Assert.That(response.Results, Is.Empty);
+        }
+
+        [Test]
+        public void ParseAndValidate_DropUnverifiableAnchors_KeepsOtherResultsWhenOneIsDropped()
+        {
+            var catalogue = new[]
+            {
+                DefaultMix,
+                new Mix
+                {
+                    Id = "mix-2",
+                    Title = "Second Mix",
+                    Url = "https://soundcloud.com/test/second",
+                    Genre = "dnb",
+                    Energy = "peak",
+                    Tracklist = Array.Empty<Track>(),
+                },
+            };
+
+            const string json = """
+                {
+                  "results": [
+                    {
+                      "mixId": "mix-1",
+                      "reason": "Only an invented anchor.",
+                      "why": ["\"mid-high\""],
+                      "confidence": 0.9
+                    },
+                    {
+                      "mixId": "mix-2",
+                      "reason": "Solid dnb.",
+                      "why": ["\"dnb\""],
+                      "confidence": 0.8
+                    }
+                  ],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            AiRecommendationResponse response = AiRecommendationResponseValidator.ParseAndValidate(
+                json, catalogue, maxResults: 3, dropUnverifiableAnchors: true);
+
+            Assert.That(response.Results.Select(r => r.MixId), Is.EqualTo(new[] { "mix-2" }));
+        }
+
+        [Test]
+        public void ParseAndValidate_DropUnverifiableAnchors_StillRejectsUnknownMixId()
+        {
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "not-in-catalogue",
+                    "reason": "Great dnb mix.",
+                    "why": ["\"dnb\""],
+                    "confidence": 0.9
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            Assert.Throws<InvalidOperationException>(() =>
+                AiRecommendationResponseValidator.ParseAndValidate(
+                    json, DefaultCatalogue, maxResults: 3, dropUnverifiableAnchors: true));
+        }
+
+        [Test]
+        public void ParseAndValidate_DropUnverifiableAnchors_NeverRewritesAnAnchorToFit()
+        {
+            // "mid-high" must not be normalised into the mix's real energy value.
+            const string json = """
+                {
+                  "results": [{
+                    "mixId": "mix-1",
+                    "reason": "Great dnb mix.",
+                    "why": ["\"dnb\"", "\"mid-high\""],
+                    "confidence": 0.9
+                  }],
+                  "clarifyingQuestion": null
+                }
+                """;
+
+            AiRecommendationResponse response = AiRecommendationResponseValidator.ParseAndValidate(
+                json, DefaultCatalogue, maxResults: 3, dropUnverifiableAnchors: true);
+
+            Assert.That(response.Results[0].Why, Does.Not.Contain("\"peak\""));
+            Assert.That(response.Results[0].Why, Does.Not.Contain("\"mid-high\""));
         }
 
         [Test]
