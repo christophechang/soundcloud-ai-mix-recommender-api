@@ -2,6 +2,22 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.58
+
+One production bugfix plus the weekly dependency backlog. No route, DTO, or status-code changes to existing endpoints.
+
+### Fixes
+
+- **MixLab run-queue write conflicts no longer surface as HTTP 500.** A `MixLabConcurrencyException` from the worker-claim path now maps to `503 Service Unavailable` in `GlobalExceptionMiddleware`, alongside `HttpRequestException` and `TimeoutException`, so a transient claim conflict is reported as retryable rather than as a server fault. Fixes #161.
+
+### Dependencies
+
+- `Swashbuckle.AspNetCore.Swagger` / `Swashbuckle.AspNetCore.SwaggerGen` 10.1.3 → 10.2.3; `Microsoft.AspNetCore.OpenApi` 10.0.9 → 10.0.10.
+- `Microsoft.Extensions.*` (DependencyInjection.Abstractions, Logging.Abstractions, Caching.Memory, Options, Options.ConfigurationExtensions, Configuration.Abstractions) 10.0.3 → 10.0.10.
+- Test dependencies: `coverlet.collector` 6.0.4 → 10.0.1, `FluentAssertions` 8.8.0 → 8.10.0, `Microsoft.NET.Test.Sdk` 18.0.1 → 18.8.1, `NUnit` 4.3.2 → 4.6.1, `NUnit.Analyzers` 4.7.0 → 4.14.0, `NUnit3TestAdapter` 5.0.0 → 6.2.0.
+- CI actions: `actions/checkout` v4 → v7, `actions/setup-dotnet` v4 → v6 (clears the Node.js 20 deprecation warning on those actions).
+- Held back `Microsoft.OpenApi` 3.9.0 (#157): the 3.x major is incompatible with the current ASP.NET Core OpenApi source generator and fails the build.
+
 ## v1.57
 
 Two internal refactors that remove long-standing maintenance traps, plus the backlog of dependency updates. No route, DTO, or status-code changes.
