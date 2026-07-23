@@ -4,6 +4,7 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Changsta.Ai.Core.Exceptions;
 using Changsta.Ai.Interface.Api.Middleware;
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
@@ -28,6 +29,14 @@ namespace Changsta.Ai.Tests.Unit.Middleware
         public async Task HttpRequestException_maps_to_503()
         {
             int status = await InvokeWithException(new HttpRequestException("connection refused"));
+
+            status.Should().Be(StatusCodes.Status503ServiceUnavailable);
+        }
+
+        [Test]
+        public async Task MixLabConcurrencyException_maps_to_503()
+        {
+            int status = await InvokeWithException(new MixLabConcurrencyException("run queue write conflict"));
 
             status.Should().Be(StatusCodes.Status503ServiceUnavailable);
         }

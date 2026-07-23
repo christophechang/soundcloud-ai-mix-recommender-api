@@ -18,11 +18,11 @@
     <PackageReference Include="Azure.Monitor.Query" Version="1.*" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.29.1" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.3" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.3" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.3" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.3" />
-    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.3" />
-    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.3" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.10" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.10" />
     <PackageReference Include="StyleCop.Analyzers" Version="1.1.118">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
