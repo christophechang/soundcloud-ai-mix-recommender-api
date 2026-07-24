@@ -1,4 +1,5 @@
 using System;
+using System.ClientModel;
 using System.IO;
 using System.Net.Http;
 using System.Text;
@@ -29,6 +30,14 @@ namespace Changsta.Ai.Tests.Unit.Middleware
         public async Task HttpRequestException_maps_to_503()
         {
             int status = await InvokeWithException(new HttpRequestException("connection refused"));
+
+            status.Should().Be(StatusCodes.Status503ServiceUnavailable);
+        }
+
+        [Test]
+        public async Task ClientResultException_maps_to_503()
+        {
+            int status = await InvokeWithException(new ClientResultException("OpenAI returned a non-success status."));
 
             status.Should().Be(StatusCodes.Status503ServiceUnavailable);
         }
