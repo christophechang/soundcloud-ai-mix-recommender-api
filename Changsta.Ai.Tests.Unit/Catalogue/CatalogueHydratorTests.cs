@@ -72,6 +72,27 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             result.Changed.Should().BeTrue();
         }
 
+        [Test]
+        public async Task Tolerates_legacy_catalog_entries_with_null_collections()
+        {
+            var hydrator = new CatalogueHydrator(new StubMoodWeightResolver(), NullLogger.Instance);
+
+            Mix legacy = MakeMix("1") with
+            {
+                Tracklist = null!,
+                Moods = null!,
+                RelatedMixes = null!,
+            };
+
+            CatalogueHydrationResult result = await hydrator.HydrateAsync(
+                new[] { legacy, MakeMix("2") },
+                CancellationToken.None);
+
+            result.Mixes[0].RelatedMixes.Should().NotBeNull();
+            result.Mixes[0].Warmth.Should().BeNull();
+            result.Changed.Should().BeTrue();
+        }
+
         private static Mix MakeMix(string id, string? description = null) => new Mix
         {
             Id = id,

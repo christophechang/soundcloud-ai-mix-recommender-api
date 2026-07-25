@@ -47,16 +47,18 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             IReadOnlyDictionary<string, double> weights,
             ILogger logger)
         {
-            if (mix.Moods.Count == 0)
+            IReadOnlyList<string> moods = mix.Moods ?? Array.Empty<string>();
+
+            if (moods.Count == 0)
             {
                 return null;
             }
 
-            var votes = new List<double>(mix.Moods.Count);
+            var votes = new List<double>(moods.Count);
 
-            foreach (string mood in mix.Moods)
+            foreach (string mood in moods)
             {
-                string key = mood.Trim().ToLowerInvariant();
+                string key = (mood ?? string.Empty).Trim().ToLowerInvariant();
 
                 if (weights.TryGetValue(key, out double w))
                 {
