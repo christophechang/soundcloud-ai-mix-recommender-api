@@ -2,11 +2,11 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
 {
     internal sealed class SlotConfig
     {
-        internal SlotConfig(SlotKey key, string label, int baseBpmTarget, double warmthTarget, string[] energyValues)
+        internal SlotConfig(SlotKey key, string label, int bpmPercentile, double warmthTarget, string[] energyValues)
         {
             Key = key;
             Label = label;
-            BaseBpmTarget = baseBpmTarget;
+            BpmPercentile = bpmPercentile;
             WarmthTarget = warmthTarget;
             EnergyValues = energyValues;
         }
@@ -15,7 +15,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
 
         internal string Label { get; }
 
-        internal int BaseBpmTarget { get; }
+        internal int BpmPercentile { get; }
 
         internal double WarmthTarget { get; }
 

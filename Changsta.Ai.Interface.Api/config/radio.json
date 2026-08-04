@@ -9,8 +9,13 @@
         "Frequency": "103.5 FM",
         "Description": "UK Bass, Garage, Breaks, Hip-Hop and Hardcore",
         "IsDefault": true,
-        "BpmOffset": 0,
-        "Genres": [ "uk bass", "breakbeat", "ukg", "hip-hop", "hardcore" ]
+        "Genres": [
+          "uk bass",
+          "breakbeat",
+          "ukg",
+          "hip-hop",
+          "hardcore"
+        ]
       },
       {
         "Id": "4x4",
@@ -20,8 +25,14 @@
         "Frequency": "97.2 FM",
         "Description": "House, Deep House, Electronica, Techno, Disco and Funk",
         "IsDefault": false,
-        "BpmOffset": -15,
-        "Genres": [ "house", "deep-house", "electronica", "techno", "disco", "funk" ]
+        "Genres": [
+          "house",
+          "deep-house",
+          "electronica",
+          "techno",
+          "disco",
+          "funk"
+        ]
       },
       {
         "Id": "170",
@@ -31,52 +42,79 @@
         "Frequency": "107.7 FM",
         "Description": "Jungle and Drum & Bass",
         "IsDefault": false,
-        "BpmOffset": 38,
-        "Genres": [ "jungle", "dnb" ]
+        "Genres": [
+          "jungle",
+          "dnb"
+        ]
       }
     ],
     "Slots": [
       {
         "Key": "Dead",
         "Label": "dead of night",
-        "BaseBpmTarget": 172,
         "WarmthTarget": -0.6,
-        "EnergyValues": [ "peak", "high" ]
+        "EnergyValues": [
+          "peak",
+          "high"
+        ],
+        "BpmPercentile": 95
       },
       {
         "Key": "Comedown",
         "Label": "comedown",
-        "BaseBpmTarget": 110,
         "WarmthTarget": 0.4,
-        "EnergyValues": [ "chilled", "low-mid", "low" ]
+        "EnergyValues": [
+          "chilled",
+          "low-mid",
+          "low"
+        ],
+        "BpmPercentile": 10
       },
       {
         "Key": "Morning",
         "Label": "morning",
-        "BaseBpmTarget": 122,
         "WarmthTarget": 0.5,
-        "EnergyValues": [ "low-mid", "mid", "chilled", "low" ]
+        "EnergyValues": [
+          "low-mid",
+          "mid",
+          "chilled",
+          "low"
+        ],
+        "BpmPercentile": 30
       },
       {
         "Key": "Afternoon",
         "Label": "afternoon",
-        "BaseBpmTarget": 125,
         "WarmthTarget": 0.3,
-        "EnergyValues": [ "mid", "journey" ]
+        "EnergyValues": [
+          "mid",
+          "journey"
+        ],
+        "BpmPercentile": 45
       },
       {
         "Key": "EarlyEve",
         "Label": "evening",
-        "BaseBpmTarget": 128,
         "WarmthTarget": 0.0,
-        "EnergyValues": [ "mid", "mid-peak", "journey", "mid-high" ]
+        "EnergyValues": [
+          "mid",
+          "mid-peak",
+          "journey",
+          "mid-high"
+        ],
+        "BpmPercentile": 60
       },
       {
         "Key": "Primetime",
         "Label": "primetime",
-        "BaseBpmTarget": 138,
         "WarmthTarget": -0.3,
-        "EnergyValues": [ "peak", "high", "mid-peak", "mid-high" ]
+        "EnergyValues": [
+          "peak",
+          "high",
+          "mid-peak",
+          "mid-high"
+        ],
+        "BpmPercentile": 85
       }
     ]
   }

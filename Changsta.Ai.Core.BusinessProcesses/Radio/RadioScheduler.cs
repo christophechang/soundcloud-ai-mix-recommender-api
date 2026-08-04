@@ -40,14 +40,20 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
                     throw new RadioStationUnavailableException(station.Id, msg);
                 }
 
-                int bpmOffset = _definitions.GetBpmOffset(station.Id);
+                // Targets come from this station's own catalogue, so the day's arc is expressed
+                // in the range it actually owns rather than a shared absolute curve.
+                int[] stationBpms = eligible
+                    .Select(m => m.GetMidBpm())
+                    .Where(b => b.HasValue)
+                    .Select(b => b!.Value)
+                    .ToArray();
 
                 stationSlots[station.Id] = BuildStationSchedule(
                     eligible,
                     date,
                     si,
                     dayBucket,
-                    bpmOffset,
+                    stationBpms,
                     crossScheduleUsed);
 
                 foreach (RadioScheduledSlot slot in stationSlots[station.Id])
@@ -217,7 +223,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
             DateOnly date,
             int stationIndex,
             DayBucket dayBucket,
-            int bpmOffset,
+            IReadOnlyList<int> stationBpms,
             IReadOnlySet<string> crossScheduleUsed)
         {
             var usedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -229,7 +235,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
             {
                 SlotKey slotKey = SlotDefinitions.ResolveSlot(hour);
                 SlotConfig slotConfig = _definitions.Slots[slotKey];
-                int bpmTarget = _definitions.GetBpmTarget(slotKey, dayBucket) + bpmOffset;
+                int bpmTarget = _definitions.GetBpmTarget(slotKey, dayBucket, stationBpms);
 
                 RadioScheduledSlot slot = SelectSlot(
                     eligible,

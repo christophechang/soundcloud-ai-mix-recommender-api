@@ -40,14 +40,14 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
 
             if (!isKnown)
             {
-                energyScore = 2.5;
+                energyScore = 4.0;
                 unknownEnergy = true;
                 string label = string.IsNullOrEmpty(mix.Energy) ? "(empty)" : mix.Energy;
                 energyWarning = $"Unknown energy value '{label}' treated as neutral.";
             }
             else
             {
-                energyScore = EnergyMatches(mix.Energy, slot.EnergyValues) ? 5.0 : 0.0;
+                energyScore = EnergyMatches(mix.Energy, slot.EnergyValues) ? 8.0 : 0.0;
                 unknownEnergy = false;
                 energyWarning = null;
             }
@@ -55,9 +55,13 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
             double warmth = mix.Warmth ?? 0.0;
             double warmthScore = Math.Max(0, 4.0 - (Math.Abs(warmth - slot.WarmthTarget) / 0.25));
 
+            // BPM and energy swapped weights. Tempo barely moves within a station — the widest
+            // catalogue spans 46 BPM, the narrowest 10 — so as the heaviest term it was ranking on
+            // a dimension that hardly varies. Energy is what actually separates a 3am record from
+            // a 9am one, and it varies across the whole pool.
             int? bpm = mix.GetMidBpm();
             double bpmScore = bpm.HasValue
-                ? Math.Max(0, 8.0 - (Math.Abs(bpm.Value - bpmTarget) / 6.0))
+                ? Math.Max(0, 5.0 - (Math.Abs(bpm.Value - bpmTarget) / 6.0))
                 : 0.0;
 
             double freshnessBonus = context.CrossScheduleUsedIds.Contains(mix.Id) ? 0.0 : 1.0;

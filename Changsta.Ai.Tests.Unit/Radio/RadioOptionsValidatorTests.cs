@@ -59,7 +59,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
                     {
                         Key = s.Key,
                         Label = s.Label,
-                        BaseBpmTarget = s.BaseBpmTarget,
+                        BpmPercentile = s.BpmPercentile,
                         WarmthTarget = s.WarmthTarget,
                         EnergyValues = new[] { "supercharged" },
                     }
@@ -152,7 +152,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
         {
             Key = key,
             Label = key.ToLowerInvariant(),
-            BaseBpmTarget = 120,
+            BpmPercentile = 50,
             WarmthTarget = 0.0,
             EnergyValues = new[] { energy },
         };

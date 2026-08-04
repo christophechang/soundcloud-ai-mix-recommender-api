@@ -12,10 +12,10 @@ namespace Changsta.Ai.Tests.Unit.Radio
         private static readonly SlotConfig Primetime = RadioTestConfig.Definitions.Slots[SlotKey.Primetime];
 
         [Test]
-        public void Known_matching_energy_gives_5_points()
+        public void Known_matching_energy_gives_8_points()
         {
             RadioSlotScore s = Score(MakeMix("peak"), Primetime, 138, Empty());
-            s.EnergyScore.Should().BeApproximately(5.0, 0.001);
+            s.EnergyScore.Should().BeApproximately(8.0, 0.001);
             s.UnknownEnergy.Should().BeFalse();
             s.EnergyWarning.Should().BeNull();
         }
@@ -29,10 +29,10 @@ namespace Changsta.Ai.Tests.Unit.Radio
         }
 
         [Test]
-        public void Unknown_energy_gives_2_5_neutral_and_warning()
+        public void Unknown_energy_gives_a_neutral_half_score_and_warning()
         {
             RadioSlotScore s = Score(MakeMix("intense"), Primetime, 138, Empty());
-            s.EnergyScore.Should().BeApproximately(2.5, 0.001);
+            s.EnergyScore.Should().BeApproximately(4.0, 0.001);
             s.UnknownEnergy.Should().BeTrue();
             s.EnergyWarning.Should().Contain("intense");
         }
@@ -69,19 +69,30 @@ namespace Changsta.Ai.Tests.Unit.Radio
         }
 
         [Test]
-        public void Perfect_bpm_gives_8_points()
+        public void Perfect_bpm_gives_5_points()
         {
             // BpmMin=136, BpmMax=140 → midBpm=138 = target → score = 8.0
             RadioSlotScore s = Score(MakeMix("peak", bpm: 136), Primetime, 138, Empty());
-            s.BpmScore.Should().BeApproximately(8.0, 0.001);
+            s.BpmScore.Should().BeApproximately(5.0, 0.001);
         }
 
         [Test]
-        public void Bpm_48_away_gives_zero_bpm_points()
+        public void Bpm_30_away_gives_zero_bpm_points()
         {
-            // BpmMin=88, BpmMax=92 → midBpm=90, |90-138|=48 → 8 - 48/6 = 0
-            RadioSlotScore s = Score(MakeMix("peak", bpm: 88), Primetime, 138, Empty());
+            // BpmMin=106, BpmMax=110 → midBpm=108, |108-138|=30 → 5 - 30/6 = 0
+            RadioSlotScore s = Score(MakeMix("peak", bpm: 106), Primetime, 138, Empty());
             s.BpmScore.Should().Be(0.0);
+        }
+
+        [Test]
+        public void Energy_outweighs_bpm()
+        {
+            // The point of the reweight: within a station tempo barely moves, so a matching
+            // energy on an off-tempo record must beat a perfect tempo on the wrong energy.
+            RadioSlotScore rightEnergyWrongBpm = Score(MakeMix("peak", bpm: 106), Primetime, 138, Empty());
+            RadioSlotScore rightBpmWrongEnergy = Score(MakeMix("chilled", bpm: 136), Primetime, 138, Empty());
+
+            rightEnergyWrongBpm.Total.Should().BeGreaterThan(rightBpmWrongEnergy.Total);
         }
 
         [Test]
