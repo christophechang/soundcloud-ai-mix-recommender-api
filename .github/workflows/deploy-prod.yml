@@ -102,3 +102,23 @@ jobs:
         with:
           app-name: ${{ secrets.AZURE_WEBAPP_NAME }}
           package: ./package
+      # A deploy that changes how the schedule is computed leaves the cached response in
+      # place, so the new build serves the old answer and looks like it never shipped.
+      # This bit twice on 2026-08-04: v1.59's new field was absent until a manual flush,
+      # and v1.60's retuned targets showed zero of 72 slots changed for the same reason.
+      # The hourly OpenClaw agent invalidates on catalogue changes; nothing invalidated on
+      # code changes until here.
+      - name: Flush the catalogue cache
+        shell: bash
+        run: |
+          code=$(curl -sS -o /tmp/flush.out -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer ${{ secrets.CATALOG_FLUSH_SECRET }}" \
+            "https://api.changsta.com/api/catalog/flush")
+
+          echo "flush responded $code"
+          cat /tmp/flush.out || true
+
+          if [ "$code" != "200" ]; then
+            echo "::error::cache flush failed — the deploy is live but clients will keep seeing the previous response until it is flushed"
+            exit 1
+          fi
