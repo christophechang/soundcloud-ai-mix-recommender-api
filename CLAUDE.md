@@ -29,40 +29,16 @@ advisories), review the changelog for breaking changes, then merge into `develop
 PR. Security-advisory bumps take priority. The CI vulnerability audit also fails any PR that
 introduces a vulnerable transitive package, so keep transitive pins current.
 
-## Releasing a Version
+## Releasing a version
 
-When asked to "release this version":
+When the operator says **"deploy release"** (or the legacy phrase **"release this version"**), run the
+user-level `deploy-release` skill (changelog → verify → push `develop` → CI → merge `main` → annotated tag →
+deploy → GitHub release → back to `develop`). Repo specifics:
 
-1. Update `CHANGELOG.md`
-   - Determine the next version number from the latest changelog entry and existing tags.
-   - Add a new top entry for that version.
-   - Summarise the current changes clearly and briefly.
+- Wait for the successful `develop` CI Build and capture its commit SHA — deployments are pinned to that SHA.
+- Deploy QA and Prod via both manual workflows:
+  `gh workflow run "Deploy QA (manual)" --repo christophechang/soundcloud-ai-mix-recommender-api --field ref=<sha>`
+  `gh workflow run "Deploy Prod (manual)" --repo christophechang/soundcloud-ai-mix-recommender-api --field ref=<sha>`
 
-2. Commit and push to `develop`
-   - Run relevant verification first.
-   - Commit with a conventional commit message.
-   - Push `develop`.
-
-3. Wait for CI
-   - Get the successful CI Build run for the pushed `develop` commit.
-   - Use that CI build SHA for deployment.
-
-4. Merge to `main`
-   - Update local `main`.
-   - Merge `develop` into `main`.
-   - Push `main`.
-
-5. Create and push a version tag
-   - Create an annotated tag for the new version.
-   - Push the tag.
-
-6. Deploy to QA and Prod
-   - Trigger both GitHub Actions deploy workflows using the successful CI build SHA:
-     `gh workflow run "Deploy QA (manual)" --repo christophechang/soundcloud-ai-mix-recommender-api --field ref=<sha>`
-     `gh workflow run "Deploy Prod (manual)" --repo christophechang/soundcloud-ai-mix-recommender-api --field ref=<sha>`
-
-7. Create the GitHub release
-   - Create a GitHub release for the pushed tag.
-   - Use the changelog entry for the release notes.
-
-For direct requests to deploy only QA, Prod, or both without saying "release this version", use the latest successful CI Build SHA and trigger only the requested deployment workflow(s).
+For direct requests to deploy only QA, Prod, or both without a release, use the latest successful CI Build
+SHA and trigger only the requested deployment workflow(s).
