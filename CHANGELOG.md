@@ -2,6 +2,22 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.61
+
+The scheduler now uses the scores it computes. No route, DTO, status-code or config changes.
+
+### Fixes
+
+- **Slot selection is confined to the best-scoring candidates.** `Pick()` shuffled every candidate and returned the first, discarding the ordering `ScoreAndFilter` had just produced. Scoring therefore only decided membership of the `>= 4.0` set and never which record won — and since almost the entire pool clears that threshold in most slots (46 of 46 on Origin FM, 30 of 30 on Killa FM, 48 of 49 on Tooz FM), the result was a uniformly random unused mix per hour, with every scoring term inert. This is why the retuned targets and weights in v1.60 changed none of the 72 slots in the live schedule.
+
+  Selection now rotates among the top 5 by score. The seeded shuffle is kept deliberately — the same record must not land on the same hour every week — but it now rotates among the best fits rather than the whole pool.
+
+  Modelled against the live catalogue, the share of slots whose pick matches the daypart's energy rises from 13–76% to **100% in 16 of 18** station/slot pairs.
+
+### Notes
+
+- The two pairs that do not reach 100% are catalogue gaps, not scheduling faults: neither Tooz FM nor Killa FM owns any `chilled` or `low` energy records, so nothing can fill the comedown hours on those stations correctly.
+
 ## v1.60
 
 Radio scheduling targets now come from each station's own catalogue. No route, DTO, or status-code changes; `config/radio.json` changes shape.

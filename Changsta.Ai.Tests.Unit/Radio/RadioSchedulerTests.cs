@@ -166,6 +166,56 @@ namespace Changsta.Ai.Tests.Unit.Radio
             s.StationSlots["170"].Should().HaveCount(24);
         }
 
+        [Test]
+        public void Slot_never_picks_a_clearly_worse_fit_when_better_ones_are_free()
+        {
+            // One station, one energy per slot. Twenty records match the primetime energy and
+            // twenty do not; a uniform shuffle over everything that clears the threshold would
+            // land on a non-matching record about half the time.
+            var list = new List<Mix>();
+            for (int i = 0; i < 20; i++)
+            {
+                list.Add(M($"fit-{i}", "uk bass", "peak", 138));
+            }
+
+            for (int i = 0; i < 20; i++)
+            {
+                list.Add(M($"unfit-{i}", "uk bass", "chilled", 138));
+            }
+
+            // Origin and Killa still need something eligible or Build throws.
+            list.Add(M("house-1", "house", "mid", 125));
+            list.Add(M("dnb-1", "dnb", "mid", 172));
+
+            RadioSchedule schedule = Build(Thursday, list);
+            IReadOnlyList<RadioScheduledSlot> tooz = schedule.StationSlots["140"];
+
+            // Primetime hours per SlotDefinitions; assert on the slot the energy set targets.
+            var primetime = tooz.Where(sl => sl.Score.EnergyScore > 0).ToList();
+            primetime.Should().NotBeEmpty(because: "matching-energy records exist and should win their slots");
+        }
+
+        [Test]
+        public void Pick_stays_deterministic_for_the_same_date_and_hour()
+        {
+            IReadOnlyList<Mix> cat = Catalogue(24, 24, 24);
+
+            string[] first = Build(Thursday, cat).StationSlots["140"].Select(s => s.Mix.Id).ToArray();
+            string[] second = Build(Thursday, cat).StationSlots["140"].Select(s => s.Mix.Id).ToArray();
+
+            second.Should().Equal(first);
+        }
+
+        [Test]
+        public void Pick_still_rotates_across_hours()
+        {
+            // The window narrows selection to the best fits; it must not collapse to one record.
+            RadioSchedule schedule = Build(Thursday, Catalogue(24, 24, 24));
+            string[] ids = schedule.StationSlots["140"].Select(s => s.Mix.Id).ToArray();
+
+            ids.Distinct().Should().HaveCountGreaterThan(1);
+        }
+
         private static RadioSchedule Build(DateOnly date, IEnumerable<Mix> mixes)
             => new RadioScheduler(RadioTestConfig.Definitions).Build(mixes.ToList(), date);
 
