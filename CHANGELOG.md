@@ -2,6 +2,28 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.60
+
+Radio scheduling targets now come from each station's own catalogue. No route, DTO, or status-code changes; `config/radio.json` changes shape.
+
+### Fixes
+
+- **BPM targets are derived per station instead of from a shared absolute curve.** The daypart curve swung 62 BPM from comedown to dead of night, while the widest station catalogue spans 46 BPM and the narrowest 10. A single curve plus a per-station `BpmOffset` cannot fit that. Measured against the live catalogue, **8 of 18 station/slot targets fell outside the station's actual BPM range**: Origin FM's morning asked for 107 against a pool starting at 116, and Killa FM's dead of night asked for 210 — 36 BPM above anything in the catalogue. On those slots the heaviest scoring term returned zero for every candidate, so selection fell through to whatever else ranked.
+
+  Slots now carry a `BpmPercentile`, which the scheduler resolves against that station's own BPM distribution, nudges by the day-of-week adjustment, then clamps back inside the pool. The day's arc is preserved — the percentiles ascend exactly as the old curve did — but each station expresses it in the range it actually owns. Every target is now reachable by construction, asserted for all slots, days and pool shapes.
+
+- **Energy and BPM swap weights, 5/8 to 8/5.** Within a single station tempo barely varies, so as the heaviest term BPM was ranking candidates on a dimension that hardly moves. Energy is what separates a 3am record from a 9am one and it varies across the whole pool.
+
+### Notes
+
+- The single `hardcore` mix stays on Tooz FM. Its genre suggests Killa FM's 164–174 band, but the record runs at 133 BPM; moving it would have dropped Killa's pool floor by 31 BPM and skewed every percentile on that station.
+- This does not explain every off-format placement. A record can still land in the wrong hour through pool exhaustion or the scheduler's relaxation ladder — which is what `relaxedRules` (v1.59) reports.
+
+### Breaking (configuration only)
+
+- `Radio:Slots[].BaseBpmTarget` is replaced by `Radio:Slots[].BpmPercentile` (0–100).
+- `Radio:Stations[].BpmOffset` is removed; per-station calibration is now implicit in the catalogue.
+
 ## v1.59
 
 The radio scheduler's own confidence signal reaches clients. Additive — no route, existing DTO field, or status code changes.

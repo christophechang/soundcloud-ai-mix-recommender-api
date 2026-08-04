@@ -20,12 +20,6 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
 
         public bool IsDefault { get; set; }
 
-        /// <summary>
-        /// Applied on top of the slot's base BPM target so scoring stays meaningful relative to
-        /// this station's actual BPM range.
-        /// </summary>
-        public int BpmOffset { get; set; }
-
         public IReadOnlyList<string> Genres { get; set; } = Array.Empty<string>();
     }
 }

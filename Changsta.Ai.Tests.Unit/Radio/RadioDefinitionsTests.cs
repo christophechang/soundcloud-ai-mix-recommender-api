@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Changsta.Ai.Core.BusinessProcesses.Radio;
 using FluentAssertions;
@@ -94,24 +95,54 @@ namespace Changsta.Ai.Tests.Unit.Radio
         }
 
         [Test]
-        public void Jungle_pressure_bpm_offset_is_positive()
+        public void Bpm_target_always_lands_inside_the_station_pool()
         {
-            int offset = RadioTestConfig.Definitions.GetBpmOffset("170");
-            offset.Should().BeGreaterThan(0, because: "DNB/Jungle BPM is much higher than the global slot targets");
+            // A shared absolute curve used to ask a 10-BPM-wide catalogue for a 62-BPM swing, so
+            // most slots targeted a tempo the station had no records at. Deriving from the pool
+            // and clamping to it makes every target reachable by construction.
+            int[] narrow = { 164, 168, 170, 172, 174 };
+
+            foreach (SlotKey slot in Enum.GetValues<SlotKey>())
+            {
+                foreach (DayBucket day in Enum.GetValues<DayBucket>())
+                {
+                    int target = RadioTestConfig.Definitions.GetBpmTarget(slot, day, narrow);
+                    target.Should().BeInRange(narrow[0], narrow[^1]);
+                }
+            }
         }
 
         [Test]
-        public void Deep_signal_fm_bpm_offset_is_negative()
+        public void Bpm_target_rises_across_the_day_from_comedown_to_dead()
         {
-            int offset = RadioTestConfig.Definitions.GetBpmOffset("4x4");
-            offset.Should().BeLessThan(0, because: "House runs slower than the global slot targets");
+            int[] pool = { 100, 110, 120, 130, 140, 150, 160 };
+
+            int comedown = RadioTestConfig.Definitions.GetBpmTarget(SlotKey.Comedown, DayBucket.Weeknight, pool);
+            int morning = RadioTestConfig.Definitions.GetBpmTarget(SlotKey.Morning, DayBucket.Weeknight, pool);
+            int primetime = RadioTestConfig.Definitions.GetBpmTarget(SlotKey.Primetime, DayBucket.Weeknight, pool);
+            int dead = RadioTestConfig.Definitions.GetBpmTarget(SlotKey.Dead, DayBucket.Weeknight, pool);
+
+            comedown.Should().BeLessThan(morning);
+            morning.Should().BeLessThan(primetime);
+            primetime.Should().BeLessThanOrEqualTo(dead);
         }
 
         [Test]
-        public void Unknown_station_bpm_offset_returns_zero()
+        public void Bpm_target_is_zero_when_the_station_has_no_usable_bpms()
         {
-            int offset = RadioTestConfig.Definitions.GetBpmOffset("unknown-station");
-            offset.Should().Be(0);
+            int target = RadioTestConfig.Definitions.GetBpmTarget(
+                SlotKey.Morning, DayBucket.Weeknight, Array.Empty<int>());
+
+            target.Should().Be(0);
+        }
+
+        [TestCase(0, 100)]
+        [TestCase(50, 130)]
+        [TestCase(100, 160)]
+        public void Percentile_interpolates_over_the_ascending_pool(int percentile, int expected)
+        {
+            int[] pool = { 100, 110, 120, 130, 140, 150, 160 };
+            RadioDefinitions.Percentile(pool, percentile).Should().Be(expected);
         }
     }
 }
