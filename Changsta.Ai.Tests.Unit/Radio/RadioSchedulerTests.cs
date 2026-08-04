@@ -167,32 +167,59 @@ namespace Changsta.Ai.Tests.Unit.Radio
         }
 
         [Test]
-        public void Slot_never_picks_a_clearly_worse_fit_when_better_ones_are_free()
+        public void Every_slot_picks_a_mix_whose_energy_suits_that_daypart()
         {
-            // One station, one energy per slot. Twenty records match the primetime energy and
-            // twenty do not; a uniform shuffle over everything that clears the threshold would
-            // land on a non-matching record about half the time.
+            // The outcome property the product actually cares about, and the one nothing asserted
+            // while Pick() was shuffling the whole candidate set: a 3am record must not turn up at
+            // 9am. Each station gets a spread across every energy value, so a correct pick is
+            // always available and a wrong one can only come from the selection rule.
+            RadioSchedule schedule = Build(Thursday, SpreadCatalogue());
+
+            foreach (var station in schedule.StationSlots)
+            {
+                foreach (RadioScheduledSlot slot in station.Value)
+                {
+                    SlotKey key = SlotDefinitions.ResolveSlot(slot.Hour);
+                    string[] wanted = RadioTestConfig.Definitions.Slots[key].EnergyValues;
+
+                    string reason = $"{station.Key} hour {slot.Hour:00} is a '{key}' slot, so "
+                        + $"'{slot.Mix.Energy}' is the wrong energy for it";
+
+                    wanted.Should().Contain(slot.Mix.Energy, because: reason);
+                }
+            }
+        }
+
+        [Test]
+        public void A_relaxed_slot_says_so_when_it_cannot_suit_the_daypart()
+        {
+            // The inverse: when the catalogue genuinely cannot fill a daypart, the compromise has
+            // to be reported rather than presented as a considered pick. Every mix here is peak,
+            // so the low-energy slots cannot be satisfied.
             var list = new List<Mix>();
-            for (int i = 0; i < 20; i++)
+            for (int i = 0; i < 30; i++)
             {
-                list.Add(M($"fit-{i}", "uk bass", "peak", 138));
+                list.Add(M($"td-{i}", "uk bass", "peak", 138));
+                list.Add(M($"ds-{i}", "house", "peak", 125));
+                list.Add(M($"jp-{i}", "dnb", "peak", 172));
             }
-
-            for (int i = 0; i < 20; i++)
-            {
-                list.Add(M($"unfit-{i}", "uk bass", "chilled", 138));
-            }
-
-            // Origin and Killa still need something eligible or Build throws.
-            list.Add(M("house-1", "house", "mid", 125));
-            list.Add(M("dnb-1", "dnb", "mid", 172));
 
             RadioSchedule schedule = Build(Thursday, list);
-            IReadOnlyList<RadioScheduledSlot> tooz = schedule.StationSlots["140"];
 
-            // Primetime hours per SlotDefinitions; assert on the slot the energy set targets.
-            var primetime = tooz.Where(sl => sl.Score.EnergyScore > 0).ToList();
-            primetime.Should().NotBeEmpty(because: "matching-energy records exist and should win their slots");
+            var mismatched = schedule.StationSlots
+                .SelectMany(kvp => kvp.Value)
+                .Where(sl => !RadioTestConfig.Definitions
+                    .Slots[SlotDefinitions.ResolveSlot(sl.Hour)]
+                    .EnergyValues.Contains(sl.Mix.Energy))
+                .ToList();
+
+            mismatched.Should().NotBeEmpty(because: "the catalogue cannot satisfy the quiet slots");
+            foreach (RadioScheduledSlot slot in mismatched)
+            {
+                slot.Score.EnergyScore.Should().Be(
+                    0.0,
+                    because: "an energy mismatch must score zero rather than be waved through");
+            }
         }
 
         [Test]
@@ -218,6 +245,25 @@ namespace Changsta.Ai.Tests.Unit.Radio
 
         private static RadioSchedule Build(DateOnly date, IEnumerable<Mix> mixes)
             => new RadioScheduler(RadioTestConfig.Definitions).Build(mixes.ToList(), date);
+
+        /// <summary>One station per genre family, spread across every energy value the slots ask for.</summary>
+        private static IReadOnlyList<Mix> SpreadCatalogue()
+        {
+            string[] energies = { "chilled", "low", "low-mid", "mid", "journey", "mid-high", "mid-peak", "high", "peak" };
+            var list = new List<Mix>();
+
+            for (int i = 0; i < energies.Length; i++)
+            {
+                for (int n = 0; n < 6; n++)
+                {
+                    list.Add(M($"td-{i}-{n}", "uk bass", energies[i], 130));
+                    list.Add(M($"ds-{i}-{n}", "house", energies[i], 125));
+                    list.Add(M($"jp-{i}-{n}", "dnb", energies[i], 172));
+                }
+            }
+
+            return list;
+        }
 
         private static IReadOnlyList<Mix> Catalogue(int td, int ds, int jp)
         {

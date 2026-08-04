@@ -2,6 +2,24 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.62
+
+Guards for the class of bug that has been slipping through, and a deploy that invalidates its own cache. No route, DTO, status-code or config changes.
+
+### Fixes
+
+- **A prod deploy now flushes the catalogue cache as its final step.** The hourly agent invalidates on catalogue changes, which covers content; nothing invalidated on code changes, so a deploy that altered how the schedule is computed from an unchanged catalogue served the previous cached answer. This read as a failed deploy twice: v1.59's `relaxedRules` was absent from the payload after a green deploy, and v1.60's retuned BPM targets showed zero of 72 slots changed. The job now fails if the flush does not return 200 — a deploy that cannot invalidate has not really shipped.
+
+### Tests
+
+Six real defects surfaced this week that 750 passing tests did not see, because they asserted that machinery ran rather than that it produced the right answer. Three guards, each verified by reintroducing the bug it was written for and watching it fail.
+
+- **Mapping completeness.** A fully-populated `RadioHourSlotDto` goes through the controller and every `RadioSlotVm` property is asserted non-default. `RelaxedRules` shipped unmapped and still serialised — as an empty array — so no serialisation or schema test could see it. Catches the same omission for fields that do not exist yet.
+- **Wire contract.** Reflection over every view model asserts each public property reaches the JSON under a camelCase name. Note it does *not* catch an unmapped field, since the property still serialises; that is why the mapping test above exists separately.
+- **Scheduling outcome.** Given a catalogue spread across every energy value, every slot must pick a mix whose energy suits that daypart — the property the product actually cares about, and one nothing asserted while `Pick()` shuffled the whole candidate set. The inverse is asserted too: when the catalogue genuinely cannot fill a daypart, the mismatch scores zero rather than being waved through.
+
+777 tests, 0 warnings.
+
 ## v1.61
 
 The scheduler now uses the scores it computes. No route, DTO, status-code or config changes.
