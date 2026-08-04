@@ -2,6 +2,22 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.59
+
+The radio scheduler's own confidence signal reaches clients. Additive — no route, existing DTO field, or status code changes.
+
+### Features
+
+- **`relaxedRules` is now returned on every radio slot.** `RadioScheduler` fills a slot through a five-stage ladder, dropping one constraint at each stage — artist repetition, then genre clustering, then the 4.0 score threshold, then finally permitting a same-station same-day repeat. It already recorded which rules it dropped, and `GetRadioScheduleUseCase` already carried that onto `RadioHourSlotDto`, but `RadioController.MapSlot` never mapped it, so the signal stopped at the API boundary and no client could see it.
+
+  Consumers could not distinguish a considered placement from a compromise, and presented every slot with equal confidence — including slots the scheduler itself had flagged as a fallback. An empty list means a clean match; a non-empty list names the rules dropped, in the order they were dropped.
+
+  `relaxedRules` is kept separate from `warnings`: `warnings` carries `AuditWarnings`, which is data quality (an unknown energy value on a mix), while `relaxedRules` is scheduling confidence. The wire name is pinned by test rather than left to serializer defaults, since clients key off it.
+
+### Docs
+
+- Committed pending design plans under `docs/superpowers/plans/`, the radio stations API handover v2, the now-spinning API notes, and a catalogue snapshot. `CLAUDE.md`'s release section now points at the `deploy-release` skill rather than restating the steps.
+
 ## v1.58
 
 One production bugfix plus the weekly dependency backlog. No route, DTO, or status-code changes to existing endpoints.

@@ -76,6 +76,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
                 Mix = RadioMixMapper.MapMix(slot.Mix),
                 IsCurrent = slot.IsCurrent,
                 Warnings = slot.AuditWarnings,
+                RelaxedRules = slot.RelaxedRules,
             };
     }
 }

@@ -98,6 +98,51 @@ namespace Changsta.Ai.Tests.Unit.Radio
         }
 
         [Test]
+        public async Task GetStationsAsync_surfaces_relaxed_rules_on_a_compromised_slot()
+        {
+            string[] relaxed =
+            {
+                "Artist repetition penalty relaxed.",
+                "Score threshold relaxed — picking from any unused mix.",
+            };
+
+            var ok = (OkObjectResult)await MakeController(relaxed).GetStationsAsync(CancellationToken.None);
+            var response = (RadioResponse)ok.Value!;
+
+            foreach (RadioStationVm station in response.Stations)
+            {
+                station.CurrentSlot.RelaxedRules.Should().Equal(relaxed);
+            }
+        }
+
+        [Test]
+        public async Task GetStationsAsync_relaxed_rules_is_empty_for_a_clean_slot()
+        {
+            var ok = (OkObjectResult)await MakeController().GetStationsAsync(CancellationToken.None);
+            var response = (RadioResponse)ok.Value!;
+
+            foreach (RadioStationVm station in response.Stations)
+            {
+                station.CurrentSlot.RelaxedRules.Should().BeEmpty();
+            }
+        }
+
+        [Test]
+        public async Task GetStationsAsync_keeps_relaxed_rules_separate_from_audit_warnings()
+        {
+            string[] relaxed = { "Genre clustering penalty relaxed." };
+
+            var ok = (OkObjectResult)await MakeController(relaxed).GetStationsAsync(CancellationToken.None);
+            var response = (RadioResponse)ok.Value!;
+
+            foreach (RadioStationVm station in response.Stations)
+            {
+                station.CurrentSlot.Warnings.Should().BeEmpty();
+                station.CurrentSlot.RelaxedRules.Should().Equal(relaxed);
+            }
+        }
+
+        [Test]
         public void GetStationsAsync_supports_legacy_now_spinning_program_route()
         {
             var attributes = typeof(RadioController)
@@ -119,10 +164,10 @@ namespace Changsta.Ai.Tests.Unit.Radio
             status.StatusCode.Should().Be(503);
         }
 
-        private static RadioController MakeController() =>
-            new RadioController(new StubUseCase(MakeResult()));
+        private static RadioController MakeController(string[]? relaxedRules = null) =>
+            new RadioController(new StubUseCase(MakeResult(relaxedRules)));
 
-        private static RadioScheduleResultDto MakeResult()
+        private static RadioScheduleResultDto MakeResult(string[]? relaxedRules = null)
         {
             var now = DateTimeOffset.UtcNow;
             var stations = RadioTestConfig.Definitions.Stations
@@ -140,6 +185,7 @@ namespace Changsta.Ai.Tests.Unit.Radio
                         Hour = now.Hour,
                         Mix = M($"mix-{s.Id}", s.Genres[0]),
                         IsCurrent = true,
+                        RelaxedRules = relaxedRules ?? Array.Empty<string>(),
                     },
                 })
                 .ToArray();
