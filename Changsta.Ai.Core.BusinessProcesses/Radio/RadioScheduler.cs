@@ -9,6 +9,9 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
     internal sealed class RadioScheduler : IRadioScheduler
     {
         private const double MinScoreThreshold = 4.0;
+
+        /// <summary>How many of the best-scoring candidates a slot rotates between.</summary>
+        private const int PickWindow = 5;
         private const int RecentGenreWindow = 3;
         private const int RecentArtistWindow = 3;
 
@@ -160,6 +163,20 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
             return result;
         }
 
+        /// <summary>
+        /// Rotates among the best-fitting candidates rather than the whole eligible set.
+        /// <para>
+        /// This used to shuffle every candidate and take the first, which discarded the ordering
+        /// <see cref="ScoreAndFilter"/> had just computed — so scoring only decided membership of
+        /// the >= 4.0 set, never which record won. With almost the entire pool clearing that
+        /// threshold in most slots (46 of 46 on one station, 30 of 30 on another), the effect was
+        /// a uniformly random unused mix per hour, and every scoring term was inert.
+        /// </para>
+        /// <para>
+        /// The seeded shuffle is deliberate — the same record must not land on the same hour every
+        /// week — so variety is kept, but confined to the top <see cref="PickWindow"/> by score.
+        /// </para>
+        /// </summary>
         private static (Mix mix, RadioSlotScore score) Pick(
             List<(Mix mix, RadioSlotScore score)> candidates,
             DateOnly date,
@@ -169,7 +186,10 @@ namespace Changsta.Ai.Core.BusinessProcesses.Radio
             int seed = unchecked((date.DayNumber * 1009) + (stationIndex * 97) + (hour * 7));
             var rng = new Random(seed);
 
-            var shuffled = candidates.ToList();
+            // candidates arrives sorted by score descending.
+            int window = Math.Min(PickWindow, candidates.Count);
+            var shuffled = candidates.Take(window).ToList();
+
             for (int i = shuffled.Count - 1; i > 0; i--)
             {
                 int j = rng.Next(i + 1);
