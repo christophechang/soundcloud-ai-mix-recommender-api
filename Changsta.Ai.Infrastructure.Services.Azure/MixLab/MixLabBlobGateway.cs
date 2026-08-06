@@ -103,6 +103,25 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
             }
         }
 
+        public async Task<string> WriteUnconditionalAsync(
+            string blobPath,
+            ReadOnlyMemory<byte> content,
+            CancellationToken cancellationToken)
+        {
+            await _containerClient
+                .CreateIfNotExistsAsync(cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+
+            var blobClient = _containerClient.GetBlobClient(blobPath);
+
+            using var stream = new MemoryStream(content.ToArray());
+            var result = await blobClient
+                .UploadAsync(stream, new BlobUploadOptions(), cancellationToken)
+                .ConfigureAwait(false);
+
+            return result.Value.ETag.ToString();
+        }
+
         public async Task<Stream> OpenReadStreamAsync(string blobPath, CancellationToken cancellationToken)
         {
             var blobClient = _containerClient.GetBlobClient(blobPath);

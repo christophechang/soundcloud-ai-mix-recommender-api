@@ -74,6 +74,23 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             return Task.FromResult(newETag);
         }
 
+        /// <summary>
+        /// Unconditional overwrite. Deliberately does not consult
+        /// <see cref="ForcedConflictsRemaining"/> — unconditional writes have no precondition to
+        /// fail, so simulated conflicts must not be spent here (see
+        /// <see cref="MixLabBlobGateway.WriteUnconditionalAsync"/>).
+        /// </summary>
+        public Task<string> WriteUnconditionalAsync(
+            string blobPath,
+            ReadOnlyMemory<byte> content,
+            CancellationToken cancellationToken)
+        {
+            string newETag = "etag-" + _nextETag++;
+            _blobs[blobPath] = (content.ToArray(), newETag);
+            WrittenPaths.Add(blobPath);
+            return Task.FromResult(newETag);
+        }
+
         public Task<Stream> OpenReadStreamAsync(string blobPath, CancellationToken cancellationToken)
         {
             if (!_blobs.TryGetValue(blobPath, out var stored))
