@@ -53,6 +53,13 @@ namespace Changsta.Ai.Interface.Api.MixLab
             services.AddScoped<IGetPendingMixLabFeedbackUseCase, GetPendingMixLabFeedbackUseCase>();
             services.AddScoped<IAckMixLabFeedbackUseCase, AckMixLabFeedbackUseCase>();
 
+            // Map use cases (Milestone B)
+            services.AddScoped<IRequestMixLabMapUseCase, RequestMixLabMapUseCase>();
+            services.AddScoped<IClaimMixLabMapUseCase, ClaimMixLabMapUseCase>();
+            services.AddScoped<ICompleteMixLabMapUseCase, CompleteMixLabMapUseCase>();
+            services.AddScoped<IFailMixLabMapUseCase, FailMixLabMapUseCase>();
+            services.AddScoped<IGetMixLabMapUseCase, GetMixLabMapUseCase>();
+
             return services;
         }
     }

@@ -62,6 +62,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure
             services.AddSingleton<IMixLabArtifactStore, BlobMixLabArtifactStore>();
             services.AddSingleton<IMixLabHistoryStore, BlobMixLabHistoryStore>();
             services.AddSingleton<IMixLabFeedbackQueue, BlobMixLabFeedbackQueue>();
+            services.AddSingleton<IMixLabMapRepository, BlobMixLabMapRepository>();
 
             return services;
         }
