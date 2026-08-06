@@ -40,6 +40,18 @@ namespace Changsta.Ai.Tests.Unit.MixLab
         }
 
         [Test]
+        public void AddMixLabServices_resolves_all_map_use_cases()
+        {
+            using ServiceProvider provider = BuildProvider();
+
+            provider.GetRequiredService<IRequestMixLabMapUseCase>().Should().NotBeNull();
+            provider.GetRequiredService<IClaimMixLabMapUseCase>().Should().NotBeNull();
+            provider.GetRequiredService<ICompleteMixLabMapUseCase>().Should().NotBeNull();
+            provider.GetRequiredService<IFailMixLabMapUseCase>().Should().NotBeNull();
+            provider.GetRequiredService<IGetMixLabMapUseCase>().Should().NotBeNull();
+        }
+
+        [Test]
         public void AddMixLabServices_binds_MixLabOptions_from_configuration()
         {
             using ServiceProvider provider = BuildProvider();

@@ -2,6 +2,22 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.63
+
+Adds the MixLab library-map job endpoints under `/api/mixlab/maps` — request, worker claim/complete/fail, and read back a per-upload Camelot-wheel map, all persisted to the existing MixLab blob container. New endpoints only; no changes to existing routes, DTOs, status codes or config.
+
+### Features
+
+- **`POST maps`, `POST maps/claim`, `POST maps/{uploadId}/result`, `POST maps/{uploadId}/fail`, `GET maps/{uploadId}`.** Mirrors the run-queue lifecycle (`MixLabRunsController`) for library-map jobs. `POST maps` resolves `uploadId` (or the literal `latest`) and requests or refreshes a `queued` job — `202` with the job (camelCase), `404` distinguishing an unknown upload id from no uploads existing yet, `400` when `uploadId` is missing. `POST maps/claim` claims the oldest queued job for a worker — `200` with the job, `204` when nothing is claimable; `workerId` presence/shape validation mirrors `MixLabRunsController.ClaimAsync` exactly. `POST maps/{uploadId}/result` accepts the engine's payload verbatim (`[RequestSizeLimit(32MB)]`) and marks the job succeeded (`204`, `404` if the job isn't running). `POST maps/{uploadId}/fail` records an error and marks the job failed (`204`/`404`). `GET maps/{uploadId}` returns `{ job, payload }`, embedding the stored engine JSON unescaped rather than as a JSON-encoded string; `payload` is `null` for any job that hasn't succeeded, including a succeeded job whose payload blob is unexpectedly missing, which still returns `200` rather than crashing.
+- **Result payloads are validated as JSON at push time, not read time.** `ICompleteMixLabMapUseCase` stores the engine payload verbatim and never parses it, so `POST maps/{uploadId}/result` rejects a non-JSON body with `400` before anything is written. The alternative — deferring the check to `GET`, which parses the stored bytes to embed them unescaped — would turn one bad worker payload into a `500` on every later read instead of a single rejected write.
+- These endpoints ship dormant: the worker does not yet claim map jobs and the web overlay that would display them doesn't exist yet. Both land in a follow-up.
+
+### Internal
+
+- `AddMixLabAzureServices` now registers `IMixLabMapRepository` alongside the other blob-backed MixLab repositories. The map use cases added in the prior milestone step already depended on it, but nothing had wired it into DI yet.
+
+834 tests, 0 warnings.
+
 ## v1.62
 
 Guards for the class of bug that has been slipping through, and a deploy that invalidates its own cache. No route, DTO, status-code or config changes.
