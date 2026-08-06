@@ -102,48 +102,71 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(workerId);
 
-            MixLabMapJob? claimed = null;
+            for (int attempt = 1; attempt <= MaxWriteAttempts; attempt++)
+            {
+                MixLabBlobReadResult? read = await _gateway
+                    .ReadAsync(MixLabBlobPaths.MapsIndex, cancellationToken)
+                    .ConfigureAwait(false);
 
-            await MutateIndexWithRetryAsync(
-                current =>
+                IReadOnlyList<MixLabMapJob> current = read is null
+                    ? Array.Empty<MixLabMapJob>()
+                    : Deserialize<MixLabMapJob[]>(read.Content);
+
+                DateTimeOffset now = _timeProvider.GetUtcNow();
+                DateTimeOffset threshold = now - staleLease;
+
+                List<MixLabMapJob> requeued = current
+                    .Select(e => e.Status == MixLabMapStatus.Running
+                        && e.ClaimedAt is DateTimeOffset claimedAt
+                        && claimedAt < threshold
+                            ? e with { Status = MixLabMapStatus.Queued, ClaimedAt = null, WorkerId = null }
+                            : e)
+                    .ToList();
+
+                MixLabMapJob? oldestQueued = requeued
+                    .Where(e => e.Status == MixLabMapStatus.Queued)
+                    .OrderBy(e => e.RequestedAt)
+                    .FirstOrDefault();
+
+                if (oldestQueued is null)
                 {
-                    DateTimeOffset now = _timeProvider.GetUtcNow();
-                    DateTimeOffset threshold = now - staleLease;
+                    // Nothing stale to requeue and nothing queued to claim: leave the index
+                    // untouched. A requeue always yields a Queued candidate, so this is the true
+                    // no-op case — matters because workers poll this on a tight interval and an
+                    // unconditional write here would churn blob writes/ETags for nothing and eat
+                    // into concurrent RequestAsync callers' retry budget.
+                    return null;
+                }
 
-                    List<MixLabMapJob> requeued = current
-                        .Select(e => e.Status == MixLabMapStatus.Running
-                            && e.ClaimedAt is DateTimeOffset claimedAt
-                            && claimedAt < threshold
-                                ? e with { Status = MixLabMapStatus.Queued, ClaimedAt = null, WorkerId = null }
-                                : e)
-                        .ToList();
+                MixLabMapJob claimed = oldestQueued with
+                {
+                    Status = MixLabMapStatus.Running,
+                    ClaimedAt = now,
+                    WorkerId = workerId,
+                };
 
-                    MixLabMapJob? oldestQueued = requeued
-                        .Where(e => e.Status == MixLabMapStatus.Queued)
-                        .OrderBy(e => e.RequestedAt)
-                        .FirstOrDefault();
+                IReadOnlyList<MixLabMapJob> next = requeued
+                    .Select(e => string.Equals(e.UploadId, claimed.UploadId, StringComparison.Ordinal) ? claimed : e)
+                    .ToArray();
 
-                    if (oldestQueued is null)
-                    {
-                        claimed = null;
-                        return requeued;
-                    }
+                try
+                {
+                    await _gateway
+                        .WriteAsync(MixLabBlobPaths.MapsIndex, Serialize(next), read?.ETag, cancellationToken)
+                        .ConfigureAwait(false);
+                    return claimed;
+                }
+                catch (MixLabConcurrencyException) when (attempt < MaxWriteAttempts)
+                {
+                    _logger.LogWarning(
+                        "MixLab maps index write conflict; re-reading and retrying ({Attempt}/{MaxAttempts}).",
+                        attempt,
+                        MaxWriteAttempts);
+                }
+            }
 
-                    MixLabMapJob updated = oldestQueued with
-                    {
-                        Status = MixLabMapStatus.Running,
-                        ClaimedAt = now,
-                        WorkerId = workerId,
-                    };
-                    claimed = updated;
-
-                    return requeued
-                        .Select(e => string.Equals(e.UploadId, updated.UploadId, StringComparison.Ordinal) ? updated : e)
-                        .ToArray();
-                },
-                cancellationToken).ConfigureAwait(false);
-
-            return claimed;
+            throw new MixLabConcurrencyException(
+                $"Could not claim a queued MixLab map job after {MaxWriteAttempts} attempts because of concurrent writes.");
         }
 
         public async Task CompleteAsync(string uploadId, ReadOnlyMemory<byte> payload, CancellationToken cancellationToken)

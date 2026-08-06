@@ -120,6 +120,45 @@ namespace Changsta.Ai.Tests.Unit.MixLab
         }
 
         [Test]
+        public async Task TryClaimOldestQueuedAsync_empty_index_does_not_write()
+        {
+            (BlobMixLabMapRepository sut, FakeMixLabBlobGateway gateway, _) = BuildSut();
+
+            MixLabMapJob? claimed = await sut.TryClaimOldestQueuedAsync("worker-1", TimeSpan.FromMinutes(45), CancellationToken.None);
+
+            claimed.Should().BeNull();
+            gateway.WrittenPaths.Should().BeEmpty();
+        }
+
+        [Test]
+        public async Task TryClaimOldestQueuedAsync_no_actionable_entries_does_not_write()
+        {
+            (BlobMixLabMapRepository sut, FakeMixLabBlobGateway gateway, FakeTimeProvider time) = BuildSut();
+            time.UtcNow = new DateTimeOffset(2026, 7, 8, 12, 0, 0, TimeSpan.Zero);
+
+            await sut.RequestAsync("u_1", CancellationToken.None);
+            await sut.TryClaimOldestQueuedAsync("worker-1", TimeSpan.FromMinutes(45), CancellationToken.None);
+            await sut.CompleteAsync("u_1", new byte[] { 1 }, CancellationToken.None);
+
+            await sut.RequestAsync("u_2", CancellationToken.None);
+            await sut.TryClaimOldestQueuedAsync("worker-2", TimeSpan.FromMinutes(45), CancellationToken.None);
+            await sut.FailAsync("u_2", "boom", CancellationToken.None);
+
+            await sut.RequestAsync("u_3", CancellationToken.None);
+            await sut.TryClaimOldestQueuedAsync("worker-3", TimeSpan.FromMinutes(45), CancellationToken.None);
+
+            // u_3 is Running but well within the lease — nothing here is stale or queued.
+            time.UtcNow = time.UtcNow.AddMinutes(5);
+
+            int writesBefore = gateway.WrittenPaths.Count;
+
+            MixLabMapJob? claimed = await sut.TryClaimOldestQueuedAsync("worker-4", TimeSpan.FromMinutes(45), CancellationToken.None);
+
+            claimed.Should().BeNull();
+            gateway.WrittenPaths.Count.Should().Be(writesBefore);
+        }
+
+        [Test]
         public async Task CompleteAsync_stores_payload_verbatim_and_marks_succeeded()
         {
             (BlobMixLabMapRepository sut, _, FakeTimeProvider time) = BuildSut();
