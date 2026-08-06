@@ -28,6 +28,14 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
         /// </summary>
         Task<string> WriteAsync(string blobPath, ReadOnlyMemory<byte> content, string? expectedETag, CancellationToken cancellationToken);
 
+        /// <summary>
+        /// Writes <paramref name="content"/> at <paramref name="blobPath"/> as a plain overwrite —
+        /// no <c>If-Match</c>/<c>If-None-Match</c> conditions. For payloads that are refreshed in
+        /// place rather than created once (unlike <see cref="WriteStreamAsync"/>, which is
+        /// create-only). Returns the new ETag.
+        /// </summary>
+        Task<string> WriteUnconditionalAsync(string blobPath, ReadOnlyMemory<byte> content, CancellationToken cancellationToken);
+
         /// <summary>Opens a lazily-read stream over an existing blob (for artifact/upload downloads).</summary>
         Task<Stream> OpenReadStreamAsync(string blobPath, CancellationToken cancellationToken);
 

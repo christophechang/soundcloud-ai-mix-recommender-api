@@ -14,10 +14,14 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
 
         public const string FeedbackPending = "feedback/pending.json";
 
+        public const string MapsIndex = "maps/index.json";
+
         public static string UploadContent(string uploadId) => $"uploads/{uploadId}.xml.gz";
 
         public static string RunManifest(string runId) => $"runs/{runId}/run.json";
 
         public static string RunArtifact(string runId, string name) => $"runs/{runId}/{name}";
+
+        public static string MapPayload(string uploadId) => $"maps/{uploadId}.json";
     }
 }
