@@ -38,6 +38,27 @@ namespace Changsta.Ai.Tests.Unit.MixLab
         }
 
         [Test]
+        public async Task RequestMapAsync_accepted_response_serializes_camelCase_with_lowercase_status()
+        {
+            // Guards the ManifestJsonOptions wiring itself: the Python worker parses this response,
+            // so a camelCase property name and a lower-case enum string are binding contracts, not
+            // incidental formatting. Serializing with the SerializerSettings actually attached to
+            // the JsonResult means this fails if that wiring is ever dropped.
+            MixLabMapJob job = BuildJob("u_1", MixLabMapStatus.Queued);
+            var sut = BuildSut(requestUseCase: new StubRequestUseCase(new RequestMixLabMapResult
+            {
+                Outcome = RequestMixLabMapResult.RequestOutcome.Accepted,
+                Job = job,
+            }));
+
+            IActionResult result = await sut.RequestMapAsync(Json("{\"uploadId\":\"u_1\"}"), CancellationToken.None);
+
+            string json = SerializeJsonResult(result);
+            json.Should().Contain("\"uploadId\":\"u_1\"");
+            json.Should().Contain("\"status\":\"queued\"");
+        }
+
+        [Test]
         public async Task RequestMapAsync_missing_uploadId_returns_400_without_calling_use_case()
         {
             var spy = new SpyRequestUseCase();
@@ -163,6 +184,21 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             await sut.ClaimAsync(Json("{\"workerId\":\"worker-42\"}"), CancellationToken.None);
 
             spy.WorkerIdReceived.Should().Be("worker-42");
+        }
+
+        [Test]
+        public async Task ClaimAsync_returns_200_response_serializes_camelCase_with_lowercase_status()
+        {
+            // See RequestMapAsync_accepted_response_serializes_camelCase_with_lowercase_status: same
+            // binding-contract guard, for the claim response.
+            MixLabMapJob job = BuildJob("u_1", MixLabMapStatus.Running);
+            var sut = BuildSut(claimUseCase: new StubClaimUseCase(job));
+
+            IActionResult result = await sut.ClaimAsync(Json("{\"workerId\":\"worker-1\"}"), CancellationToken.None);
+
+            string json = SerializeJsonResult(result);
+            json.Should().Contain("\"uploadId\":\"u_1\"");
+            json.Should().Contain("\"status\":\"running\"");
         }
 
         [Test]
@@ -298,6 +334,29 @@ namespace Changsta.Ai.Tests.Unit.MixLab
         }
 
         [Test]
+        public async Task GetMapAsync_response_serializes_camelCase_with_lowercase_status()
+        {
+            // See RequestMapAsync_accepted_response_serializes_camelCase_with_lowercase_status: same
+            // binding-contract guard, for the get response. The property-name assertion alone would
+            // not catch SerializerSettings being dropped here, since the app's global MVC options
+            // already camelCase property names — it's specifically the enum-as-lowercase-string that
+            // depends on ManifestJsonOptions's JsonStringEnumConverter.
+            MixLabMapJob job = BuildJob("u_1", MixLabMapStatus.Queued);
+            var sut = BuildSut(getUseCase: new StubGetUseCase(new GetMixLabMapResult
+            {
+                Outcome = GetMixLabMapResult.GetOutcome.Found,
+                Job = job,
+                Payload = null,
+            }));
+
+            IActionResult result = await sut.GetMapAsync("u_1", CancellationToken.None);
+
+            string json = SerializeJsonResult(result);
+            json.Should().Contain("\"uploadId\":\"u_1\"");
+            json.Should().Contain("\"status\":\"queued\"");
+        }
+
+        [Test]
         public async Task GetMapAsync_succeeded_job_with_missing_blob_returns_200_with_null_payload_and_does_not_crash()
         {
             // Edge case called out explicitly in the task brief: a succeeded job whose payload blob
@@ -388,6 +447,19 @@ namespace Changsta.Ai.Tests.Unit.MixLab
         private static object? GetAnonymousProperty(object value, string propertyName)
         {
             return value.GetType().GetProperty(propertyName) !.GetValue(value);
+        }
+
+        /// <summary>
+        /// Serializes a <see cref="JsonResult"/>'s value with the <see cref="JsonSerializerOptions"/>
+        /// actually attached to it via <see cref="JsonResult.SerializerSettings"/>, rather than a
+        /// fresh default-constructed one — so a test using this fails if the controller ever stops
+        /// wiring ManifestJsonOptions onto the result.
+        /// </summary>
+        private static string SerializeJsonResult(IActionResult result)
+        {
+            var jsonResult = (JsonResult)result;
+            var options = (JsonSerializerOptions)jsonResult.SerializerSettings !;
+            return JsonSerializer.Serialize(jsonResult.Value, options);
         }
 
         private static MixLabMapJob BuildJob(string uploadId, MixLabMapStatus status) => new()

@@ -173,9 +173,12 @@ namespace Changsta.Ai.Interface.Api.Controllers
             // throw. Payload is null unless the job has succeeded (GetMixLabMapUseCase), and it can
             // also come back null for a succeeded job whose blob is missing — either way this must
             // serialise as payload: null, never crash.
-            JsonElement? payload = result.Payload is null
-                ? null
-                : JsonDocument.Parse(result.Payload).RootElement.Clone();
+            JsonElement? payload = null;
+            if (result.Payload is not null)
+            {
+                using JsonDocument document = JsonDocument.Parse(result.Payload);
+                payload = document.RootElement.Clone();
+            }
 
             return new JsonResult(new { job = result.Job, payload }) { SerializerSettings = ManifestJsonOptions };
         }

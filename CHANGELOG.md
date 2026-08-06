@@ -16,7 +16,7 @@ Adds the MixLab library-map job endpoints under `/api/mixlab/maps` — request, 
 
 - `AddMixLabAzureServices` now registers `IMixLabMapRepository` alongside the other blob-backed MixLab repositories. The map use cases added in the prior milestone step already depended on it, but nothing had wired it into DI yet.
 
-834 tests, 0 warnings.
+837 tests, 0 warnings.
 
 ## v1.62
 
