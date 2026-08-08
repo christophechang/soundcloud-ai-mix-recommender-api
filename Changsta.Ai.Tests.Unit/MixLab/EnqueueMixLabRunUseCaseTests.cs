@@ -54,6 +54,66 @@ namespace Changsta.Ai.Tests.Unit.MixLab
         }
 
         [Test]
+        public async Task EnqueueAsync_direction_spec_is_accepted_and_persisted()
+        {
+            (EnqueueMixLabRunUseCase sut, BlobMixLabRunRepository runs, BlobMixLabUploadRepository uploads, _) = BuildSut();
+            string uploadId = await SeedUploadAsync(uploads);
+            const string spec = "{\"direction_type\":\"artist_thread\",\"title\":\"Artist thread: Dusky\","
+                + "\"mood\":\"Dusky as spine\",\"brief\":\"b\",\"track_ids\":[\"1\",\"2\"],\"thread_artist\":\"Dusky\"}";
+            string flags = "{\"genre\":\"house\",\"mode\":\"unplayed\",\"risk\":\"medium\",\"directions\":\"mixed\","
+                + "\"directionSpec\":" + JsonSerializer.Serialize(spec) + "}";
+
+            EnqueueMixLabRunResult result = await sut.EnqueueAsync(Json(flags), uploadId, CancellationToken.None);
+
+            result.Outcome.Should().Be(EnqueueMixLabRunResult.EnqueueOutcome.Created);
+            MixLabRun? run = await runs.GetAsync(result.RunId!, CancellationToken.None);
+            run!.Flags.DirectionSpec.Should().Be(spec);
+        }
+
+        [Test]
+        public async Task EnqueueAsync_direction_spec_must_be_a_json_object()
+        {
+            (EnqueueMixLabRunUseCase sut, _, BlobMixLabUploadRepository uploads, _) = BuildSut();
+            string uploadId = await SeedUploadAsync(uploads);
+            string flags = "{\"genre\":\"t\",\"mode\":\"all\",\"risk\":\"high\",\"directions\":\"mixed\","
+                + "\"directionSpec\":\"[1,2]\"}";
+
+            EnqueueMixLabRunResult result = await sut.EnqueueAsync(Json(flags), uploadId, CancellationToken.None);
+
+            result.Outcome.Should().Be(EnqueueMixLabRunResult.EnqueueOutcome.InvalidRequest);
+            result.ErrorMessage.Should().Contain("directionSpec");
+        }
+
+        [Test]
+        public async Task EnqueueAsync_direction_spec_with_invalid_json_is_rejected()
+        {
+            (EnqueueMixLabRunUseCase sut, _, BlobMixLabUploadRepository uploads, _) = BuildSut();
+            string uploadId = await SeedUploadAsync(uploads);
+            string flags = "{\"genre\":\"t\",\"mode\":\"all\",\"risk\":\"high\",\"directions\":\"mixed\","
+                + "\"directionSpec\":\"{nope\"}";
+
+            EnqueueMixLabRunResult result = await sut.EnqueueAsync(Json(flags), uploadId, CancellationToken.None);
+
+            result.Outcome.Should().Be(EnqueueMixLabRunResult.EnqueueOutcome.InvalidRequest);
+            result.ErrorMessage.Should().Contain("directionSpec");
+        }
+
+        [Test]
+        public async Task EnqueueAsync_direction_spec_over_8000_chars_is_rejected()
+        {
+            (EnqueueMixLabRunUseCase sut, _, BlobMixLabUploadRepository uploads, _) = BuildSut();
+            string uploadId = await SeedUploadAsync(uploads);
+            string spec = "{\"brief\":\"" + new string('x', 8001) + "\"}";
+            string flags = "{\"genre\":\"t\",\"mode\":\"all\",\"risk\":\"high\",\"directions\":\"mixed\","
+                + "\"directionSpec\":" + JsonSerializer.Serialize(spec) + "}";
+
+            EnqueueMixLabRunResult result = await sut.EnqueueAsync(Json(flags), uploadId, CancellationToken.None);
+
+            result.Outcome.Should().Be(EnqueueMixLabRunResult.EnqueueOutcome.InvalidRequest);
+            result.ErrorMessage.Should().Contain("directionSpec");
+        }
+
+        [Test]
         public async Task EnqueueAsync_latest_resolves_to_newest_upload()
         {
             (EnqueueMixLabRunUseCase sut, BlobMixLabRunRepository runs, BlobMixLabUploadRepository uploads, FakeTimeProvider time) = BuildSut();

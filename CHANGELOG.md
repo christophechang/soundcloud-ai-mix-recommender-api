@@ -2,6 +2,12 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## Unreleased
+
+### Features
+
+- **`directionSpec` run flag.** `POST /api/mixlab/runs` accepts an optional `directionSpec` flag — a JSON-serialised library-map direction entry pinned for the run ("Run this direction" in mixlab-web). Validated as a non-empty JSON-object string of at most 8000 characters and persisted verbatim into the run manifest; the worker maps it to the engine's `--direction-spec`, which owns full validation. Existing enqueue payloads are unaffected.
+
 ## v1.63
 
 Adds the MixLab library-map job endpoints under `/api/mixlab/maps` — request, worker claim/complete/fail, and read back a per-upload Camelot-wheel map, all persisted to the existing MixLab blob container. New endpoints only; no changes to existing routes, DTOs, status codes or config.
