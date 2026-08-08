@@ -18,6 +18,12 @@ namespace Changsta.Ai.Core.Domain.MixLab
 
         public string? Intent { get; init; }
 
+        /// <summary>
+        /// JSON-serialised library-map direction entry pinned for this run ("Run this
+        /// direction"). Opaque here — the engine's <c>--direction-spec</c> parses it.
+        /// </summary>
+        public string? DirectionSpec { get; init; }
+
         public int? MixLength { get; init; }
 
         public bool Resequence { get; init; }

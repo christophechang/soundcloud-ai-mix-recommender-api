@@ -24,6 +24,8 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
 
         private const int MaxIntentLength = 500;
 
+        private const int MaxDirectionSpecLength = 8000;
+
         private const double MinBpmValue = 40;
 
         private const double MaxBpmValue = 260;
@@ -39,6 +41,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
             "risk",
             "directions",
             "intent",
+            "directionSpec",
             "mixLength",
             "resequence",
             "deep",
@@ -166,6 +169,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
             }
 
             if (!TryReadOptionalIntent(flags, out string? intent, out error)
+                || !TryReadOptionalDirectionSpec(flags, out string? directionSpec, out error)
                 || !TryReadOptionalBoundedInt(flags, "mixLength", MinMixLength, MaxMixLength, out int? mixLength, out error)
                 || !TryReadOptionalBool(flags, "resequence", out bool resequence, out error)
                 || !TryReadOptionalBool(flags, "deep", out bool deep, out error)
@@ -202,6 +206,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
                 Risk = risk!,
                 Directions = directions!,
                 Intent = intent,
+                DirectionSpec = directionSpec,
                 MixLength = mixLength,
                 Resequence = resequence,
                 Deep = deep,
@@ -282,6 +287,49 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
             }
 
             value = intent;
+            return true;
+        }
+
+        private static bool TryReadOptionalDirectionSpec(JsonElement flags, out string? value, out string? error)
+        {
+            value = null;
+            error = null;
+
+            if (!flags.TryGetProperty("directionSpec", out JsonElement element) || element.ValueKind == JsonValueKind.Null)
+            {
+                return true;
+            }
+
+            if (element.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(element.GetString()))
+            {
+                error = "'directionSpec' must be a non-empty string.";
+                return false;
+            }
+
+            string spec = element.GetString() ?? string.Empty;
+            if (spec.Length > MaxDirectionSpecLength)
+            {
+                error = $"'directionSpec' must be at most {MaxDirectionSpecLength} characters.";
+                return false;
+            }
+
+            // Cheap structural check only — the engine's --direction-spec owns full validation.
+            try
+            {
+                using JsonDocument doc = JsonDocument.Parse(spec);
+                if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                {
+                    error = "'directionSpec' must be a JSON object (a library-map direction entry).";
+                    return false;
+                }
+            }
+            catch (JsonException)
+            {
+                error = "'directionSpec' must be valid JSON.";
+                return false;
+            }
+
+            value = spec;
             return true;
         }
 
