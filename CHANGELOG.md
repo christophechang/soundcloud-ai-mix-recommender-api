@@ -2,6 +2,12 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## Unreleased
+
+### Features
+
+- **`trackPool` run flag.** `POST /api/mixlab/runs` accepts an optional `trackPool` flag — a JSON-serialised track-pool restriction pinned for the run ("Run this block" in mixlab-web). Validated as a non-empty JSON-object string of at most 16000 characters and persisted verbatim into the run manifest; the worker will map it to the engine's `--track-pool`, which owns full validation. Existing enqueue payloads are unaffected.
+
 ## v1.64
 
 ### Features

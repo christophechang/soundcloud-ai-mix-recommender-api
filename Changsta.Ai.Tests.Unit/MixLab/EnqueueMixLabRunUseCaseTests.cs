@@ -114,6 +114,99 @@ namespace Changsta.Ai.Tests.Unit.MixLab
         }
 
         [Test]
+        public async Task EnqueueAsync_track_pool_is_accepted_and_persisted()
+        {
+            (EnqueueMixLabRunUseCase sut, BlobMixLabRunRepository runs, BlobMixLabUploadRepository uploads, _) = BuildSut();
+            string uploadId = await SeedUploadAsync(uploads);
+            const string pool = "{\"track_ids\":[\"1\",\"2\",\"3\"]}";
+            string flags = "{\"genre\":\"house\",\"mode\":\"unplayed\",\"risk\":\"medium\",\"directions\":\"mixed\","
+                + "\"trackPool\":" + JsonSerializer.Serialize(pool) + "}";
+
+            EnqueueMixLabRunResult result = await sut.EnqueueAsync(Json(flags), uploadId, CancellationToken.None);
+
+            result.Outcome.Should().Be(EnqueueMixLabRunResult.EnqueueOutcome.Created);
+            MixLabRun? run = await runs.GetAsync(result.RunId!, CancellationToken.None);
+            run!.Flags.TrackPool.Should().Be(pool);
+        }
+
+        [Test]
+        public async Task EnqueueAsync_track_pool_alongside_other_flags_is_accepted()
+        {
+            (EnqueueMixLabRunUseCase sut, BlobMixLabRunRepository runs, BlobMixLabUploadRepository uploads, _) = BuildSut();
+            string uploadId = await SeedUploadAsync(uploads);
+            const string spec = "{\"direction_type\":\"artist_thread\",\"title\":\"Artist thread: Dusky\","
+                + "\"mood\":\"Dusky as spine\",\"brief\":\"b\",\"track_ids\":[\"1\",\"2\"],\"thread_artist\":\"Dusky\"}";
+            const string pool = "{\"track_ids\":[\"1\",\"2\",\"3\"]}";
+            string flags = "{\"genre\":\"house\",\"mode\":\"unplayed\",\"risk\":\"medium\",\"directions\":\"mixed\","
+                + "\"directionSpec\":" + JsonSerializer.Serialize(spec) + ","
+                + "\"trackPool\":" + JsonSerializer.Serialize(pool) + "}";
+
+            EnqueueMixLabRunResult result = await sut.EnqueueAsync(Json(flags), uploadId, CancellationToken.None);
+
+            result.Outcome.Should().Be(EnqueueMixLabRunResult.EnqueueOutcome.Created);
+            MixLabRun? run = await runs.GetAsync(result.RunId!, CancellationToken.None);
+            run!.Flags.TrackPool.Should().Be(pool);
+            run.Flags.DirectionSpec.Should().Be(spec);
+        }
+
+        [Test]
+        public async Task EnqueueAsync_track_pool_must_be_a_json_object()
+        {
+            (EnqueueMixLabRunUseCase sut, _, BlobMixLabUploadRepository uploads, _) = BuildSut();
+            string uploadId = await SeedUploadAsync(uploads);
+            string flags = "{\"genre\":\"t\",\"mode\":\"all\",\"risk\":\"high\",\"directions\":\"mixed\","
+                + "\"trackPool\":\"[1,2]\"}";
+
+            EnqueueMixLabRunResult result = await sut.EnqueueAsync(Json(flags), uploadId, CancellationToken.None);
+
+            result.Outcome.Should().Be(EnqueueMixLabRunResult.EnqueueOutcome.InvalidRequest);
+            result.ErrorMessage.Should().Contain("trackPool");
+        }
+
+        [Test]
+        public async Task EnqueueAsync_track_pool_with_invalid_json_is_rejected()
+        {
+            (EnqueueMixLabRunUseCase sut, _, BlobMixLabUploadRepository uploads, _) = BuildSut();
+            string uploadId = await SeedUploadAsync(uploads);
+            string flags = "{\"genre\":\"t\",\"mode\":\"all\",\"risk\":\"high\",\"directions\":\"mixed\","
+                + "\"trackPool\":\"{nope\"}";
+
+            EnqueueMixLabRunResult result = await sut.EnqueueAsync(Json(flags), uploadId, CancellationToken.None);
+
+            result.Outcome.Should().Be(EnqueueMixLabRunResult.EnqueueOutcome.InvalidRequest);
+            result.ErrorMessage.Should().Contain("trackPool");
+        }
+
+        [Test]
+        public async Task EnqueueAsync_track_pool_empty_string_is_rejected()
+        {
+            (EnqueueMixLabRunUseCase sut, _, BlobMixLabUploadRepository uploads, _) = BuildSut();
+            string uploadId = await SeedUploadAsync(uploads);
+            string flags = "{\"genre\":\"t\",\"mode\":\"all\",\"risk\":\"high\",\"directions\":\"mixed\","
+                + "\"trackPool\":\"\"}";
+
+            EnqueueMixLabRunResult result = await sut.EnqueueAsync(Json(flags), uploadId, CancellationToken.None);
+
+            result.Outcome.Should().Be(EnqueueMixLabRunResult.EnqueueOutcome.InvalidRequest);
+            result.ErrorMessage.Should().Contain("trackPool");
+        }
+
+        [Test]
+        public async Task EnqueueAsync_track_pool_over_16000_chars_is_rejected()
+        {
+            (EnqueueMixLabRunUseCase sut, _, BlobMixLabUploadRepository uploads, _) = BuildSut();
+            string uploadId = await SeedUploadAsync(uploads);
+            string pool = "{\"track_ids\":[\"" + new string('x', 16001) + "\"]}";
+            string flags = "{\"genre\":\"t\",\"mode\":\"all\",\"risk\":\"high\",\"directions\":\"mixed\","
+                + "\"trackPool\":" + JsonSerializer.Serialize(pool) + "}";
+
+            EnqueueMixLabRunResult result = await sut.EnqueueAsync(Json(flags), uploadId, CancellationToken.None);
+
+            result.Outcome.Should().Be(EnqueueMixLabRunResult.EnqueueOutcome.InvalidRequest);
+            result.ErrorMessage.Should().Contain("trackPool");
+        }
+
+        [Test]
         public async Task EnqueueAsync_latest_resolves_to_newest_upload()
         {
             (EnqueueMixLabRunUseCase sut, BlobMixLabRunRepository runs, BlobMixLabUploadRepository uploads, FakeTimeProvider time) = BuildSut();

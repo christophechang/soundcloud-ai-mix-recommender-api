@@ -26,6 +26,8 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
 
         private const int MaxDirectionSpecLength = 8000;
 
+        private const int MaxTrackPoolLength = 16000;
+
         private const double MinBpmValue = 40;
 
         private const double MaxBpmValue = 260;
@@ -42,6 +44,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
             "directions",
             "intent",
             "directionSpec",
+            "trackPool",
             "mixLength",
             "resequence",
             "deep",
@@ -170,6 +173,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
 
             if (!TryReadOptionalIntent(flags, out string? intent, out error)
                 || !TryReadOptionalDirectionSpec(flags, out string? directionSpec, out error)
+                || !TryReadOptionalTrackPool(flags, out string? trackPool, out error)
                 || !TryReadOptionalBoundedInt(flags, "mixLength", MinMixLength, MaxMixLength, out int? mixLength, out error)
                 || !TryReadOptionalBool(flags, "resequence", out bool resequence, out error)
                 || !TryReadOptionalBool(flags, "deep", out bool deep, out error)
@@ -207,6 +211,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
                 Directions = directions!,
                 Intent = intent,
                 DirectionSpec = directionSpec,
+                TrackPool = trackPool,
                 MixLength = mixLength,
                 Resequence = resequence,
                 Deep = deep,
@@ -330,6 +335,49 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
             }
 
             value = spec;
+            return true;
+        }
+
+        private static bool TryReadOptionalTrackPool(JsonElement flags, out string? value, out string? error)
+        {
+            value = null;
+            error = null;
+
+            if (!flags.TryGetProperty("trackPool", out JsonElement element) || element.ValueKind == JsonValueKind.Null)
+            {
+                return true;
+            }
+
+            if (element.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(element.GetString()))
+            {
+                error = "'trackPool' must be a non-empty string.";
+                return false;
+            }
+
+            string pool = element.GetString() ?? string.Empty;
+            if (pool.Length > MaxTrackPoolLength)
+            {
+                error = $"'trackPool' must be at most {MaxTrackPoolLength} characters.";
+                return false;
+            }
+
+            // Cheap structural check only — the engine's --track-pool owns full validation.
+            try
+            {
+                using JsonDocument doc = JsonDocument.Parse(pool);
+                if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                {
+                    error = "'trackPool' must be a JSON object (a library-map block restriction).";
+                    return false;
+                }
+            }
+            catch (JsonException)
+            {
+                error = "'trackPool' must be valid JSON.";
+                return false;
+            }
+
+            value = pool;
             return true;
         }
 

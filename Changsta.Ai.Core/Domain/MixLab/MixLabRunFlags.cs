@@ -24,6 +24,12 @@ namespace Changsta.Ai.Core.Domain.MixLab
         /// </summary>
         public string? DirectionSpec { get; init; }
 
+        /// <summary>
+        /// JSON-serialised track-pool restriction pinned for this run ("Run this block").
+        /// Opaque here — the engine owns full validation.
+        /// </summary>
+        public string? TrackPool { get; init; }
+
         public int? MixLength { get; init; }
 
         public bool Resequence { get; init; }
