@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Changsta.Ai.Core.Domain.MixLab;
@@ -212,6 +213,32 @@ namespace Changsta.Ai.Tests.Unit.MixLab
         }
 
         [Test]
+        public async Task CreateQueuedAsync_run_with_trackPool_flag_summary_ends_with_block()
+        {
+            var sut = BuildSut(out _, out _);
+
+            MixLabRun created = await sut.CreateQueuedAsync(MakeFlags(trackPool: "{\"conceptId\":\"c_1\"}"), "u_1", CancellationToken.None);
+
+            IReadOnlyList<MixLabRunIndexEntry> index = await sut.GetIndexAsync(take: 100, skip: 0, CancellationToken.None);
+            MixLabRunIndexEntry entry = index.Single(e => e.RunId == created.RunId);
+
+            entry.FlagsSummary.Should().Be("all/high/mixed/block");
+        }
+
+        [Test]
+        public async Task CreateQueuedAsync_run_without_trackPool_flag_summary_unchanged()
+        {
+            var sut = BuildSut(out _, out _);
+
+            MixLabRun created = await sut.CreateQueuedAsync(MakeFlags(), "u_1", CancellationToken.None);
+
+            IReadOnlyList<MixLabRunIndexEntry> index = await sut.GetIndexAsync(take: 100, skip: 0, CancellationToken.None);
+            MixLabRunIndexEntry entry = index.Single(e => e.RunId == created.RunId);
+
+            entry.FlagsSummary.Should().Be("all/high/mixed");
+        }
+
+        [Test]
         public async Task GetIndexAsync_applies_take_and_skip()
         {
             var sut = BuildSut(out _, out var time);
@@ -264,7 +291,7 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             return new BlobMixLabRunRepository(gateway, timeProvider, NullLogger<BlobMixLabRunRepository>.Instance);
         }
 
-        private static MixLabRunFlags MakeFlags()
+        private static MixLabRunFlags MakeFlags(string? trackPool = null)
         {
             return new MixLabRunFlags
             {
@@ -272,6 +299,7 @@ namespace Changsta.Ai.Tests.Unit.MixLab
                 Mode = "all",
                 Risk = "high",
                 Directions = "mixed",
+                TrackPool = trackPool,
             };
         }
 

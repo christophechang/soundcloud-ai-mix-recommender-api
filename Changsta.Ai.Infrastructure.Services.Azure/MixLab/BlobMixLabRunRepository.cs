@@ -375,7 +375,8 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
 
         private static string BuildFlagsSummary(MixLabRunFlags flags)
         {
-            return $"{flags.Mode}/{flags.Risk}/{flags.Directions}";
+            string summary = $"{flags.Mode}/{flags.Risk}/{flags.Directions}";
+            return string.IsNullOrEmpty(flags.TrackPool) ? summary : $"{summary}/block";
         }
 
         private static ReadOnlyMemory<byte> Serialize<T>(T value)
