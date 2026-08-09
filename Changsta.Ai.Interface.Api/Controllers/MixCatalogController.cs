@@ -195,7 +195,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
 
             Mix[] results = mixes
                 .Where(m => m.Tracklist.Any(t =>
-                    string.Equals(t.Artist, artistName, StringComparison.OrdinalIgnoreCase)))
+                    string.Equals(NormalizeArtistRouteName(t.Artist), artistName, StringComparison.OrdinalIgnoreCase)))
                 .ToArray();
 
             if (results.Length == 0)
@@ -230,9 +230,11 @@ namespace Changsta.Ai.Interface.Api.Controllers
         {
             const string MixesSuffix = "/mixes";
 
-            return name.EndsWith(MixesSuffix, StringComparison.OrdinalIgnoreCase)
+            string withoutSuffix = name.EndsWith(MixesSuffix, StringComparison.OrdinalIgnoreCase)
                 ? name[..^MixesSuffix.Length]
                 : name;
+
+            return Uri.UnescapeDataString(withoutSuffix).Trim();
         }
 
         private async Task<IReadOnlyList<Mix>> LoadCatalogueAsync(int maxItems, CancellationToken cancellationToken) =>

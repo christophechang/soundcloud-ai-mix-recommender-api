@@ -452,6 +452,34 @@ namespace Changsta.Ai.Tests.Unit.Controllers
         }
 
         [Test]
+        public async Task GetMixesByArtistAsync_normalizes_encoded_trailing_spaces()
+        {
+            var mixes = new[]
+            {
+                MakeMix("1", "dnb", ("Sam Binga", "Track 1")),
+            };
+
+            var page = await InvokeMixesByArtistAsync(BuildSut(mixes), "Sam%20Binga%20");
+
+            Assert.That(page.Items, Has.Length.EqualTo(1));
+            Assert.That(page.Items[0].Id, Is.EqualTo("1"));
+        }
+
+        [Test]
+        public async Task GetMixesByArtistAsync_trims_catalog_artist_names_before_matching()
+        {
+            var mixes = new[]
+            {
+                MakeMix("1", "dnb", ("Gentleman's Dub Club ", "Track 1")),
+            };
+
+            var page = await InvokeMixesByArtistAsync(BuildSut(mixes), "Gentleman's Dub Club");
+
+            Assert.That(page.Items, Has.Length.EqualTo(1));
+            Assert.That(page.Items[0].Id, Is.EqualTo("1"));
+        }
+
+        [Test]
         public async Task GetMixesByArtistAsync_returns_404_when_artist_not_found()
         {
             var mixes = new[]
