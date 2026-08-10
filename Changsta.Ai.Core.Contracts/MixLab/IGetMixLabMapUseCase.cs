@@ -10,8 +10,8 @@ namespace Changsta.Ai.Core.Contracts.MixLab
     public interface IGetMixLabMapUseCase
     {
         /// <summary>
-        /// Resolves <paramref name="uploadId"/> (a concrete id or the literal <c>latest</c>) and
-        /// returns its map job, or <see cref="GetMixLabMapResult.GetOutcome.NotFound"/> when unknown.
+        /// Resolves the literal <c>latest</c> to the newest upload and returns the target map job,
+        /// or <see cref="GetMixLabMapResult.GetOutcome.NotFound"/> when unknown.
         /// </summary>
         Task<GetMixLabMapResult> GetAsync(string uploadId, CancellationToken cancellationToken);
     }

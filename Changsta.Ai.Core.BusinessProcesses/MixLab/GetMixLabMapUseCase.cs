@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Changsta.Ai.Core.Contracts.MixLab;
@@ -8,9 +7,10 @@ using Changsta.Ai.Core.Domain.MixLab;
 namespace Changsta.Ai.Core.BusinessProcesses.MixLab
 {
     /// <summary>
-    /// Resolves the target upload exactly like <see cref="RequestMixLabMapUseCase"/> does, then
-    /// reads its library-map job and, when the job has succeeded, the stored engine payload. See
-    /// issue #128.
+    /// Resolves the literal <c>latest</c> to the newest upload, then reads the target library-map
+    /// job and, when the job has succeeded, the stored engine payload. Concrete upload ids are read
+    /// directly from the map index so archived map jobs remain available after upload retention
+    /// prunes the source upload entry. See issue #128.
     /// </summary>
     public sealed class GetMixLabMapUseCase : IGetMixLabMapUseCase
     {
@@ -42,11 +42,6 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
             }
             else
             {
-                if (!await UploadExistsAsync(uploadId, cancellationToken).ConfigureAwait(false))
-                {
-                    return NotFound();
-                }
-
                 resolvedUploadId = uploadId;
             }
 
@@ -71,20 +66,6 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
         private static GetMixLabMapResult NotFound()
         {
             return new GetMixLabMapResult { Outcome = GetMixLabMapResult.GetOutcome.NotFound };
-        }
-
-        private async Task<bool> UploadExistsAsync(string uploadId, CancellationToken cancellationToken)
-        {
-            IReadOnlyList<MixLabUpload> uploads = await _uploads.GetIndexAsync(cancellationToken).ConfigureAwait(false);
-            foreach (MixLabUpload upload in uploads)
-            {
-                if (string.Equals(upload.UploadId, uploadId, StringComparison.Ordinal))
-                {
-                    return true;
-                }
-            }
-
-            return false;
         }
     }
 }
