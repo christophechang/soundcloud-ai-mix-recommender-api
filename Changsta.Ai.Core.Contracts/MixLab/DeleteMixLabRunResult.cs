@@ -17,6 +17,12 @@ namespace Changsta.Ai.Core.Contracts.MixLab
 
             /// <summary>The run is still active (queued or running) and may not be deleted (→ 409).</summary>
             Active,
+
+            /// <summary>
+            /// Another run is running under a live claim, so no run may be deleted right now
+            /// (→ 409). See <see cref="IDeleteMixLabRunUseCase"/>.
+            /// </summary>
+            EngineBusy,
         }
 
         required public DeleteOutcome Outcome { get; init; }

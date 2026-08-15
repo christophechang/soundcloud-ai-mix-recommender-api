@@ -14,11 +14,22 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
     /// Deletes a run and purges its entry from the concept-history document so it stops steering
     /// future runs (novelty penalty + feedback multipliers). Only a non-active run may be deleted;
     /// a queued or running run is rejected so the delete never races an in-flight worker
-    /// claim/complete. History is purged first, then the run blobs are removed: both steps are
-    /// idempotent, so a caller that retries after a transient failure converges cleanly. The history
-    /// document is opaque JSON owned by the Python engine (<c>{"runs": [{"run_id": ...}]}</c>); this
-    /// use case is the only place the API reads into it, and it touches nothing but the matching
-    /// <c>runs[]</c> entry. See issue #130 and docs/architecture/mixlab-anywhere.md §3.
+    /// claim/complete, and no run at all may be deleted while another one holds a live claim (see
+    /// below). History is purged first, then the run's pending feedback, then the run blobs: every
+    /// step is idempotent, so a caller that retries after a transient failure converges cleanly.
+    /// The history document is opaque JSON owned by the Python engine
+    /// (<c>{"runs": [{"run_id": ...}]}</c>); this use case is the only place the API reads into it,
+    /// and it touches nothing but the matching <c>runs[]</c> entry. See issue #130 and
+    /// docs/architecture/mixlab-anywhere.md §3.
+    /// <para>
+    /// The live-claim guard exists because the engine's history sync would otherwise undo the
+    /// purge: the worker adopts the remote document at the start of a run (<c>sync_down</c>) and
+    /// PUTs its own copy back at the end (<c>sync_up</c>), and that PUT's conflict path merges by
+    /// re-adding every run id present locally but not remotely — exactly what a purge produces.
+    /// The resurrected entry would then belong to no manifest and no index row: invisible in the
+    /// archive, still steering generation. Rejecting the delete for the length of the in-flight
+    /// run removes the only window in which that can happen.
+    /// </para>
     /// </summary>
     public sealed class DeleteMixLabRunUseCase : IDeleteMixLabRunUseCase
     {
@@ -31,15 +42,21 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
 
         private readonly IMixLabRunRepository _runs;
         private readonly IMixLabHistoryStore _history;
+        private readonly IMixLabFeedbackQueue _feedback;
+        private readonly MixLabOptions _options;
         private readonly ILogger<DeleteMixLabRunUseCase> _logger;
 
         public DeleteMixLabRunUseCase(
             IMixLabRunRepository runs,
             IMixLabHistoryStore history,
+            IMixLabFeedbackQueue feedback,
+            MixLabOptions options,
             ILogger<DeleteMixLabRunUseCase> logger)
         {
             _runs = runs ?? throw new ArgumentNullException(nameof(runs));
             _history = history ?? throw new ArgumentNullException(nameof(history));
+            _feedback = feedback ?? throw new ArgumentNullException(nameof(feedback));
+            _options = options ?? throw new ArgumentNullException(nameof(options));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -58,9 +75,23 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
                 return new DeleteMixLabRunResult { Outcome = DeleteMixLabRunResult.DeleteOutcome.Active };
             }
 
+            TimeSpan staleLease = TimeSpan.FromMinutes(_options.ClaimLeaseMinutes);
+            if (await _runs.HasLiveRunningRunAsync(staleLease, cancellationToken).ConfigureAwait(false))
+            {
+                _logger.LogInformation(
+                    "Refused to delete MixLab run {RunId}: another run holds a live claim and its history push would resurrect the purge.",
+                    runId);
+
+                return new DeleteMixLabRunResult { Outcome = DeleteMixLabRunResult.DeleteOutcome.EngineBusy };
+            }
+
             // Purge history first: if this fails the run is left intact, so the whole delete stays
             // retryable. On retry the purge finds nothing to remove and the run delete completes.
             await PurgeRunFromHistoryAsync(runId, cancellationToken).ConfigureAwait(false);
+
+            // Pending feedback for a deleted run can only ever be skipped as unmatchable by the
+            // engine; drop it rather than leave it queued against concepts that no longer exist.
+            await _feedback.RemoveForRunAsync(runId, cancellationToken).ConfigureAwait(false);
 
             await _runs.DeleteAsync(runId, cancellationToken).ConfigureAwait(false);
 

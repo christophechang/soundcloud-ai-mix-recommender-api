@@ -94,6 +94,29 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
             return run;
         }
 
+        public async Task<bool> HasLiveRunningRunAsync(TimeSpan staleLease, CancellationToken cancellationToken)
+        {
+            IReadOnlyList<MixLabRunIndexEntry> entries = await ReadIndexEntriesAsync(cancellationToken).ConfigureAwait(false);
+            DateTimeOffset threshold = _timeProvider.GetUtcNow() - staleLease;
+
+            foreach (MixLabRunIndexEntry entry in entries.Where(e => e.Status == MixLabRunStatus.Running))
+            {
+                // The index carries no claimedAt, so liveness is read from the manifest — the same
+                // source RequeueIfStaleAsync judges staleness from, with the same comparison.
+                MixLabRun? run = await GetAsync(entry.RunId, cancellationToken).ConfigureAwait(false);
+
+                if (run is not null
+                    && run.Status == MixLabRunStatus.Running
+                    && run.ClaimedAt is DateTimeOffset claimedAt
+                    && claimedAt >= threshold)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         public async Task<MixLabRun?> TryClaimOldestQueuedAsync(string workerId, TimeSpan staleLease, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(workerId);

@@ -53,12 +53,44 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             pending.Should().BeEmpty();
         }
 
-        private static MixLabFeedbackEvent MakeEvent(string eventId)
+        [Test]
+        public async Task RemoveForRunAsync_drops_only_the_named_run_events()
+        {
+            var gateway = new FakeMixLabBlobGateway();
+            var sut = new BlobMixLabFeedbackQueue(gateway, NullLogger<BlobMixLabFeedbackQueue>.Instance);
+
+            await sut.AppendAsync(MakeEvent("f_1"), CancellationToken.None);
+            await sut.AppendAsync(MakeEvent("f_2", "r_2"), CancellationToken.None);
+
+            await sut.RemoveForRunAsync("r_1", CancellationToken.None);
+
+            var pending = await sut.GetPendingAsync(CancellationToken.None);
+
+            pending.Should().ContainSingle(e => e.EventId == "f_2");
+        }
+
+        [Test]
+        public async Task RemoveForRunAsync_writes_nothing_when_the_run_has_no_pending_events()
+        {
+            var gateway = new FakeMixLabBlobGateway();
+            var sut = new BlobMixLabFeedbackQueue(gateway, NullLogger<BlobMixLabFeedbackQueue>.Instance);
+
+            await sut.AppendAsync(MakeEvent("f_1"), CancellationToken.None);
+            gateway.WrittenPaths.Clear();
+
+            await sut.RemoveForRunAsync("r_other", CancellationToken.None);
+
+            // No rewrite of an identical document — that would churn the ETag under a worker ack.
+            gateway.WrittenPaths.Should().BeEmpty();
+            (await sut.GetPendingAsync(CancellationToken.None)).Should().ContainSingle();
+        }
+
+        private static MixLabFeedbackEvent MakeEvent(string eventId, string runId = "r_1")
         {
             return new MixLabFeedbackEvent
             {
                 EventId = eventId,
-                RunId = "r_1",
+                RunId = runId,
                 ConceptId = "concept-1",
                 Verdict = MixLabFeedbackVerdict.Played,
                 RecordedAt = DateTimeOffset.UtcNow,
