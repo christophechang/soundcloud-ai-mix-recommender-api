@@ -16,6 +16,44 @@ namespace Changsta.Ai.Tests.Unit.MixLab
     public sealed class BlobMixLabRunRepositoryTests
     {
         [Test]
+        public async Task HasLiveRunningRunAsync_is_true_while_a_claim_is_within_the_lease()
+        {
+            var sut = BuildSut(out _, out var time);
+            time.UtcNow = new DateTimeOffset(2026, 7, 8, 12, 0, 0, TimeSpan.Zero);
+            await sut.CreateQueuedAsync(MakeFlags(), "u_1", CancellationToken.None);
+            await sut.TryClaimOldestQueuedAsync("worker-1", TimeSpan.FromMinutes(45), CancellationToken.None);
+
+            time.UtcNow = time.UtcNow.AddMinutes(44);
+
+            (await sut.HasLiveRunningRunAsync(TimeSpan.FromMinutes(45), CancellationToken.None)).Should().BeTrue();
+        }
+
+        [Test]
+        public async Task HasLiveRunningRunAsync_is_false_once_the_claim_has_gone_stale()
+        {
+            var sut = BuildSut(out _, out var time);
+            time.UtcNow = new DateTimeOffset(2026, 7, 8, 12, 0, 0, TimeSpan.Zero);
+            await sut.CreateQueuedAsync(MakeFlags(), "u_1", CancellationToken.None);
+            await sut.TryClaimOldestQueuedAsync("worker-1", TimeSpan.FromMinutes(45), CancellationToken.None);
+
+            time.UtcNow = time.UtcNow.AddMinutes(46);
+
+            (await sut.HasLiveRunningRunAsync(TimeSpan.FromMinutes(45), CancellationToken.None)).Should().BeFalse();
+        }
+
+        [Test]
+        public async Task HasLiveRunningRunAsync_is_false_for_queued_and_terminal_runs()
+        {
+            var sut = BuildSut(out _, out var time);
+            time.UtcNow = new DateTimeOffset(2026, 7, 8, 12, 0, 0, TimeSpan.Zero);
+            MixLabRun failed = await sut.CreateQueuedAsync(MakeFlags(), "u_1", CancellationToken.None);
+            await sut.FailAsync(failed.RunId, "boom", CancellationToken.None);
+            await sut.CreateQueuedAsync(MakeFlags(), "u_2", CancellationToken.None);
+
+            (await sut.HasLiveRunningRunAsync(TimeSpan.FromMinutes(45), CancellationToken.None)).Should().BeFalse();
+        }
+
+        [Test]
         public async Task TryClaimOldestQueuedAsync_no_runs_returns_null()
         {
             var sut = BuildSut(out _, out _);

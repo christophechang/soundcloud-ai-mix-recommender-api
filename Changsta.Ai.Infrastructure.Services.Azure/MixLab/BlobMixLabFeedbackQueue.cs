@@ -53,6 +53,25 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
                 cancellationToken);
         }
 
+        public async Task RemoveForRunAsync(string runId, CancellationToken cancellationToken)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+
+            IReadOnlyList<MixLabFeedbackEvent> pending = await ReadEntriesAsync(cancellationToken).ConfigureAwait(false);
+            if (!pending.Any(e => string.Equals(e.RunId, runId, StringComparison.Ordinal)))
+            {
+                // Nothing queued for this run — the common case on a delete. Skip the write rather
+                // than rewrite an identical document and churn the ETag under the worker's ack.
+                return;
+            }
+
+            await MutateWithRetryAsync(
+                current => current.Where(e => !string.Equals(e.RunId, runId, StringComparison.Ordinal)).ToArray(),
+                cancellationToken).ConfigureAwait(false);
+
+            _logger.LogInformation("Dropped pending feedback events for deleted MixLab run {RunId}.", runId);
+        }
+
         private static ReadOnlyMemory<byte> Serialize<T>(T value)
         {
             return JsonSerializer.SerializeToUtf8Bytes(value, MixLabJsonOptions.Options);
