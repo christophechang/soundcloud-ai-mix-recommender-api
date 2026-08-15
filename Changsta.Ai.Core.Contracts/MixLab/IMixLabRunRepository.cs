@@ -27,6 +27,16 @@ namespace Changsta.Ai.Core.Contracts.MixLab
         Task<MixLabRun?> TryClaimOldestQueuedAsync(string workerId, TimeSpan staleLease, CancellationToken cancellationToken);
 
         /// <summary>
+        /// Whether any run is running under a live claim — claimed less than
+        /// <paramref name="staleLease"/> ago, so a worker is holding it right now. A run whose
+        /// claim has gone stale (or that carries no <c>claimedAt</c>) does not count: its worker
+        /// is gone, and the next claim requeues it. Queued runs do not count either — nothing has
+        /// read the concept history on their behalf yet. See
+        /// <see cref="IDeleteMixLabRunUseCase"/> for why a delete needs to know.
+        /// </summary>
+        Task<bool> HasLiveRunningRunAsync(TimeSpan staleLease, CancellationToken cancellationToken);
+
+        /// <summary>
         /// Marks a run succeeded and stores its concepts. Idempotent: calling this again for a
         /// run that is already <see cref="MixLabRunStatus.Succeeded"/> is a no-op. Throws
         /// <see cref="Changsta.Ai.Core.Exceptions.MixLabInvalidRunStateException"/> if the run is

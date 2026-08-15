@@ -4,6 +4,11 @@ Notable changes to the SoundCloud Mix Recommender API.
 
 ## Unreleased
 
+### Fixes
+
+- **A run delete can no longer be undone by the engine's history sync.** `DELETE /api/mixlab/runs/{id}` now returns `409` while any run holds a live claim (claimed within `MixLab:ClaimLeaseMinutes`), not only when the target run itself is active. The worker adopts the concept-history document at the start of a run and pushes its own copy back at the end, and that push's conflict path re-adds run ids the remote no longer has — silently resurrecting the entry a concurrent delete had just purged. The resurrected entry belonged to no manifest and no index row: invisible in the archive, still steering novelty scoring and feedback multipliers, and unreachable by a second delete. Queued-but-unclaimed runs and runs whose claim has gone stale do not block a delete — neither holds a pre-purge snapshot.
+- **Deleting a run drops its pending feedback events.** Events queued in `feedback/pending.json` for a deleted run could only ever be skipped as unmatchable by the engine; they are now removed as part of the delete. Nothing is written (so no ETag churn under a worker ack) when the run has nothing pending.
+
 ## v1.65
 
 ### Features

@@ -18,5 +18,12 @@ namespace Changsta.Ai.Core.Contracts.MixLab
 
         /// <summary>Removes the given events from the pending queue after the worker has merged them into history.</summary>
         Task AckAsync(IReadOnlyList<string> eventIds, CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Drops every pending event belonging to a run, for use when that run is deleted — its
+        /// concepts are gone, so the engine could only ever skip the events as unmatchable.
+        /// Idempotent, and a no-op (no write, no ETag churn) when the run has nothing pending.
+        /// </summary>
+        Task RemoveForRunAsync(string runId, CancellationToken cancellationToken);
     }
 }

@@ -228,6 +228,8 @@ namespace Changsta.Ai.Interface.Api.Controllers
                     ApiProblem.NotFound($"Run '{id}' not found."),
                 DeleteMixLabRunResult.DeleteOutcome.Active =>
                     ApiProblem.Status(StatusCodes.Status409Conflict, $"Run '{id}' is still active; only a succeeded or failed run can be deleted."),
+                DeleteMixLabRunResult.DeleteOutcome.EngineBusy =>
+                    ApiProblem.Status(StatusCodes.Status409Conflict, "A run is in flight — runs can't be deleted until it finishes."),
                 _ => ApiProblem.Status(StatusCodes.Status500InternalServerError, "An unexpected error occurred."),
             };
         }
