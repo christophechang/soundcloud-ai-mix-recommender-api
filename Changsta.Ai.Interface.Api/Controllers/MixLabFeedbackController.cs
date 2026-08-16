@@ -15,7 +15,8 @@ namespace Changsta.Ai.Interface.Api.Controllers
 {
     /// <summary>
     /// MixLab Anywhere field feedback: recording a verdict/rating/notes/publishedMixSlug against a
-    /// completed run's concept, and the pending-queue read/ack pair the worker uses to fold that
+    /// completed run's concept, setting the operator's "in session" shortlist marker on a concept,
+    /// and the pending-queue read/ack pair the worker uses to fold that
     /// feedback into engine history. Transport only: request parsing and status-code mapping live
     /// here; all validation and orchestration live in the use cases. The whole controller is guarded
     /// by the shared MixLab bearer secret. See docs/architecture/mixlab-anywhere.md §4 rows 14-15,
@@ -29,15 +30,18 @@ namespace Changsta.Ai.Interface.Api.Controllers
         private readonly ISubmitMixLabConceptFeedbackUseCase _submitFeedback;
         private readonly IGetPendingMixLabFeedbackUseCase _getPendingFeedback;
         private readonly IAckMixLabFeedbackUseCase _ackFeedback;
+        private readonly ISetMixLabConceptShortlistUseCase _setShortlist;
 
         public MixLabFeedbackController(
             ISubmitMixLabConceptFeedbackUseCase submitFeedback,
             IGetPendingMixLabFeedbackUseCase getPendingFeedback,
-            IAckMixLabFeedbackUseCase ackFeedback)
+            IAckMixLabFeedbackUseCase ackFeedback,
+            ISetMixLabConceptShortlistUseCase setShortlist)
         {
             _submitFeedback = submitFeedback ?? throw new ArgumentNullException(nameof(submitFeedback));
             _getPendingFeedback = getPendingFeedback ?? throw new ArgumentNullException(nameof(getPendingFeedback));
             _ackFeedback = ackFeedback ?? throw new ArgumentNullException(nameof(ackFeedback));
+            _setShortlist = setShortlist ?? throw new ArgumentNullException(nameof(setShortlist));
         }
 
         [HttpPost("runs/{id}/concepts/{conceptId}/feedback")]
@@ -69,6 +73,41 @@ namespace Changsta.Ai.Interface.Api.Controllers
                 SubmitMixLabConceptFeedbackResult.SubmitOutcome.RunNotFound =>
                     ApiProblem.NotFound($"Run '{id}' not found."),
                 SubmitMixLabConceptFeedbackResult.SubmitOutcome.ConceptNotFound =>
+                    ApiProblem.NotFound($"Concept '{conceptId}' not found on run '{id}'."),
+                _ => ApiProblem.Status(StatusCodes.Status500InternalServerError, "An unexpected error occurred."),
+            };
+        }
+
+        /// <summary>
+        /// Sets or clears the "in session" marker on a concept. Idempotent, and deliberately
+        /// side-effect-free beyond the manifest and the archive index: no feedback event is queued,
+        /// so the engine never learns about shortlisting.
+        /// </summary>
+        [HttpPut("runs/{id}/concepts/{conceptId}/shortlist")]
+        public async Task<IActionResult> SetShortlistAsync(
+            [FromRoute] string id,
+            [FromRoute] string conceptId,
+            [FromBody] JsonElement body,
+            CancellationToken cancellationToken)
+        {
+            if (body.ValueKind != JsonValueKind.Object
+                || !body.TryGetProperty("shortlisted", out JsonElement shortlistedElement)
+                || (shortlistedElement.ValueKind != JsonValueKind.True
+                    && shortlistedElement.ValueKind != JsonValueKind.False))
+            {
+                return ApiProblem.BadRequest("'shortlisted' is required and must be a boolean.");
+            }
+
+            SetMixLabConceptShortlistResult result = await _setShortlist
+                .SetAsync(id, conceptId, shortlistedElement.GetBoolean(), cancellationToken)
+                .ConfigureAwait(false);
+
+            return result.Outcome switch
+            {
+                SetMixLabConceptShortlistResult.SetOutcome.Updated => NoContent(),
+                SetMixLabConceptShortlistResult.SetOutcome.RunNotFound =>
+                    ApiProblem.NotFound($"Run '{id}' not found."),
+                SetMixLabConceptShortlistResult.SetOutcome.ConceptNotFound =>
                     ApiProblem.NotFound($"Concept '{conceptId}' not found on run '{id}'."),
                 _ => ApiProblem.Status(StatusCodes.Status500InternalServerError, "An unexpected error occurred."),
             };

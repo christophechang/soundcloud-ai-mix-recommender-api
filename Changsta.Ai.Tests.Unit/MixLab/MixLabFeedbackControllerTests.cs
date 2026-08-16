@@ -189,6 +189,99 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             GetConfigurationKey(bearerSecretAttribute).Should().Be("MixLab:ApiSecret");
         }
 
+        [Test]
+        public async Task SetShortlistAsync_updated_returns_204()
+        {
+            var sut = BuildSut(shortlistResult: new SetMixLabConceptShortlistResult
+            {
+                Outcome = SetMixLabConceptShortlistResult.SetOutcome.Updated,
+            });
+
+            IActionResult result = await sut.SetShortlistAsync(
+                "r_1", "concept-1", Json("{\"shortlisted\":true}"), CancellationToken.None);
+
+            result.Should().BeOfType<NoContentResult>();
+        }
+
+        [Test]
+        public async Task SetShortlistAsync_passes_the_boolean_through_to_the_use_case()
+        {
+            var spy = new SpySetShortlistUseCase(new SetMixLabConceptShortlistResult
+            {
+                Outcome = SetMixLabConceptShortlistResult.SetOutcome.Updated,
+            });
+            var sut = BuildSut(shortlistUseCase: spy);
+
+            await sut.SetShortlistAsync("r_1", "concept-1", Json("{\"shortlisted\":false}"), CancellationToken.None);
+
+            spy.RunIdReceived.Should().Be("r_1");
+            spy.ConceptIdReceived.Should().Be("concept-1");
+            spy.ShortlistedReceived.Should().BeFalse();
+        }
+
+        [Test]
+        public async Task SetShortlistAsync_run_not_found_returns_404()
+        {
+            var sut = BuildSut(shortlistResult: new SetMixLabConceptShortlistResult
+            {
+                Outcome = SetMixLabConceptShortlistResult.SetOutcome.RunNotFound,
+            });
+
+            IActionResult result = await sut.SetShortlistAsync(
+                "r_missing", "concept-1", Json("{\"shortlisted\":true}"), CancellationToken.None);
+
+            result.Should().BeOfType<NotFoundObjectResult>();
+        }
+
+        [Test]
+        public async Task SetShortlistAsync_concept_not_found_returns_404()
+        {
+            var sut = BuildSut(shortlistResult: new SetMixLabConceptShortlistResult
+            {
+                Outcome = SetMixLabConceptShortlistResult.SetOutcome.ConceptNotFound,
+            });
+
+            IActionResult result = await sut.SetShortlistAsync(
+                "r_1", "does-not-exist", Json("{\"shortlisted\":true}"), CancellationToken.None);
+
+            result.Should().BeOfType<NotFoundObjectResult>();
+        }
+
+        [TestCase("{}")]
+        [TestCase("[]")]
+        [TestCase("{\"shortlisted\":\"true\"}")]
+        [TestCase("{\"shortlisted\":1}")]
+        [TestCase("{\"shortlisted\":null}")]
+        public async Task SetShortlistAsync_missing_or_non_boolean_returns_400_without_calling_use_case(string body)
+        {
+            var spy = new SpySetShortlistUseCase(new SetMixLabConceptShortlistResult
+            {
+                Outcome = SetMixLabConceptShortlistResult.SetOutcome.Updated,
+            });
+            var sut = BuildSut(shortlistUseCase: spy);
+
+            IActionResult result = await sut.SetShortlistAsync("r_1", "concept-1", Json(body), CancellationToken.None);
+
+            result.Should().BeOfType<BadRequestObjectResult>();
+            spy.Called.Should().BeFalse();
+        }
+
+        [Test]
+        public async Task SetShortlistAsync_does_not_touch_the_feedback_use_cases()
+        {
+            // A shortlist must never produce a feedback event; the controller has no path from this
+            // endpoint into the submit use case.
+            var submitSpy = new SpySubmitFeedbackUseCase(new SubmitMixLabConceptFeedbackResult
+            {
+                Outcome = SubmitMixLabConceptFeedbackResult.SubmitOutcome.Recorded,
+            });
+            var sut = BuildSut(submitUseCase: submitSpy);
+
+            await sut.SetShortlistAsync("r_1", "concept-1", Json("{\"shortlisted\":true}"), CancellationToken.None);
+
+            submitSpy.Called.Should().BeFalse();
+        }
+
         private static string GetConfigurationKey(BearerSecretAttribute attribute)
         {
             return (string)typeof(BearerSecretAttribute)
@@ -206,15 +299,26 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             ISubmitMixLabConceptFeedbackUseCase? submitUseCase = null,
             SubmitMixLabConceptFeedbackResult? submitResult = null,
             IReadOnlyList<MixLabFeedbackEvent>? pendingEvents = null,
-            IAckMixLabFeedbackUseCase? ackUseCase = null)
+            IAckMixLabFeedbackUseCase? ackUseCase = null,
+            ISetMixLabConceptShortlistUseCase? shortlistUseCase = null,
+            SetMixLabConceptShortlistResult? shortlistResult = null)
         {
+            // Hoisted rather than inlined as a constructor argument: a multi-line non-first
+            // argument trips SA1118.
+            ISetMixLabConceptShortlistUseCase shortlist = shortlistUseCase
+                ?? new SpySetShortlistUseCase(shortlistResult ?? new SetMixLabConceptShortlistResult
+                {
+                    Outcome = SetMixLabConceptShortlistResult.SetOutcome.Updated,
+                });
+
             var sut = new MixLabFeedbackController(
                 submitUseCase ?? new StubSubmitFeedbackUseCase(submitResult ?? new SubmitMixLabConceptFeedbackResult
                 {
                     Outcome = SubmitMixLabConceptFeedbackResult.SubmitOutcome.Recorded,
                 }),
                 new StubGetPendingFeedbackUseCase(pendingEvents ?? Array.Empty<MixLabFeedbackEvent>()),
-                ackUseCase ?? new SpyAckFeedbackUseCase());
+                ackUseCase ?? new SpyAckFeedbackUseCase(),
+                shortlist);
 
             sut.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
             return sut;
@@ -303,6 +407,37 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             {
                 EventIdsReceived = eventIds;
                 return Task.CompletedTask;
+            }
+        }
+
+        private sealed class SpySetShortlistUseCase : ISetMixLabConceptShortlistUseCase
+        {
+            private readonly SetMixLabConceptShortlistResult _result;
+
+            public SpySetShortlistUseCase(SetMixLabConceptShortlistResult result)
+            {
+                _result = result;
+            }
+
+            public bool Called { get; private set; }
+
+            public string? RunIdReceived { get; private set; }
+
+            public string? ConceptIdReceived { get; private set; }
+
+            public bool? ShortlistedReceived { get; private set; }
+
+            public Task<SetMixLabConceptShortlistResult> SetAsync(
+                string runId,
+                string conceptId,
+                bool shortlisted,
+                CancellationToken cancellationToken)
+            {
+                Called = true;
+                RunIdReceived = runId;
+                ConceptIdReceived = conceptId;
+                ShortlistedReceived = shortlisted;
+                return Task.FromResult(_result);
             }
         }
     }

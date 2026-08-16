@@ -52,6 +52,14 @@ namespace Changsta.Ai.Tests.Unit.MixLab
         }
 
         [Test]
+        public void AddMixLabServices_resolves_the_shortlist_use_case()
+        {
+            using ServiceProvider provider = BuildProvider();
+
+            provider.GetRequiredService<ISetMixLabConceptShortlistUseCase>().Should().NotBeNull();
+        }
+
+        [Test]
         public void AddMixLabServices_binds_MixLabOptions_from_configuration()
         {
             using ServiceProvider provider = BuildProvider();
