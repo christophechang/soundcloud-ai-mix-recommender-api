@@ -13,5 +13,14 @@ namespace Changsta.Ai.Core.Domain.MixLab
         required public string Title { get; init; }
 
         public MixLabConceptFeedback? Feedback { get; init; }
+
+        /// <summary>
+        /// The operator has starred this cut as one they intend to make ("in session" in
+        /// mixlab-web). Set only through
+        /// <c>PUT /api/mixlab/runs/{id}/concepts/{conceptId}/shortlist</c>; deliberately outside the
+        /// feedback loop, so nothing about it reaches engine history. Absent on manifests written
+        /// before this field existed, which reads as <see langword="false"/>.
+        /// </summary>
+        public bool Shortlisted { get; init; }
     }
 }

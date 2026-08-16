@@ -26,10 +26,16 @@ namespace Changsta.Ai.Interface.Api.Controllers
         // Run manifests and index entries must serialise with camelCase property names AND
         // lower-case string enums (status = "queued", not 0) so the Python worker and the web UI
         // parse them. The global MVC options set camelCase names but not string enums, so serialise
-        // these responses explicitly.
+        // these responses explicitly. The verdict converter comes first: the generic string-enum
+        // converter would render PlayedModified as "playedModified", but the blob layer writes —
+        // and every consumer reads — "played_modified".
         private static readonly JsonSerializerOptions ManifestJsonOptions = new(JsonSerializerDefaults.Web)
         {
-            Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
+            Converters =
+            {
+                new MixLabFeedbackVerdictJsonConverter(),
+                new JsonStringEnumConverter(JsonNamingPolicy.CamelCase),
+            },
         };
 
         private readonly IEnqueueMixLabRunUseCase _enqueue;
@@ -39,6 +45,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
         private readonly IMixLabRunQueryUseCase _query;
         private readonly IOpenMixLabRunArtifactUseCase _artifacts;
         private readonly IDeleteMixLabRunUseCase _delete;
+        private readonly IReindexMixLabRunsUseCase _reindex;
 
         public MixLabRunsController(
             IEnqueueMixLabRunUseCase enqueue,
@@ -47,7 +54,8 @@ namespace Changsta.Ai.Interface.Api.Controllers
             IFailMixLabRunUseCase fail,
             IMixLabRunQueryUseCase query,
             IOpenMixLabRunArtifactUseCase artifacts,
-            IDeleteMixLabRunUseCase delete)
+            IDeleteMixLabRunUseCase delete,
+            IReindexMixLabRunsUseCase reindex)
         {
             _enqueue = enqueue;
             _claim = claim;
@@ -56,6 +64,7 @@ namespace Changsta.Ai.Interface.Api.Controllers
             _query = query;
             _artifacts = artifacts;
             _delete = delete;
+            _reindex = reindex;
         }
 
         [HttpPost("runs")]
@@ -232,6 +241,19 @@ namespace Changsta.Ai.Interface.Api.Controllers
                     ApiProblem.Status(StatusCodes.Status409Conflict, "A run is in flight — runs can't be deleted until it finishes."),
                 _ => ApiProblem.Status(StatusCodes.Status500InternalServerError, "An unexpected error occurred."),
             };
+        }
+
+        /// <summary>
+        /// Recomputes the archive index's shortlist/played counts from the run manifests. Idempotent
+        /// maintenance: run it once per environment after a deploy that introduces the counts, and
+        /// any time counts look stale. Not on a schedule — the counts are maintained on every write.
+        /// </summary>
+        [HttpPost("runs/reindex")]
+        public async Task<IActionResult> ReindexRunsAsync(CancellationToken cancellationToken)
+        {
+            int runs = await _reindex.ReindexAsync(cancellationToken).ConfigureAwait(false);
+
+            return Ok(new { runs });
         }
 
         [HttpGet("runs/{id}/report")]
