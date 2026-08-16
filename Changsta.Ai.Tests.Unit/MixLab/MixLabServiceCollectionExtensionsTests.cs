@@ -37,6 +37,8 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             provider.GetRequiredService<IFailMixLabRunUseCase>().Should().NotBeNull();
             provider.GetRequiredService<IMixLabRunQueryUseCase>().Should().NotBeNull();
             provider.GetRequiredService<IOpenMixLabRunArtifactUseCase>().Should().NotBeNull();
+            provider.GetRequiredService<IDeleteMixLabRunUseCase>().Should().NotBeNull();
+            provider.GetRequiredService<IReindexMixLabRunsUseCase>().Should().NotBeNull();
         }
 
         [Test]
@@ -49,6 +51,14 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             provider.GetRequiredService<ICompleteMixLabMapUseCase>().Should().NotBeNull();
             provider.GetRequiredService<IFailMixLabMapUseCase>().Should().NotBeNull();
             provider.GetRequiredService<IGetMixLabMapUseCase>().Should().NotBeNull();
+        }
+
+        [Test]
+        public void AddMixLabServices_resolves_the_shortlist_use_case()
+        {
+            using ServiceProvider provider = BuildProvider();
+
+            provider.GetRequiredService<ISetMixLabConceptShortlistUseCase>().Should().NotBeNull();
         }
 
         [Test]

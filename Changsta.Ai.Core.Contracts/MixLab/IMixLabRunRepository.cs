@@ -46,11 +46,40 @@ namespace Changsta.Ai.Core.Contracts.MixLab
 
         Task FailAsync(string runId, string error, CancellationToken cancellationToken);
 
+        /// <summary>
+        /// Merges feedback onto a run's concept, then refreshes that run's index counts (a played or
+        /// played-modified verdict is what <see cref="MixLabRunIndexEntry.PlayedCount"/> counts).
+        /// Throws <see cref="Changsta.Ai.Core.Exceptions.MixLabInvalidRunStateException"/> when the
+        /// run or the concept does not exist.
+        /// </summary>
         Task UpdateConceptFeedbackAsync(
             string runId,
             string conceptId,
             MixLabConceptFeedback feedback,
             CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Sets or clears the operator's "in session" marker on one of a run's concepts, then
+        /// refreshes that run's index counts. Idempotent. Throws
+        /// <see cref="Changsta.Ai.Core.Exceptions.MixLabInvalidRunStateException"/> when the run or
+        /// the concept does not exist. Writes no feedback event: shortlisting is a web/API concern
+        /// and never reaches engine history.
+        /// </summary>
+        Task UpdateConceptShortlistAsync(
+            string runId,
+            string conceptId,
+            bool shortlisted,
+            CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Re-derives <see cref="MixLabRunIndexEntry.ShortlistedCount"/> and
+        /// <see cref="MixLabRunIndexEntry.PlayedCount"/> for every index entry from its run
+        /// manifest, leaving every other field untouched and leaving alone any entry whose manifest
+        /// is missing. Returns the number of runs whose manifest was read and applied. Idempotent:
+        /// this is both the backfill for entries written before the counts existed and the repair
+        /// for counts left stale by a crash between a manifest write and its index write.
+        /// </summary>
+        Task<int> RecomputeIndexCountsAsync(CancellationToken cancellationToken);
 
         /// <summary>
         /// Permanently removes a run: its manifest and every per-run artifact blob
