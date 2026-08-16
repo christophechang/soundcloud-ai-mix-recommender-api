@@ -340,6 +340,50 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
                 cancellationToken).ConfigureAwait(false);
         }
 
+        public async Task<int> RecomputeIndexCountsAsync(CancellationToken cancellationToken)
+        {
+            IReadOnlyList<MixLabRunIndexEntry> entries = await ReadIndexEntriesAsync(cancellationToken).ConfigureAwait(false);
+
+            if (entries.Count == 0)
+            {
+                // Nothing to project from: skip the index write entirely rather than rewriting the
+                // blob (and burning an ETag) to store what it already holds.
+                return 0;
+            }
+
+            // One blob GET per run, sequentially. At the current archive size (tens of runs) that is
+            // far inside App Service's 230-second request cap; introduce bounded concurrency before
+            // the archive reaches the low hundreds. The sweep is not a snapshot: a shortlist or
+            // feedback write that lands after this loop read that run's manifest is clobbered by the
+            // numbers below and stays wrong until the next reindex. Harmless for a manual repair
+            // tool — do not put this on a timer, where it would race the live writes continuously.
+            var counts = new Dictionary<string, (int ShortlistedCount, int PlayedCount)>(StringComparer.Ordinal);
+
+            foreach (MixLabRunIndexEntry entry in entries)
+            {
+                MixLabRun? run = await GetAsync(entry.RunId, cancellationToken).ConfigureAwait(false);
+
+                if (run is not null)
+                {
+                    counts[entry.RunId] = CountConcepts(run);
+                }
+            }
+
+            // Apply with `with` on whatever the index holds at write time — never write back the
+            // array read above, because a worker claim/complete may have changed a status meanwhile.
+            await MutateRunIndexWithRetryAsync(
+                current => current
+                    .Select(e => counts.TryGetValue(e.RunId, out (int ShortlistedCount, int PlayedCount) c)
+                        ? e with { ShortlistedCount = c.ShortlistedCount, PlayedCount = c.PlayedCount }
+                        : e)
+                    .ToArray(),
+                cancellationToken).ConfigureAwait(false);
+
+            _logger.LogInformation("Recomputed MixLab index counts for {RunCount} run(s).", counts.Count);
+
+            return counts.Count;
+        }
+
         public async Task DeleteAsync(string runId, CancellationToken cancellationToken)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(runId);
@@ -541,7 +585,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
         /// index mutate delegate, so it repeats on every retry attempt — see
         /// <see cref="MutateRunIndexWithRetryAsync(Func{IReadOnlyList{MixLabRunIndexEntry}, CancellationToken, Task{IReadOnlyList{MixLabRunIndexEntry}}}, CancellationToken)"/>.
         /// Manifest and index are separate blobs with separate ETags, so a crash between the two
-        /// writes leaves the counts stale; <c>POST /api/mixlab/runs/reindex</c> is the repair.
+        /// writes leaves the counts stale; <see cref="RecomputeIndexCountsAsync"/> is the repair.
         /// <para>
         /// Best-effort by design: the caller's real write (the manifest) has already landed by the
         /// time this runs, so an index that will not settle within the retry budget is logged and

@@ -45,6 +45,7 @@ namespace Changsta.Ai.Interface.Api.MixLab
             services.AddScoped<IMixLabRunQueryUseCase, MixLabRunQueryUseCase>();
             services.AddScoped<IOpenMixLabRunArtifactUseCase, OpenMixLabRunArtifactUseCase>();
             services.AddScoped<IDeleteMixLabRunUseCase, DeleteMixLabRunUseCase>();
+            services.AddScoped<IReindexMixLabRunsUseCase, ReindexMixLabRunsUseCase>();
 
             // History and feedback use cases (A4).
             services.AddScoped<IGetMixLabHistoryUseCase, GetMixLabHistoryUseCase>();

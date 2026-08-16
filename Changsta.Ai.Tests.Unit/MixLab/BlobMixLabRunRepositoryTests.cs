@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Changsta.Ai.Core.Domain.MixLab;
@@ -526,6 +527,87 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             MixLabRun? run = await sut.GetAsync(runId, CancellationToken.None);
             run!.Concepts.Single().Shortlisted.Should().BeTrue();
             (await EntryAsync(sut, runId)).ShortlistedCount.Should().Be(0, "the index write never landed");
+        }
+
+        [Test]
+        public async Task RecomputeIndexCountsAsync_repairs_drifted_counts_and_returns_the_run_count()
+        {
+            var sut = BuildSut(out var gateway, out _);
+            string runId = await CompletedRunWithConceptsAsync(sut, "concept-1", "concept-2");
+            await sut.UpdateConceptShortlistAsync(runId, "concept-1", shortlisted: true, CancellationToken.None);
+
+            // Simulate the crash window: the index carries numbers the manifest does not support.
+            IReadOnlyList<MixLabRunIndexEntry> index = await sut.GetIndexAsync(take: 100, skip: 0, CancellationToken.None);
+            MixLabRunIndexEntry[] drifted = index
+                .Select(e => e with { ShortlistedCount = 7, PlayedCount = 9 })
+                .ToArray();
+            await gateway.WriteUnconditionalAsync(
+                "runs/index.json",
+                JsonSerializer.SerializeToUtf8Bytes(drifted, MixLabJsonOptions.Options),
+                CancellationToken.None);
+
+            int repaired = await sut.RecomputeIndexCountsAsync(CancellationToken.None);
+
+            repaired.Should().Be(1);
+            MixLabRunIndexEntry entry = await EntryAsync(sut, runId);
+            entry.ShortlistedCount.Should().Be(1);
+            entry.PlayedCount.Should().Be(0);
+        }
+
+        [Test]
+        public async Task RecomputeIndexCountsAsync_preserves_every_other_field_on_the_entry()
+        {
+            var sut = BuildSut(out _, out _);
+            string runId = await CompletedRunWithConceptsAsync(sut, "concept-1", "concept-2");
+
+            await sut.RecomputeIndexCountsAsync(CancellationToken.None);
+
+            MixLabRunIndexEntry entry = await EntryAsync(sut, runId);
+            entry.Status.Should().Be(MixLabRunStatus.Succeeded);
+            entry.Genre.Should().Be("traverse");
+            entry.FlagsSummary.Should().Be("all/high/mixed");
+            entry.ConceptCount.Should().Be(2);
+        }
+
+        [Test]
+        public async Task RecomputeIndexCountsAsync_leaves_an_entry_whose_manifest_is_missing_untouched()
+        {
+            var sut = BuildSut(out var gateway, out _);
+            string runId = await CompletedRunWithConceptsAsync(sut, "concept-1");
+            await sut.UpdateConceptShortlistAsync(runId, "concept-1", shortlisted: true, CancellationToken.None);
+            await gateway.DeleteAsync($"runs/{runId}/run.json", CancellationToken.None);
+
+            int repaired = await sut.RecomputeIndexCountsAsync(CancellationToken.None);
+
+            repaired.Should().Be(0);
+            (await EntryAsync(sut, runId)).ShortlistedCount.Should().Be(1);
+        }
+
+        [Test]
+        public async Task RecomputeIndexCountsAsync_is_idempotent()
+        {
+            var sut = BuildSut(out _, out _);
+            string runId = await CompletedRunWithConceptsAsync(sut, "concept-1");
+            await sut.UpdateConceptFeedbackAsync(
+                runId,
+                "concept-1",
+                new MixLabConceptFeedback { Verdict = MixLabFeedbackVerdict.Played, RecordedAt = DateTimeOffset.UtcNow },
+                CancellationToken.None);
+
+            await sut.RecomputeIndexCountsAsync(CancellationToken.None);
+            await sut.RecomputeIndexCountsAsync(CancellationToken.None);
+
+            (await EntryAsync(sut, runId)).PlayedCount.Should().Be(1);
+        }
+
+        [Test]
+        public async Task RecomputeIndexCountsAsync_empty_archive_returns_zero()
+        {
+            var sut = BuildSut(out _, out _);
+
+            int repaired = await sut.RecomputeIndexCountsAsync(CancellationToken.None);
+
+            repaired.Should().Be(0);
         }
 
         private static async Task<MixLabRunIndexEntry> EntryAsync(BlobMixLabRunRepository sut, string runId)

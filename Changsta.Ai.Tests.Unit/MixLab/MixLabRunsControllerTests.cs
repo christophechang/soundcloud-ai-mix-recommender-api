@@ -82,6 +82,30 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             GetConfigurationKey(bearerSecretAttribute).Should().Be("MixLab:ApiSecret");
         }
 
+        [Test]
+        public async Task ReindexRunsAsync_returns_200_with_the_run_count()
+        {
+            var spy = new SpyReindexUseCase(returns: 12);
+            var sut = BuildSut(reindex: spy);
+
+            IActionResult result = await sut.ReindexRunsAsync(CancellationToken.None);
+
+            var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+            JsonSerializer.Serialize(ok.Value).Should().Be("{\"runs\":12}");
+            spy.Called.Should().BeTrue();
+        }
+
+        [Test]
+        public async Task ReindexRunsAsync_empty_archive_returns_zero()
+        {
+            var sut = BuildSut(reindex: new SpyReindexUseCase(returns: 0));
+
+            IActionResult result = await sut.ReindexRunsAsync(CancellationToken.None);
+
+            var ok = result.Should().BeOfType<OkObjectResult>().Subject;
+            JsonSerializer.Serialize(ok.Value).Should().Be("{\"runs\":0}");
+        }
+
         private static string GetConfigurationKey(BearerSecretAttribute attribute)
         {
             return (string)typeof(BearerSecretAttribute)
@@ -134,7 +158,9 @@ namespace Changsta.Ai.Tests.Unit.MixLab
         /// performs no null checks, so the unused ones are passed as null rather than growing five
         /// stub classes that nothing asserts on.
         /// </summary>
-        private static MixLabRunsController BuildSut(IMixLabRunQueryUseCase? query = null)
+        private static MixLabRunsController BuildSut(
+            IMixLabRunQueryUseCase? query = null,
+            IReindexMixLabRunsUseCase? reindex = null)
         {
             var sut = new MixLabRunsController(
                 enqueue: null!,
@@ -143,7 +169,8 @@ namespace Changsta.Ai.Tests.Unit.MixLab
                 fail: null!,
                 query: query ?? new StubRunQueryUseCase(null, Array.Empty<MixLabRunIndexEntry>()),
                 artifacts: null!,
-                delete: null!);
+                delete: null!,
+                reindex: reindex ?? new SpyReindexUseCase(returns: 0));
 
             sut.ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() };
             return sut;
@@ -165,6 +192,24 @@ namespace Changsta.Ai.Tests.Unit.MixLab
 
             public Task<MixLabRun?> GetAsync(string runId, CancellationToken cancellationToken) =>
                 Task.FromResult(_run);
+        }
+
+        private sealed class SpyReindexUseCase : IReindexMixLabRunsUseCase
+        {
+            private readonly int _returns;
+
+            public SpyReindexUseCase(int returns)
+            {
+                _returns = returns;
+            }
+
+            public bool Called { get; private set; }
+
+            public Task<int> ReindexAsync(CancellationToken cancellationToken)
+            {
+                Called = true;
+                return Task.FromResult(_returns);
+            }
         }
     }
 }

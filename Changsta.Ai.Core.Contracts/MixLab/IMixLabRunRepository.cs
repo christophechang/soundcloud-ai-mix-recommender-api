@@ -72,6 +72,16 @@ namespace Changsta.Ai.Core.Contracts.MixLab
             CancellationToken cancellationToken);
 
         /// <summary>
+        /// Re-derives <see cref="MixLabRunIndexEntry.ShortlistedCount"/> and
+        /// <see cref="MixLabRunIndexEntry.PlayedCount"/> for every index entry from its run
+        /// manifest, leaving every other field untouched and leaving alone any entry whose manifest
+        /// is missing. Returns the number of runs whose manifest was read and applied. Idempotent:
+        /// this is both the backfill for entries written before the counts existed and the repair
+        /// for counts left stale by a crash between a manifest write and its index write.
+        /// </summary>
+        Task<int> RecomputeIndexCountsAsync(CancellationToken cancellationToken);
+
+        /// <summary>
         /// Permanently removes a run: its manifest and every per-run artifact blob
         /// (<c>runs/{runId}/*</c>) plus its entry in the archive index. Idempotent — deleting a run
         /// that does not exist (no manifest, no index entry) is a no-op. Does not touch the concept

@@ -37,6 +37,8 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             provider.GetRequiredService<IFailMixLabRunUseCase>().Should().NotBeNull();
             provider.GetRequiredService<IMixLabRunQueryUseCase>().Should().NotBeNull();
             provider.GetRequiredService<IOpenMixLabRunArtifactUseCase>().Should().NotBeNull();
+            provider.GetRequiredService<IDeleteMixLabRunUseCase>().Should().NotBeNull();
+            provider.GetRequiredService<IReindexMixLabRunsUseCase>().Should().NotBeNull();
         }
 
         [Test]
