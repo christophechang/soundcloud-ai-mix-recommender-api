@@ -316,57 +316,14 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
             MixLabConceptFeedback feedback,
             CancellationToken cancellationToken)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(runId);
-            ArgumentException.ThrowIfNullOrWhiteSpace(conceptId);
             ArgumentNullException.ThrowIfNull(feedback);
 
-            for (int attempt = 1; attempt <= MaxWriteAttempts; attempt++)
-            {
-                MixLabBlobReadResult? read = await _gateway
-                    .ReadAsync(MixLabBlobPaths.RunManifest(runId), cancellationToken)
-                    .ConfigureAwait(false);
-
-                if (read is null)
-                {
-                    throw new MixLabInvalidRunStateException(runId, $"MixLab run '{runId}' does not exist.");
-                }
-
-                MixLabRun current = Deserialize<MixLabRun>(read.Content);
-
-                if (!current.Concepts.Any(c => string.Equals(c.ConceptId, conceptId, StringComparison.Ordinal)))
-                {
-                    throw new MixLabInvalidRunStateException(
-                        runId,
-                        $"Concept '{conceptId}' was not found on MixLab run '{runId}'.");
-                }
-
-                MixLabRun updated = current with
-                {
-                    Concepts = current.Concepts
-                        .Select(c => string.Equals(c.ConceptId, conceptId, StringComparison.Ordinal)
-                            ? c with { Feedback = feedback }
-                            : c)
-                        .ToArray(),
-                };
-
-                try
-                {
-                    await _gateway
-                        .WriteAsync(MixLabBlobPaths.RunManifest(runId), Serialize(updated), read.ETag, cancellationToken)
-                        .ConfigureAwait(false);
-                }
-                catch (MixLabConcurrencyException) when (attempt < MaxWriteAttempts)
-                {
-                    continue;
-                }
-
-                await RefreshIndexCountsAsync(runId, cancellationToken).ConfigureAwait(false);
-
-                return;
-            }
-
-            throw new MixLabConcurrencyException(
-                $"Could not update concept feedback on MixLab run '{runId}' after {MaxWriteAttempts} attempts because of concurrent writes.");
+            await MutateConceptWithRetryAsync(
+                runId,
+                conceptId,
+                "feedback",
+                c => c with { Feedback = feedback },
+                cancellationToken).ConfigureAwait(false);
         }
 
         public async Task UpdateConceptShortlistAsync(
@@ -375,56 +332,12 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
             bool shortlisted,
             CancellationToken cancellationToken)
         {
-            ArgumentException.ThrowIfNullOrWhiteSpace(runId);
-            ArgumentException.ThrowIfNullOrWhiteSpace(conceptId);
-
-            for (int attempt = 1; attempt <= MaxWriteAttempts; attempt++)
-            {
-                MixLabBlobReadResult? read = await _gateway
-                    .ReadAsync(MixLabBlobPaths.RunManifest(runId), cancellationToken)
-                    .ConfigureAwait(false);
-
-                if (read is null)
-                {
-                    throw new MixLabInvalidRunStateException(runId, $"MixLab run '{runId}' does not exist.");
-                }
-
-                MixLabRun current = Deserialize<MixLabRun>(read.Content);
-
-                if (!current.Concepts.Any(c => string.Equals(c.ConceptId, conceptId, StringComparison.Ordinal)))
-                {
-                    throw new MixLabInvalidRunStateException(
-                        runId,
-                        $"Concept '{conceptId}' was not found on MixLab run '{runId}'.");
-                }
-
-                MixLabRun updated = current with
-                {
-                    Concepts = current.Concepts
-                        .Select(c => string.Equals(c.ConceptId, conceptId, StringComparison.Ordinal)
-                            ? c with { Shortlisted = shortlisted }
-                            : c)
-                        .ToArray(),
-                };
-
-                try
-                {
-                    await _gateway
-                        .WriteAsync(MixLabBlobPaths.RunManifest(runId), Serialize(updated), read.ETag, cancellationToken)
-                        .ConfigureAwait(false);
-                }
-                catch (MixLabConcurrencyException) when (attempt < MaxWriteAttempts)
-                {
-                    continue;
-                }
-
-                await RefreshIndexCountsAsync(runId, cancellationToken).ConfigureAwait(false);
-
-                return;
-            }
-
-            throw new MixLabConcurrencyException(
-                $"Could not update concept shortlist on MixLab run '{runId}' after {MaxWriteAttempts} attempts because of concurrent writes.");
+            await MutateConceptWithRetryAsync(
+                runId,
+                conceptId,
+                "shortlist",
+                c => c with { Shortlisted = shortlisted },
+                cancellationToken).ConfigureAwait(false);
         }
 
         public async Task DeleteAsync(string runId, CancellationToken cancellationToken)
@@ -486,6 +399,73 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
                     || c.Feedback.Verdict == MixLabFeedbackVerdict.PlayedModified));
 
             return (shortlisted, played);
+        }
+
+        /// <summary>
+        /// Read-modify-write of a single concept inside a run manifest under ETag <c>If-Match</c>
+        /// with bounded retry, followed by the best-effort index-count refresh. The concept-level
+        /// writes (feedback, shortlist) differ only in which field <paramref name="mutate"/> sets and
+        /// in the <paramref name="operation"/> word their exhausted-retry message carries.
+        /// Throws <see cref="MixLabInvalidRunStateException"/> when the run or the concept does not
+        /// exist, and <see cref="MixLabConcurrencyException"/> when the manifest write never lands.
+        /// </summary>
+        private async Task MutateConceptWithRetryAsync(
+            string runId,
+            string conceptId,
+            string operation,
+            Func<MixLabRunConcept, MixLabRunConcept> mutate,
+            CancellationToken cancellationToken)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(conceptId);
+
+            for (int attempt = 1; attempt <= MaxWriteAttempts; attempt++)
+            {
+                MixLabBlobReadResult? read = await _gateway
+                    .ReadAsync(MixLabBlobPaths.RunManifest(runId), cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (read is null)
+                {
+                    throw new MixLabInvalidRunStateException(runId, $"MixLab run '{runId}' does not exist.");
+                }
+
+                MixLabRun current = Deserialize<MixLabRun>(read.Content);
+
+                if (!current.Concepts.Any(c => string.Equals(c.ConceptId, conceptId, StringComparison.Ordinal)))
+                {
+                    throw new MixLabInvalidRunStateException(
+                        runId,
+                        $"Concept '{conceptId}' was not found on MixLab run '{runId}'.");
+                }
+
+                MixLabRun updated = current with
+                {
+                    Concepts = current.Concepts
+                        .Select(c => string.Equals(c.ConceptId, conceptId, StringComparison.Ordinal)
+                            ? mutate(c)
+                            : c)
+                        .ToArray(),
+                };
+
+                try
+                {
+                    await _gateway
+                        .WriteAsync(MixLabBlobPaths.RunManifest(runId), Serialize(updated), read.ETag, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch (MixLabConcurrencyException) when (attempt < MaxWriteAttempts)
+                {
+                    continue;
+                }
+
+                await RefreshIndexCountsAsync(runId, cancellationToken).ConfigureAwait(false);
+
+                return;
+            }
+
+            throw new MixLabConcurrencyException(
+                $"Could not update concept {operation} on MixLab run '{runId}' after {MaxWriteAttempts} attempts because of concurrent writes.");
         }
 
         private async Task RequeueStaleRunningAsync(TimeSpan staleLease, CancellationToken cancellationToken)

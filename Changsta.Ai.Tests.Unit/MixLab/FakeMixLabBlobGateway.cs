@@ -27,11 +27,13 @@ namespace Changsta.Ai.Tests.Unit.MixLab
         public int ForcedConflictsRemaining { get; set; }
 
         /// <summary>
-        /// Path-scoped equivalent of <see cref="ForcedConflictsRemaining"/>: the next N conditional
+        /// Path-scoped equivalent of <see cref="ForcedConflictsRemaining"/>: the next N
         /// <see cref="WriteAsync"/> calls for that exact blob path throw a simulated
-        /// <see cref="MixLabConcurrencyException"/>. Needed because an operation that writes the
-        /// manifest and then the index would otherwise spend the global counter on the manifest,
-        /// leaving the index's retry loop untested.
+        /// <see cref="MixLabConcurrencyException"/>, whether or not they carry an expected ETag —
+        /// like the global counter, this one is spent before any precondition is inspected.
+        /// (<see cref="WriteUnconditionalAsync"/> consults neither counter.) Needed because an
+        /// operation that writes the manifest and then the index would otherwise spend the global
+        /// counter on the manifest, leaving the index's retry loop untested.
         /// </summary>
         public Dictionary<string, int> ForcedConflictsByPath { get; } = new(StringComparer.Ordinal);
 
