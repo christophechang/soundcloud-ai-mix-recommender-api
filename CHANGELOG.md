@@ -14,6 +14,8 @@ Notable changes to the SoundCloud Mix Recommender API.
 
 - **Feedback verdicts on `GET /api/mixlab/runs/{id}` now carry their wire spelling.** The blob layer writes `played_modified` (per the architecture doc's §5.3 contract) but that response serialised the enum through a generic camelCase string-enum converter, emitting `playedModified` — a spelling no consumer recognises. A cut marked "played, modified" therefore counted as played on the server while reading as unknown on the client. The dedicated verdict converter moved from the Azure infrastructure project into `Core.Contracts`, beside the wire-value constants it now shares a switch with, so the API and the blob layer serialise identically by construction rather than by two switches staying in sync.
 
+901 tests, 0 warnings.
+
 ## v1.66
 
 ### Fixes
