@@ -584,6 +584,50 @@ namespace Changsta.Ai.Tests.Unit.MixLab
         }
 
         [Test]
+        public async Task RecomputeIndexCountsAsync_repairs_only_the_readable_run_of_a_multi_entry_index()
+        {
+            // The single-entry cases above cannot show that the sweep rebuilds the index in place:
+            // with one entry, "repaired" and "reordered into oblivion" look identical. Two entries,
+            // both drifted, one manifest deleted — order, the repair, and the skip are all visible.
+            var sut = BuildSut(out var gateway, out _);
+            string olderRunId = await CompletedRunWithConceptsAsync(sut, "concept-1");
+            string newerRunId = await CompletedRunWithConceptsAsync(sut, "concept-2", "concept-3");
+            await sut.UpdateConceptShortlistAsync(newerRunId, "concept-2", shortlisted: true, CancellationToken.None);
+
+            IReadOnlyList<MixLabRunIndexEntry> index = await sut.GetIndexAsync(take: 100, skip: 0, CancellationToken.None);
+            MixLabRunIndexEntry[] drifted = index
+                .Select(e => e with { ShortlistedCount = 7, PlayedCount = 9 })
+                .ToArray();
+            await gateway.WriteUnconditionalAsync(
+                "runs/index.json",
+                JsonSerializer.SerializeToUtf8Bytes(drifted, MixLabJsonOptions.Options),
+                CancellationToken.None);
+            await gateway.DeleteAsync($"runs/{olderRunId}/run.json", CancellationToken.None);
+
+            int repaired = await sut.RecomputeIndexCountsAsync(CancellationToken.None);
+
+            repaired.Should().Be(1, "only one of the two manifests could be read");
+
+            IReadOnlyList<MixLabRunIndexEntry> after = await sut.GetIndexAsync(take: 100, skip: 0, CancellationToken.None);
+            after.Select(e => e.RunId).Should().Equal(
+                new[] { newerRunId, olderRunId },
+                "the sweep projects the index in place and must not reorder it");
+
+            MixLabRunIndexEntry repairedEntry = after.Single(e => e.RunId == newerRunId);
+            repairedEntry.ShortlistedCount.Should().Be(1);
+            repairedEntry.PlayedCount.Should().Be(0);
+
+            MixLabRunIndexEntry untouched = after.Single(e => e.RunId == olderRunId);
+            untouched.Should().BeEquivalentTo(
+                drifted.Single(e => e.RunId == olderRunId),
+                "an entry with no manifest to project from is copied through byte-for-byte");
+            untouched.Status.Should().Be(MixLabRunStatus.Succeeded);
+            untouched.ConceptCount.Should().Be(1);
+            untouched.ShortlistedCount.Should().Be(7, "there was nothing left to recompute the count from");
+            untouched.PlayedCount.Should().Be(9);
+        }
+
+        [Test]
         public async Task RecomputeIndexCountsAsync_is_idempotent()
         {
             var sut = BuildSut(out _, out _);
@@ -603,11 +647,12 @@ namespace Changsta.Ai.Tests.Unit.MixLab
         [Test]
         public async Task RecomputeIndexCountsAsync_empty_archive_returns_zero()
         {
-            var sut = BuildSut(out _, out _);
+            var sut = BuildSut(out var gateway, out _);
 
             int repaired = await sut.RecomputeIndexCountsAsync(CancellationToken.None);
 
             repaired.Should().Be(0);
+            gateway.WrittenPaths.Should().BeEmpty("with nothing to project from, the index blob is not rewritten");
         }
 
         private static async Task<MixLabRunIndexEntry> EntryAsync(BlobMixLabRunRepository sut, string runId)

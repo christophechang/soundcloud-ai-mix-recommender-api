@@ -369,6 +369,13 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
                 }
             }
 
+            if (counts.Count == 0)
+            {
+                // Same reasoning as the empty-index early-out above: every manifest was missing, so
+                // the projection below would rewrite the index byte-for-byte. Skip the write.
+                return 0;
+            }
+
             // Apply with `with` on whatever the index holds at write time — never write back the
             // array read above, because a worker claim/complete may have changed a status meanwhile.
             await MutateRunIndexWithRetryAsync(
@@ -587,9 +594,11 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
         /// Manifest and index are separate blobs with separate ETags, so a crash between the two
         /// writes leaves the counts stale; <see cref="RecomputeIndexCountsAsync"/> is the repair.
         /// <para>
-        /// Best-effort by design: the caller's real write (the manifest) has already landed by the
-        /// time this runs, so an index that will not settle within the retry budget is logged and
-        /// left stale rather than surfaced as a failure for an operation that succeeded.
+        /// Best-effort by design, and unconditionally so apart from cancellation: the caller's real
+        /// write (the manifest) has already landed by the time this runs, so <em>any</em> index
+        /// failure — a lost ETag race, a blob-service 500/503, a transport fault — is logged and the
+        /// counts left stale rather than surfaced as a failure for an operation that succeeded. Only
+        /// <see cref="OperationCanceledException"/> propagates.
         /// </para>
         /// </summary>
         private async Task RefreshIndexCountsAsync(string runId, CancellationToken cancellationToken)
@@ -621,8 +630,12 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
                     },
                     cancellationToken).ConfigureAwait(false);
             }
-            catch (MixLabConcurrencyException ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                // Deliberately broad: the failure mode is not only a lost ETag race. A 500/503, a
+                // socket reset, or a malformed index blob would otherwise escape this guard and fail
+                // a write whose manifest has already landed. Cancellation still propagates — the
+                // caller is going away, and swallowing it would hide that.
                 _logger.LogWarning(
                     ex,
                     "Index counts for {RunId} left stale after exhausting index write retries; POST runs/reindex repairs.",
