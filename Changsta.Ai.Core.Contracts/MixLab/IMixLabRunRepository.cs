@@ -46,10 +46,29 @@ namespace Changsta.Ai.Core.Contracts.MixLab
 
         Task FailAsync(string runId, string error, CancellationToken cancellationToken);
 
+        /// <summary>
+        /// Merges feedback onto a run's concept, then refreshes that run's index counts (a played or
+        /// played-modified verdict is what <see cref="MixLabRunIndexEntry.PlayedCount"/> counts).
+        /// Throws <see cref="Changsta.Ai.Core.Exceptions.MixLabInvalidRunStateException"/> when the
+        /// run or the concept does not exist.
+        /// </summary>
         Task UpdateConceptFeedbackAsync(
             string runId,
             string conceptId,
             MixLabConceptFeedback feedback,
+            CancellationToken cancellationToken);
+
+        /// <summary>
+        /// Sets or clears the operator's "in session" marker on one of a run's concepts, then
+        /// refreshes that run's index counts. Idempotent. Throws
+        /// <see cref="Changsta.Ai.Core.Exceptions.MixLabInvalidRunStateException"/> when the run or
+        /// the concept does not exist. Writes no feedback event: shortlisting is a web/API concern
+        /// and never reaches engine history.
+        /// </summary>
+        Task UpdateConceptShortlistAsync(
+            string runId,
+            string conceptId,
+            bool shortlisted,
             CancellationToken cancellationToken);
 
         /// <summary>

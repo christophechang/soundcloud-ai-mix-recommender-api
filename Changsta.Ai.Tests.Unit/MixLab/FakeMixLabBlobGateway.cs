@@ -26,12 +26,30 @@ namespace Changsta.Ai.Tests.Unit.MixLab
         /// </summary>
         public int ForcedConflictsRemaining { get; set; }
 
+        /// <summary>
+        /// Path-scoped equivalent of <see cref="ForcedConflictsRemaining"/>: the next N conditional
+        /// <see cref="WriteAsync"/> calls for that exact blob path throw a simulated
+        /// <see cref="MixLabConcurrencyException"/>. Needed because an operation that writes the
+        /// manifest and then the index would otherwise spend the global counter on the manifest,
+        /// leaving the index's retry loop untested.
+        /// </summary>
+        public Dictionary<string, int> ForcedConflictsByPath { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>
+        /// Every blob path passed to <see cref="ReadAsync"/>, in order — lets a test assert that a
+        /// retrying index mutation re-read the run manifest on each attempt rather than reusing a
+        /// stale snapshot.
+        /// </summary>
+        public List<string> ReadPaths { get; } = new();
+
         public List<string> DeletedPaths { get; } = new();
 
         public List<string> WrittenPaths { get; } = new();
 
         public Task<MixLabBlobReadResult?> ReadAsync(string blobPath, CancellationToken cancellationToken)
         {
+            ReadPaths.Add(blobPath);
+
             if (_blobs.TryGetValue(blobPath, out var stored))
             {
                 return Task.FromResult<MixLabBlobReadResult?>(new MixLabBlobReadResult(stored.Content, stored.ETag));
@@ -46,6 +64,12 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             string? expectedETag,
             CancellationToken cancellationToken)
         {
+            if (ForcedConflictsByPath.TryGetValue(blobPath, out int pathConflicts) && pathConflicts > 0)
+            {
+                ForcedConflictsByPath[blobPath] = pathConflicts - 1;
+                throw new MixLabConcurrencyException($"Simulated MixLab blob write conflict for '{blobPath}'.");
+            }
+
             if (ForcedConflictsRemaining > 0)
             {
                 ForcedConflictsRemaining--;

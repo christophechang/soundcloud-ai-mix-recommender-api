@@ -387,6 +387,166 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             entry.PlayedCount.Should().Be(0);
         }
 
+        [Test]
+        public async Task UpdateConceptFeedbackAsync_played_verdict_bumps_played_count_on_the_index()
+        {
+            var sut = BuildSut(out _, out _);
+            string runId = await CompletedRunWithConceptsAsync(sut, "concept-1", "concept-2");
+
+            await sut.UpdateConceptFeedbackAsync(
+                runId,
+                "concept-1",
+                new MixLabConceptFeedback { Verdict = MixLabFeedbackVerdict.Played, RecordedAt = DateTimeOffset.UtcNow },
+                CancellationToken.None);
+
+            MixLabRunIndexEntry entry = await EntryAsync(sut, runId);
+            entry.PlayedCount.Should().Be(1);
+            entry.ShortlistedCount.Should().Be(0);
+            entry.ConceptCount.Should().Be(2);
+        }
+
+        [Test]
+        public async Task UpdateConceptFeedbackAsync_played_modified_counts_as_played()
+        {
+            var sut = BuildSut(out _, out _);
+            string runId = await CompletedRunWithConceptsAsync(sut, "concept-1");
+
+            await sut.UpdateConceptFeedbackAsync(
+                runId,
+                "concept-1",
+                new MixLabConceptFeedback { Verdict = MixLabFeedbackVerdict.PlayedModified, RecordedAt = DateTimeOffset.UtcNow },
+                CancellationToken.None);
+
+            (await EntryAsync(sut, runId)).PlayedCount.Should().Be(1);
+        }
+
+        [Test]
+        public async Task UpdateConceptFeedbackAsync_rejected_verdict_drops_the_played_count_again()
+        {
+            var sut = BuildSut(out _, out _);
+            string runId = await CompletedRunWithConceptsAsync(sut, "concept-1");
+
+            await sut.UpdateConceptFeedbackAsync(
+                runId,
+                "concept-1",
+                new MixLabConceptFeedback { Verdict = MixLabFeedbackVerdict.Played, RecordedAt = DateTimeOffset.UtcNow },
+                CancellationToken.None);
+            await sut.UpdateConceptFeedbackAsync(
+                runId,
+                "concept-1",
+                new MixLabConceptFeedback { Verdict = MixLabFeedbackVerdict.Rejected, RecordedAt = DateTimeOffset.UtcNow },
+                CancellationToken.None);
+
+            (await EntryAsync(sut, runId)).PlayedCount.Should().Be(0);
+        }
+
+        [Test]
+        public async Task UpdateConceptShortlistAsync_sets_the_flag_and_the_index_count()
+        {
+            var sut = BuildSut(out _, out _);
+            string runId = await CompletedRunWithConceptsAsync(sut, "concept-1", "concept-2");
+
+            await sut.UpdateConceptShortlistAsync(runId, "concept-1", shortlisted: true, CancellationToken.None);
+
+            MixLabRun? run = await sut.GetAsync(runId, CancellationToken.None);
+            run!.Concepts.Single(c => c.ConceptId == "concept-1").Shortlisted.Should().BeTrue();
+            run.Concepts.Single(c => c.ConceptId == "concept-2").Shortlisted.Should().BeFalse();
+            (await EntryAsync(sut, runId)).ShortlistedCount.Should().Be(1);
+        }
+
+        [Test]
+        public async Task UpdateConceptShortlistAsync_clearing_is_idempotent_and_returns_the_count_to_zero()
+        {
+            var sut = BuildSut(out _, out _);
+            string runId = await CompletedRunWithConceptsAsync(sut, "concept-1");
+
+            await sut.UpdateConceptShortlistAsync(runId, "concept-1", shortlisted: true, CancellationToken.None);
+            await sut.UpdateConceptShortlistAsync(runId, "concept-1", shortlisted: false, CancellationToken.None);
+            await sut.UpdateConceptShortlistAsync(runId, "concept-1", shortlisted: false, CancellationToken.None);
+
+            MixLabRun? run = await sut.GetAsync(runId, CancellationToken.None);
+            run!.Concepts.Single().Shortlisted.Should().BeFalse();
+            (await EntryAsync(sut, runId)).ShortlistedCount.Should().Be(0);
+        }
+
+        [Test]
+        public async Task UpdateConceptShortlistAsync_unknown_run_throws_invalid_run_state()
+        {
+            var sut = BuildSut(out _, out _);
+
+            Func<Task> act = () => sut.UpdateConceptShortlistAsync("r_missing", "concept-1", true, CancellationToken.None);
+
+            await act.Should().ThrowAsync<MixLabInvalidRunStateException>();
+        }
+
+        [Test]
+        public async Task UpdateConceptShortlistAsync_unknown_concept_throws_invalid_run_state()
+        {
+            var sut = BuildSut(out _, out _);
+            string runId = await CompletedRunWithConceptsAsync(sut, "concept-1");
+
+            Func<Task> act = () => sut.UpdateConceptShortlistAsync(runId, "does-not-exist", true, CancellationToken.None);
+
+            await act.Should().ThrowAsync<MixLabInvalidRunStateException>();
+        }
+
+        [Test]
+        public async Task UpdateConceptShortlistAsync_index_write_conflict_rereads_the_manifest_and_converges()
+        {
+            var sut = BuildSut(out var gateway, out _);
+            string runId = await CompletedRunWithConceptsAsync(sut, "concept-1", "concept-2");
+            gateway.ReadPaths.Clear();
+
+            // One forced conflict on the index blob only: the manifest write lands, the first index
+            // attempt loses the ETag race, and the second attempt must derive the counts from a
+            // freshly-read manifest rather than a snapshot taken before the retry.
+            gateway.ForcedConflictsByPath["runs/index.json"] = 1;
+
+            await sut.UpdateConceptShortlistAsync(runId, "concept-1", shortlisted: true, CancellationToken.None);
+
+            (await EntryAsync(sut, runId)).ShortlistedCount.Should().Be(1);
+            gateway.ReadPaths.Count(p => p == $"runs/{runId}/run.json")
+                .Should().Be(3, "one read to mutate the manifest plus one per index-mutate attempt");
+        }
+
+        [Test]
+        public async Task UpdateConceptShortlistAsync_exhausted_index_retries_keep_the_manifest_write_and_leave_counts_stale()
+        {
+            // The count refresh is a derived projection, not the caller's write. Once the manifest
+            // has landed, an index that will not settle must not turn a successful shortlist into a
+            // 500 — the numbers go stale and POST runs/reindex repairs them.
+            var sut = BuildSut(out var gateway, out _);
+            string runId = await CompletedRunWithConceptsAsync(sut, "concept-1");
+
+            gateway.ForcedConflictsByPath["runs/index.json"] = 10;
+
+            Func<Task> act = () => sut.UpdateConceptShortlistAsync(runId, "concept-1", true, CancellationToken.None);
+
+            await act.Should().NotThrowAsync();
+            MixLabRun? run = await sut.GetAsync(runId, CancellationToken.None);
+            run!.Concepts.Single().Shortlisted.Should().BeTrue();
+            (await EntryAsync(sut, runId)).ShortlistedCount.Should().Be(0, "the index write never landed");
+        }
+
+        private static async Task<MixLabRunIndexEntry> EntryAsync(BlobMixLabRunRepository sut, string runId)
+        {
+            IReadOnlyList<MixLabRunIndexEntry> index = await sut.GetIndexAsync(take: 100, skip: 0, CancellationToken.None);
+            return index.Single(e => e.RunId == runId);
+        }
+
+        private static async Task<string> CompletedRunWithConceptsAsync(
+            BlobMixLabRunRepository sut,
+            params string[] conceptIds)
+        {
+            MixLabRun created = await sut.CreateQueuedAsync(MakeFlags(), "u_1", CancellationToken.None);
+            await sut.TryClaimOldestQueuedAsync("worker-1", TimeSpan.FromMinutes(45), CancellationToken.None);
+            await sut.CompleteAsync(
+                created.RunId,
+                conceptIds.Select(id => MakeConcept(id, $"Title {id}")).ToArray(),
+                CancellationToken.None);
+            return created.RunId;
+        }
+
         private static BlobMixLabRunRepository BuildSut(out FakeMixLabBlobGateway gateway, out FakeTimeProvider timeProvider)
         {
             gateway = new FakeMixLabBlobGateway();

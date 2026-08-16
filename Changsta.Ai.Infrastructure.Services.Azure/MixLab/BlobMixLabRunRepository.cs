@@ -360,11 +360,71 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
                     continue;
                 }
 
+                await RefreshIndexCountsAsync(runId, cancellationToken).ConfigureAwait(false);
+
                 return;
             }
 
             throw new MixLabConcurrencyException(
                 $"Could not update concept feedback on MixLab run '{runId}' after {MaxWriteAttempts} attempts because of concurrent writes.");
+        }
+
+        public async Task UpdateConceptShortlistAsync(
+            string runId,
+            string conceptId,
+            bool shortlisted,
+            CancellationToken cancellationToken)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(runId);
+            ArgumentException.ThrowIfNullOrWhiteSpace(conceptId);
+
+            for (int attempt = 1; attempt <= MaxWriteAttempts; attempt++)
+            {
+                MixLabBlobReadResult? read = await _gateway
+                    .ReadAsync(MixLabBlobPaths.RunManifest(runId), cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (read is null)
+                {
+                    throw new MixLabInvalidRunStateException(runId, $"MixLab run '{runId}' does not exist.");
+                }
+
+                MixLabRun current = Deserialize<MixLabRun>(read.Content);
+
+                if (!current.Concepts.Any(c => string.Equals(c.ConceptId, conceptId, StringComparison.Ordinal)))
+                {
+                    throw new MixLabInvalidRunStateException(
+                        runId,
+                        $"Concept '{conceptId}' was not found on MixLab run '{runId}'.");
+                }
+
+                MixLabRun updated = current with
+                {
+                    Concepts = current.Concepts
+                        .Select(c => string.Equals(c.ConceptId, conceptId, StringComparison.Ordinal)
+                            ? c with { Shortlisted = shortlisted }
+                            : c)
+                        .ToArray(),
+                };
+
+                try
+                {
+                    await _gateway
+                        .WriteAsync(MixLabBlobPaths.RunManifest(runId), Serialize(updated), read.ETag, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch (MixLabConcurrencyException) when (attempt < MaxWriteAttempts)
+                {
+                    continue;
+                }
+
+                await RefreshIndexCountsAsync(runId, cancellationToken).ConfigureAwait(false);
+
+                return;
+            }
+
+            throw new MixLabConcurrencyException(
+                $"Could not update concept shortlist on MixLab run '{runId}' after {MaxWriteAttempts} attempts because of concurrent writes.");
         }
 
         public async Task DeleteAsync(string runId, CancellationToken cancellationToken)
@@ -411,6 +471,21 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
         {
             return JsonSerializer.Deserialize<T>(content, MixLabJsonOptions.Options)
                 ?? throw new JsonException($"MixLab blob content deserialised to null for type {typeof(T).Name}.");
+        }
+
+        /// <summary>
+        /// The manifest-derived counts an index entry projects: starred concepts, and concepts whose
+        /// feedback verdict is played or played-modified.
+        /// </summary>
+        private static (int ShortlistedCount, int PlayedCount) CountConcepts(MixLabRun run)
+        {
+            int shortlisted = run.Concepts.Count(c => c.Shortlisted);
+            int played = run.Concepts.Count(c =>
+                c.Feedback is not null
+                && (c.Feedback.Verdict == MixLabFeedbackVerdict.Played
+                    || c.Feedback.Verdict == MixLabFeedbackVerdict.PlayedModified));
+
+            return (shortlisted, played);
         }
 
         private async Task RequeueStaleRunningAsync(TimeSpan staleLease, CancellationToken cancellationToken)
@@ -481,6 +556,56 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
             }
         }
 
+        /// <summary>
+        /// Re-derives one run's index counts from its manifest. The manifest read happens inside the
+        /// index mutate delegate, so it repeats on every retry attempt — see
+        /// <see cref="MutateRunIndexWithRetryAsync(Func{IReadOnlyList{MixLabRunIndexEntry}, CancellationToken, Task{IReadOnlyList{MixLabRunIndexEntry}}}, CancellationToken)"/>.
+        /// Manifest and index are separate blobs with separate ETags, so a crash between the two
+        /// writes leaves the counts stale; <c>POST /api/mixlab/runs/reindex</c> is the repair.
+        /// <para>
+        /// Best-effort by design: the caller's real write (the manifest) has already landed by the
+        /// time this runs, so an index that will not settle within the retry budget is logged and
+        /// left stale rather than surfaced as a failure for an operation that succeeded.
+        /// </para>
+        /// </summary>
+        private async Task RefreshIndexCountsAsync(string runId, CancellationToken cancellationToken)
+        {
+            try
+            {
+                await MutateRunIndexWithRetryAsync(
+                    async (entries, ct) =>
+                    {
+                        if (!entries.Any(e => string.Equals(e.RunId, runId, StringComparison.Ordinal)))
+                        {
+                            return entries;
+                        }
+
+                        MixLabRun? run = await GetAsync(runId, ct).ConfigureAwait(false);
+
+                        if (run is null)
+                        {
+                            return entries;
+                        }
+
+                        (int shortlistedCount, int playedCount) = CountConcepts(run);
+
+                        return entries
+                            .Select(e => string.Equals(e.RunId, runId, StringComparison.Ordinal)
+                                ? e with { ShortlistedCount = shortlistedCount, PlayedCount = playedCount }
+                                : e)
+                            .ToArray();
+                    },
+                    cancellationToken).ConfigureAwait(false);
+            }
+            catch (MixLabConcurrencyException ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Index counts for {RunId} left stale after exhausting index write retries; POST runs/reindex repairs.",
+                    runId);
+            }
+        }
+
         private async Task<IReadOnlyList<MixLabRunIndexEntry>> ReadIndexEntriesAsync(CancellationToken cancellationToken)
         {
             MixLabBlobReadResult? read = await _gateway
@@ -492,8 +617,24 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
                 : Deserialize<MixLabRunIndexEntry[]>(read.Content);
         }
 
-        private async Task MutateRunIndexWithRetryAsync(
+        private Task MutateRunIndexWithRetryAsync(
             Func<IReadOnlyList<MixLabRunIndexEntry>, IReadOnlyList<MixLabRunIndexEntry>> mutate,
+            CancellationToken cancellationToken)
+        {
+            return MutateRunIndexWithRetryAsync(
+                (entries, _) => Task.FromResult(mutate(entries)),
+                cancellationToken);
+        }
+
+        /// <summary>
+        /// Read-modify-write of <c>runs/index.json</c> under ETag <c>If-Match</c> with bounded
+        /// retry. The mutate delegate runs afresh on every attempt, which is what makes the derived
+        /// counts converge: a count refresh re-reads the run manifest inside the delegate, and a
+        /// competing writer always writes its manifest before its index, so the attempt that lost
+        /// the ETag race also sees the competitor's manifest.
+        /// </summary>
+        private async Task MutateRunIndexWithRetryAsync(
+            Func<IReadOnlyList<MixLabRunIndexEntry>, CancellationToken, Task<IReadOnlyList<MixLabRunIndexEntry>>> mutateAsync,
             CancellationToken cancellationToken)
         {
             for (int attempt = 1; attempt <= MaxWriteAttempts; attempt++)
@@ -506,7 +647,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
                     ? Array.Empty<MixLabRunIndexEntry>()
                     : Deserialize<MixLabRunIndexEntry[]>(read.Content);
 
-                IReadOnlyList<MixLabRunIndexEntry> next = mutate(current);
+                IReadOnlyList<MixLabRunIndexEntry> next = await mutateAsync(current, cancellationToken).ConfigureAwait(false);
 
                 try
                 {
