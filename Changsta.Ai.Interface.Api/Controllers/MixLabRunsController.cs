@@ -26,10 +26,16 @@ namespace Changsta.Ai.Interface.Api.Controllers
         // Run manifests and index entries must serialise with camelCase property names AND
         // lower-case string enums (status = "queued", not 0) so the Python worker and the web UI
         // parse them. The global MVC options set camelCase names but not string enums, so serialise
-        // these responses explicitly.
+        // these responses explicitly. The verdict converter comes first: the generic string-enum
+        // converter would render PlayedModified as "playedModified", but the blob layer writes —
+        // and every consumer reads — "played_modified".
         private static readonly JsonSerializerOptions ManifestJsonOptions = new(JsonSerializerDefaults.Web)
         {
-            Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
+            Converters =
+            {
+                new MixLabFeedbackVerdictJsonConverter(),
+                new JsonStringEnumConverter(JsonNamingPolicy.CamelCase),
+            },
         };
 
         private readonly IEnqueueMixLabRunUseCase _enqueue;

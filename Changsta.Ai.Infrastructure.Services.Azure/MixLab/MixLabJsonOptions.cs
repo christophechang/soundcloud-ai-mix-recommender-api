@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Changsta.Ai.Core.Contracts.MixLab;
 
 namespace Changsta.Ai.Infrastructure.Services.Azure.MixLab
 {

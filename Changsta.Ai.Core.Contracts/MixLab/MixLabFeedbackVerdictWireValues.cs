@@ -6,12 +6,10 @@ namespace Changsta.Ai.Core.Contracts.MixLab
     /// <summary>
     /// The snake_case wire strings for <see cref="MixLabFeedbackVerdict"/>
     /// (<c>played</c>, <c>played_modified</c>, <c>rejected</c>, <c>unused</c> — see
-    /// docs/architecture/mixlab-anywhere.md §5.3), duplicated from the private switch inside
-    /// <c>Changsta.Ai.Infrastructure.Services.Azure.MixLab.MixLabFeedbackVerdictJsonConverter</c>.
-    /// That converter is <see langword="internal"/> to the Infrastructure.Services.Azure assembly
-    /// (visible only to its own <c>InternalsVisibleTo</c> friend, Tests.Unit) so it cannot be
-    /// referenced here to parse request bodies or render the feedback endpoints' JSON responses.
-    /// Both call sites must stay in sync with that converter's switch if the wire values ever change.
+    /// docs/architecture/mixlab-anywhere.md §5.3). This is the single definition of those values:
+    /// <see cref="MixLabFeedbackVerdictJsonConverter"/> sits beside it and delegates to
+    /// <see cref="TryParse"/> / <see cref="ToWireValue"/>, and the controllers use them directly to
+    /// parse request bodies and render feedback responses.
     /// </summary>
     public static class MixLabFeedbackVerdictWireValues
     {
