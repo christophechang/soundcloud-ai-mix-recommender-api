@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Changsta.Ai.Core.Domain.MixLab;
@@ -320,6 +321,70 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             Func<Task> act = () => sut.DeleteAsync("r_does_not_exist", CancellationToken.None);
 
             await act.Should().NotThrowAsync();
+        }
+
+        [Test]
+        public async Task GetIndexAsync_legacy_entry_without_counts_reads_zero()
+        {
+            // Every index entry written before this feature lacks both count fields; they must
+            // deserialise as 0 rather than throwing, because the reindex is what fills them in.
+            var sut = BuildSut(out var gateway, out _);
+            byte[] legacy = Encoding.UTF8.GetBytes(
+                "[{\"runId\":\"r_legacy\",\"createdAt\":\"2026-08-01T00:00:00+00:00\",\"status\":\"succeeded\"," +
+                "\"genre\":\"techno\",\"flagsSummary\":\"all/high/mixed\",\"conceptCount\":2}]");
+            await gateway.WriteUnconditionalAsync("runs/index.json", legacy, CancellationToken.None);
+
+            IReadOnlyList<MixLabRunIndexEntry> entries = await sut.GetIndexAsync(take: 100, skip: 0, CancellationToken.None);
+
+            MixLabRunIndexEntry entry = entries.Single();
+            entry.RunId.Should().Be("r_legacy");
+            entry.ShortlistedCount.Should().Be(0);
+            entry.PlayedCount.Should().Be(0);
+        }
+
+        [Test]
+        public async Task GetAsync_legacy_manifest_concept_without_shortlisted_reads_false()
+        {
+            var sut = BuildSut(out var gateway, out _);
+            byte[] legacy = Encoding.UTF8.GetBytes(
+                "{\"schemaVersion\":1,\"runId\":\"r_legacy\",\"createdAt\":\"2026-08-01T00:00:00+00:00\"," +
+                "\"status\":\"succeeded\",\"flags\":{\"genre\":\"techno\",\"mode\":\"all\",\"risk\":\"high\"," +
+                "\"directions\":\"mixed\"},\"uploadId\":\"u_1\"," +
+                "\"concepts\":[{\"conceptId\":\"c_1\",\"title\":\"Title\"}]}");
+            await gateway.WriteUnconditionalAsync("runs/r_legacy/run.json", legacy, CancellationToken.None);
+
+            MixLabRun? run = await sut.GetAsync("r_legacy", CancellationToken.None);
+
+            run!.Concepts.Single().Shortlisted.Should().BeFalse();
+        }
+
+        [Test]
+        public async Task CompleteAsync_round_trips_shortlisted_true()
+        {
+            var sut = BuildSut(out _, out _);
+            MixLabRun created = await sut.CreateQueuedAsync(MakeFlags(), "u_1", CancellationToken.None);
+            await sut.TryClaimOldestQueuedAsync("worker-1", TimeSpan.FromMinutes(45), CancellationToken.None);
+            await sut.CompleteAsync(
+                created.RunId,
+                new[] { MakeConcept("concept-1", "Title") with { Shortlisted = true } },
+                CancellationToken.None);
+
+            MixLabRun? stored = await sut.GetAsync(created.RunId, CancellationToken.None);
+
+            stored!.Concepts.Single().Shortlisted.Should().BeTrue();
+        }
+
+        [Test]
+        public async Task CreateQueuedAsync_index_entry_starts_with_zero_counts()
+        {
+            var sut = BuildSut(out _, out _);
+
+            MixLabRun created = await sut.CreateQueuedAsync(MakeFlags(), "u_1", CancellationToken.None);
+
+            IReadOnlyList<MixLabRunIndexEntry> index = await sut.GetIndexAsync(take: 100, skip: 0, CancellationToken.None);
+            MixLabRunIndexEntry entry = index.Single(e => e.RunId == created.RunId);
+            entry.ShortlistedCount.Should().Be(0);
+            entry.PlayedCount.Should().Be(0);
         }
 
         private static BlobMixLabRunRepository BuildSut(out FakeMixLabBlobGateway gateway, out FakeTimeProvider timeProvider)
