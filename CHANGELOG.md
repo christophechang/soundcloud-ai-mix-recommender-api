@@ -2,7 +2,7 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
-## Unreleased
+## v1.67
 
 ### Features
 
