@@ -90,7 +90,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             IReadOnlyDictionary<string, double> weights)
         {
             return mixes
-                .SelectMany(m => m.Moods)
+                .SelectMany(m => m.Moods ?? Array.Empty<string>())
                 .Where(m => !string.IsNullOrWhiteSpace(m))
                 .Select(m => m.Trim().ToLowerInvariant())
                 .Distinct(StringComparer.OrdinalIgnoreCase)

@@ -48,9 +48,9 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
 
         private static RelatedMixRef[] ScoreRelated(Mix target, IReadOnlyList<Mix> all)
         {
-            var trackSet = BuildTrackSet(target.Tracklist);
-            var artistSet = BuildArtistSet(target.Tracklist);
-            var moodSet = BuildMoodSet(target.Moods);
+            var trackSet = BuildTrackSet(target.Tracklist ?? Array.Empty<Track>());
+            var artistSet = BuildArtistSet(target.Tracklist ?? Array.Empty<Track>());
+            var moodSet = BuildMoodSet(target.Moods ?? Array.Empty<string>());
 
             return all
                 .Where(m => !string.Equals(m.Url, target.Url, StringComparison.OrdinalIgnoreCase))
@@ -77,13 +77,13 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
         {
             int score = 0;
 
-            int sharedTracks = candidate.Tracklist
+            int sharedTracks = (candidate.Tracklist ?? Array.Empty<Track>())
                 .Count(t => targetTracks.Contains(
-                    (t.Artist.ToLowerInvariant(), t.Title.ToLowerInvariant())));
+                    ((t.Artist ?? string.Empty).ToLowerInvariant(), (t.Title ?? string.Empty).ToLowerInvariant())));
             score += Math.Min(sharedTracks, MaxSharedTracksCap) * ScoreSharedTrack;
 
-            int sharedArtists = candidate.Tracklist
-                .Select(t => t.Artist.ToLowerInvariant())
+            int sharedArtists = (candidate.Tracklist ?? Array.Empty<Track>())
+                .Select(t => (t.Artist ?? string.Empty).ToLowerInvariant())
                 .Distinct(StringComparer.Ordinal)
                 .Count(a => targetArtists.Contains(a));
             score += Math.Min(sharedArtists, MaxSharedArtistsCap) * ScoreSharedArtist;
@@ -100,8 +100,8 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
                 score += ScoreSameEnergy;
             }
 
-            int sharedMoods = candidate.Moods
-                .Count(m => targetMoods.Contains(m.ToLowerInvariant()));
+            int sharedMoods = (candidate.Moods ?? Array.Empty<string>())
+                .Count(m => targetMoods.Contains((m ?? string.Empty).ToLowerInvariant()));
             score += Math.Min(sharedMoods, MaxSharedMoodsCap) * ScoreSharedMood;
 
             score += WarmthScore(target, candidate);
@@ -165,7 +165,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             var set = new HashSet<(string, string)>();
             foreach (Track t in tracks)
             {
-                set.Add((t.Artist.ToLowerInvariant(), t.Title.ToLowerInvariant()));
+                set.Add(((t.Artist ?? string.Empty).ToLowerInvariant(), (t.Title ?? string.Empty).ToLowerInvariant()));
             }
 
             return set;
@@ -176,7 +176,7 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             var set = new HashSet<string>(StringComparer.Ordinal);
             foreach (Track t in tracks)
             {
-                set.Add(t.Artist.ToLowerInvariant());
+                set.Add((t.Artist ?? string.Empty).ToLowerInvariant());
             }
 
             return set;
@@ -187,14 +187,19 @@ namespace Changsta.Ai.Infrastructure.Services.Azure.Catalogue
             var set = new HashSet<string>(StringComparer.Ordinal);
             foreach (string m in moods)
             {
-                set.Add(m.ToLowerInvariant());
+                set.Add((m ?? string.Empty).ToLowerInvariant());
             }
 
             return set;
         }
 
-        private static bool RelatedEquals(IReadOnlyList<RelatedMixRef> existing, RelatedMixRef[] computed)
+        private static bool RelatedEquals(IReadOnlyList<RelatedMixRef>? existing, RelatedMixRef[] computed)
         {
+            if (existing is null)
+            {
+                return false;
+            }
+
             if (existing.Count != computed.Length)
             {
                 return false;
