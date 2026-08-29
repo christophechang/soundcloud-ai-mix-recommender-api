@@ -1,9 +1,11 @@
 using System.Collections.Generic;
+using System.Security;
 using System.Threading;
 using System.Threading.Tasks;
 using Changsta.Ai.Core.BusinessProcesses.Catalogue;
 using Changsta.Ai.Core.Contracts.Catalogue;
 using Changsta.Ai.Core.Domain;
+using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 
 namespace Changsta.Ai.Tests.Unit.Catalogue
@@ -17,7 +19,7 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
             var invalidator = new SpyCatalogCacheInvalidator();
             var provider = new SpyMixCatalogueProvider();
 
-            var sut = new CatalogFlushUseCase(invalidator, provider);
+            var sut = new CatalogFlushUseCase(invalidator, provider, NullLogger<CatalogFlushUseCase>.Instance);
 
             await sut.FlushAsync(CancellationToken.None);
 
@@ -34,10 +36,27 @@ namespace Changsta.Ai.Tests.Unit.Catalogue
 
             provider.OnGetLatest = () => invalidateVersionAtWarmup = invalidator.InvalidateCallCount;
 
-            var sut = new CatalogFlushUseCase(invalidator, provider);
+            var sut = new CatalogFlushUseCase(invalidator, provider, NullLogger<CatalogFlushUseCase>.Instance);
             await sut.FlushAsync(CancellationToken.None);
 
             Assert.That(invalidateVersionAtWarmup, Is.EqualTo(1), "Invalidate must be called before GetLatestAsync.");
+        }
+
+        [Test]
+        public async Task FlushAsync_keeps_invalidation_when_rewarm_hits_security_validation()
+        {
+            var invalidator = new SpyCatalogCacheInvalidator();
+            var provider = new SpyMixCatalogueProvider
+            {
+                OnGetLatest = () => throw new SecurityException("Invalid assembly public key."),
+            };
+
+            var sut = new CatalogFlushUseCase(invalidator, provider, NullLogger<CatalogFlushUseCase>.Instance);
+
+            await sut.FlushAsync(CancellationToken.None);
+
+            Assert.That(invalidator.InvalidateCallCount, Is.EqualTo(1));
+            Assert.That(provider.GetLatestCallCount, Is.EqualTo(1));
         }
 
         private sealed class SpyCatalogCacheInvalidator : ICatalogCacheInvalidator
