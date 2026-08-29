@@ -75,7 +75,7 @@ namespace Changsta.Ai.Tests.Unit.MixLab
         }
 
         [Test]
-        public async Task GetAsync_unknown_concrete_upload_is_not_found()
+        public async Task GetAsync_unknown_concrete_upload_with_no_map_job_is_not_found()
         {
             (GetMixLabMapUseCase sut, _, StubMixLabUploadRepository uploads) = BuildSut();
             uploads.Seed("u_1");
@@ -83,6 +83,18 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             GetMixLabMapResult result = await sut.GetAsync("u_does_not_exist", CancellationToken.None);
 
             result.Outcome.Should().Be(GetMixLabMapResult.GetOutcome.NotFound);
+        }
+
+        [Test]
+        public async Task GetAsync_concrete_upload_with_map_job_returns_found_even_when_upload_was_pruned()
+        {
+            (GetMixLabMapUseCase sut, BlobMixLabMapRepository maps, _) = BuildSut();
+            await maps.RequestAsync("u_pruned", CancellationToken.None);
+
+            GetMixLabMapResult result = await sut.GetAsync("u_pruned", CancellationToken.None);
+
+            result.Outcome.Should().Be(GetMixLabMapResult.GetOutcome.Found);
+            result.Job!.UploadId.Should().Be("u_pruned");
         }
 
         [Test]
