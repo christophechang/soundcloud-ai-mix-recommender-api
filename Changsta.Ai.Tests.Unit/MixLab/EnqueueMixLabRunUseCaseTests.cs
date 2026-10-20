@@ -434,6 +434,87 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             result.ErrorMessage.Should().Contain("playlist");
         }
 
+        [TestCase("claude-sonnet-5-5")]
+        [TestCase("claude-opus-5-5")]
+        public async Task EnqueueAsync_accepts_allowed_model_and_persists_it_as_camelCase_model(string model)
+        {
+            (EnqueueMixLabRunUseCase sut, BlobMixLabRunRepository runs, BlobMixLabUploadRepository uploads, FakeMixLabBlobGateway gateway) = BuildSutWithGateway();
+            string uploadId = await SeedUploadAsync(uploads);
+            string flags = "{\"genre\":\"techno\",\"mode\":\"all\",\"risk\":\"high\",\"directions\":\"mixed\",\"model\":\"" + model + "\"}";
+
+            EnqueueMixLabRunResult result = await sut.EnqueueAsync(Json(flags), uploadId, CancellationToken.None);
+
+            result.Outcome.Should().Be(EnqueueMixLabRunResult.EnqueueOutcome.Created);
+            MixLabRun? run = await runs.GetAsync(result.RunId!, CancellationToken.None);
+            run!.Flags.Model.Should().Be(model);
+            using JsonDocument manifest = await ReadManifestAsync(gateway, result.RunId!);
+            manifest.RootElement.GetProperty("flags").GetProperty("model").GetString().Should().Be(model);
+        }
+
+        [Test]
+        public async Task EnqueueAsync_model_omitted_is_accepted_and_manifest_carries_null_like_other_optionals()
+        {
+            (EnqueueMixLabRunUseCase sut, BlobMixLabRunRepository runs, BlobMixLabUploadRepository uploads, FakeMixLabBlobGateway gateway) = BuildSutWithGateway();
+            string uploadId = await SeedUploadAsync(uploads);
+
+            EnqueueMixLabRunResult result = await sut.EnqueueAsync(Json(ValidFlags), uploadId, CancellationToken.None);
+
+            result.Outcome.Should().Be(EnqueueMixLabRunResult.EnqueueOutcome.Created);
+            MixLabRun? run = await runs.GetAsync(result.RunId!, CancellationToken.None);
+            run!.Flags.Model.Should().BeNull();
+            using JsonDocument manifest = await ReadManifestAsync(gateway, result.RunId!);
+            JsonElement persisted = manifest.RootElement.GetProperty("flags");
+            persisted.GetProperty("playlist").ValueKind.Should().Be(JsonValueKind.Null);
+            persisted.GetProperty("model").ValueKind.Should().Be(JsonValueKind.Null);
+        }
+
+        [Test]
+        public async Task EnqueueAsync_model_explicit_null_is_accepted()
+        {
+            (EnqueueMixLabRunUseCase sut, BlobMixLabRunRepository runs, BlobMixLabUploadRepository uploads, _) = BuildSut();
+            string uploadId = await SeedUploadAsync(uploads);
+            const string flags = "{\"genre\":\"techno\",\"mode\":\"all\",\"risk\":\"high\",\"directions\":\"mixed\",\"model\":null}";
+
+            EnqueueMixLabRunResult result = await sut.EnqueueAsync(Json(flags), uploadId, CancellationToken.None);
+
+            result.Outcome.Should().Be(EnqueueMixLabRunResult.EnqueueOutcome.Created);
+            MixLabRun? run = await runs.GetAsync(result.RunId!, CancellationToken.None);
+            run!.Flags.Model.Should().BeNull();
+        }
+
+        [TestCase("\"claude-fable-5-1\"", TestName = "unknown model")]
+        [TestCase("\"gpt-4\"", TestName = "non-claude model")]
+        [TestCase("\"\"", TestName = "empty model")]
+        [TestCase("\"Claude-Sonnet-5-5\"", TestName = "wrong-case model")]
+        [TestCase("5", TestName = "non-string model")]
+        public async Task EnqueueAsync_rejects_model_outside_allow_list_naming_the_field(string modelJson)
+        {
+            (EnqueueMixLabRunUseCase sut, _, BlobMixLabUploadRepository uploads, _) = BuildSut();
+            string uploadId = await SeedUploadAsync(uploads);
+            string flags = "{\"genre\":\"techno\",\"mode\":\"all\",\"risk\":\"high\",\"directions\":\"mixed\",\"model\":" + modelJson + "}";
+
+            EnqueueMixLabRunResult result = await sut.EnqueueAsync(Json(flags), uploadId, CancellationToken.None);
+
+            result.Outcome.Should().Be(EnqueueMixLabRunResult.EnqueueOutcome.InvalidRequest);
+            result.ErrorMessage.Should().Contain("model").And.Contain("claude-sonnet-5-5");
+        }
+
+        private static (EnqueueMixLabRunUseCase Sut, BlobMixLabRunRepository Runs, BlobMixLabUploadRepository Uploads, FakeMixLabBlobGateway Gateway) BuildSutWithGateway()
+        {
+            var gateway = new FakeMixLabBlobGateway();
+            var time = new FakeTimeProvider();
+            var runs = new BlobMixLabRunRepository(gateway, time, NullLogger<BlobMixLabRunRepository>.Instance);
+            var uploads = new BlobMixLabUploadRepository(gateway, time, NullLogger<BlobMixLabUploadRepository>.Instance);
+            var sut = new EnqueueMixLabRunUseCase(runs, uploads, NullLogger<EnqueueMixLabRunUseCase>.Instance);
+            return (sut, runs, uploads, gateway);
+        }
+
+        private static async Task<JsonDocument> ReadManifestAsync(FakeMixLabBlobGateway gateway, string runId)
+        {
+            MixLabBlobReadResult? read = await gateway.ReadAsync($"runs/{runId}/run.json", CancellationToken.None);
+            return JsonDocument.Parse(read!.Content);
+        }
+
         private static (EnqueueMixLabRunUseCase Sut, BlobMixLabRunRepository Runs, BlobMixLabUploadRepository Uploads, FakeTimeProvider Time) BuildSut()
         {
             var gateway = new FakeMixLabBlobGateway();
