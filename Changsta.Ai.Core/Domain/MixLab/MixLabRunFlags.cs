@@ -47,5 +47,11 @@ namespace Changsta.Ai.Core.Domain.MixLab
         public int? MinYear { get; init; }
 
         public int? MaxYear { get; init; }
+
+        /// <summary>
+        /// The Claude model the run uses (<c>claude-sonnet-5-5</c>, <c>claude-opus-5-5</c> or <c>claude-haiku-5-5</c>).
+        /// Null means the engine default applies.
+        /// </summary>
+        public string? Model { get; init; }
     }
 }

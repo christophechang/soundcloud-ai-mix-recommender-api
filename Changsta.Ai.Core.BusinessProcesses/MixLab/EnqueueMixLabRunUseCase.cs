@@ -54,6 +54,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
             "maxBpm",
             "minYear",
             "maxYear",
+            "model",
         };
 
         private static readonly HashSet<string> Modes = new(StringComparer.Ordinal) { "unplayed", "all", "played" };
@@ -61,6 +62,8 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
         private static readonly HashSet<string> Risks = new(StringComparer.Ordinal) { "low", "medium", "high" };
 
         private static readonly HashSet<string> DirectionValues = new(StringComparer.Ordinal) { "mixed", "off", "only" };
+
+        private static readonly HashSet<string> ModelValues = new(StringComparer.Ordinal) { "claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5" };
 
         private readonly IMixLabRunRepository _runs;
         private readonly IMixLabUploadRepository _uploads;
@@ -191,6 +194,11 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
                 return false;
             }
 
+            if (!TryReadOptionalAllowedString(flags, "model", ModelValues, out string? model, out error))
+            {
+                return false;
+            }
+
             if (minBpm is double lo && maxBpm is double hi && lo > hi)
             {
                 error = "'minBpm' must be less than or equal to 'maxBpm'.";
@@ -221,6 +229,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
                 MaxBpm = maxBpm,
                 MinYear = minYear,
                 MaxYear = maxYear,
+                Model = model,
             };
             return true;
         }
@@ -265,6 +274,32 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
                 return false;
             }
 
+            return true;
+        }
+
+        private static bool TryReadOptionalAllowedString(
+            JsonElement flags,
+            string key,
+            HashSet<string> allowed,
+            out string? value,
+            out string? error)
+        {
+            value = null;
+            error = null;
+
+            if (!flags.TryGetProperty(key, out JsonElement element) || element.ValueKind == JsonValueKind.Null)
+            {
+                return true;
+            }
+
+            string? candidate = element.ValueKind == JsonValueKind.String ? element.GetString() : null;
+            if (candidate is null || !allowed.Contains(candidate))
+            {
+                error = $"'{key}' must be one of: {string.Join(", ", allowed)}.";
+                return false;
+            }
+
+            value = candidate;
             return true;
         }
 
