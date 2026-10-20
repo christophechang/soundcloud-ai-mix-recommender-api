@@ -6,7 +6,7 @@ Notable changes to the SoundCloud Mix Recommender API.
 
 ### Features
 
-- **`model` run flag.** `POST /api/mixlab/runs` accepts an optional `model` flag choosing which Claude model the run uses: `claude-sonnet-5-5` or `claude-opus-5-5`. Any other value is rejected with `400` naming the field, as for `mode`, `risk` and `directions`; omitted or `null` leaves the engine default. Persisted verbatim into the run manifest as camelCase `model` (`null` when unset, like the other optional flags). Existing enqueue payloads are unaffected.
+- **`model` run flag.** `POST /api/mixlab/runs` accepts an optional `model` flag choosing which Claude model the run uses: `claude-sonnet-5-5`, `claude-opus-5-5` or `claude-haiku-5-5`. Any other value is rejected with `400` naming the field, as for `mode`, `risk` and `directions`; omitted or `null` leaves the engine default. Persisted verbatim into the run manifest as camelCase `model` (`null` when unset, like the other optional flags). Existing enqueue payloads are unaffected.
 
 ## v1.67
 

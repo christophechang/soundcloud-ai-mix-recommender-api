@@ -436,6 +436,7 @@ namespace Changsta.Ai.Tests.Unit.MixLab
 
         [TestCase("claude-sonnet-5-5")]
         [TestCase("claude-opus-5-5")]
+        [TestCase("claude-haiku-5-5")]
         public async Task EnqueueAsync_accepts_allowed_model_and_persists_it_as_camelCase_model(string model)
         {
             (EnqueueMixLabRunUseCase sut, BlobMixLabRunRepository runs, BlobMixLabUploadRepository uploads, FakeMixLabBlobGateway gateway) = BuildSutWithGateway();
@@ -496,7 +497,7 @@ namespace Changsta.Ai.Tests.Unit.MixLab
             EnqueueMixLabRunResult result = await sut.EnqueueAsync(Json(flags), uploadId, CancellationToken.None);
 
             result.Outcome.Should().Be(EnqueueMixLabRunResult.EnqueueOutcome.InvalidRequest);
-            result.ErrorMessage.Should().Contain("model").And.Contain("claude-sonnet-5-5");
+            result.ErrorMessage.Should().Contain("model").And.Contain("claude-sonnet-5-5, claude-opus-5-5, claude-haiku-5-5");
         }
 
         private static (EnqueueMixLabRunUseCase Sut, BlobMixLabRunRepository Runs, BlobMixLabUploadRepository Uploads, FakeMixLabBlobGateway Gateway) BuildSutWithGateway()

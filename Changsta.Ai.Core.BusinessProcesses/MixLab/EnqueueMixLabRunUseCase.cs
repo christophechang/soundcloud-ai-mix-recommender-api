@@ -63,7 +63,7 @@ namespace Changsta.Ai.Core.BusinessProcesses.MixLab
 
         private static readonly HashSet<string> DirectionValues = new(StringComparer.Ordinal) { "mixed", "off", "only" };
 
-        private static readonly HashSet<string> ModelValues = new(StringComparer.Ordinal) { "claude-sonnet-5-5", "claude-opus-5-5" };
+        private static readonly HashSet<string> ModelValues = new(StringComparer.Ordinal) { "claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5" };
 
         private readonly IMixLabRunRepository _runs;
         private readonly IMixLabUploadRepository _uploads;
