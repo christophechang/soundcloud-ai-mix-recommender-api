@@ -1,0 +1,37 @@
+{
+  "collection": [
+    {
+      "kind": "track",
+      "id": 1000000001,
+      "urn": "soundcloud:tracks:1000000001",
+      "title": "Fixture Mix One",
+      "permalink_url": "https://soundcloud.com/fixture-user/fixture-mix-one",
+      "created_at": "2026/01/10 20:00:00 +0000",
+      "duration": 3600000,
+      "sharing": "public",
+      "genre": "Drum & Bass",
+      "playback_count": 1204,
+      "favoritings_count": 87,
+      "likes_count": null,
+      "reposts_count": 3,
+      "comment_count": 2
+    },
+    {
+      "kind": "track",
+      "id": 1000000002,
+      "urn": "soundcloud:tracks:1000000002",
+      "title": "Fixture Mix Two",
+      "permalink_url": "https://soundcloud.com/fixture-user/fixture-mix-two",
+      "created_at": "2026/02/14 20:00:00 +0000",
+      "duration": 2700000,
+      "sharing": "public",
+      "genre": "House",
+      "playback_count": 15873,
+      "favoritings_count": 412,
+      "likes_count": null,
+      "reposts_count": 9,
+      "comment_count": 5
+    }
+  ],
+  "next_href": "https://api.soundcloud.com/users/123456/tracks?limit=50&linked_partitioning=true&cursor=fixture-cursor-2"
+}
