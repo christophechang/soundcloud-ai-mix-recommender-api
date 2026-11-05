@@ -252,7 +252,10 @@ Both responses carry `Cache-Control: no-store`.
 
 **How it works:** one app-level `client_credentials` token (cached until 60s before expiry, dropped
 on a `401`) and one paged call to `https://api.soundcloud.com/users/{id}/tracks` (`playback_count`,
-`favoritings_count`), at most 20 pages under a six-second budget. The user id comes from the
+`favoritings_count`), at most 20 pages under a six-second budget. If the token endpoint rejects a request with any
+4xx status, no token request is sent for 15 minutes, so wrong or rate-limited credentials cannot
+spend the token-issuance budget the SoundCloud app shares with another product. Changing the
+credentials clears that backoff, because an App Service setting change restarts the app. The user id comes from the
 `soundcloud:users:<digits>` segment of `SoundCloud:RssUrl`. A partial or malformed page set is a
 failure, never a partial answer. No retry. The result is held in process memory for
 `SoundCloud:StatsCacheSeconds` (default 600); a failure is held for 60 seconds. Concurrent requests

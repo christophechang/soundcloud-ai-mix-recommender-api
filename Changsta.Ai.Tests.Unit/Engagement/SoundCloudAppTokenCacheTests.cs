@@ -161,24 +161,154 @@ namespace Changsta.Ai.Tests.Unit.Engagement
         [Test]
         public async Task GetTokenAsync_throws_on_non_success()
         {
-            int calls = 0;
-            using var http = CountingClient(() =>
-            {
-                calls++;
-                return calls == 1
-                    ? JsonResponse(HttpStatusCode.Unauthorized, "{\"error\":\"invalid_client\"}")
-                    : TokenResponse("tok", 3600);
-            });
-            using var sut = CreateSut(http, new FakeTimeProvider());
+            using var rejected = CountingClient(() => JsonResponse(HttpStatusCode.Unauthorized, "{\"error\":\"invalid_client\"}"));
+            using var rejectedSut = CreateSut(rejected, new FakeTimeProvider());
 
-            Func<Task> act = () => sut.GetTokenAsync(CancellationToken.None);
+            Func<Task> act = () => rejectedSut.GetTokenAsync(CancellationToken.None);
 
             var thrown = await act.Should().ThrowAsync<HttpRequestException>();
             thrown.Which.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
             thrown.Which.Message.Should().NotContain(ClientSecret).And.NotContain("invalid_client");
 
-            await sut.GetTokenAsync(CancellationToken.None);
+            // A 4xx now starts the token backoff, so "nothing cached, next call requests again" is
+            // checked with a 5xx, which stays retryable.
+            int calls = 0;
+            using var http = CountingClient(() =>
+            {
+                calls++;
+                return calls == 1
+                    ? JsonResponse(HttpStatusCode.InternalServerError, "{\"error\":\"boom\"}")
+                    : TokenResponse("tok", 3600);
+            });
+            using var sut = CreateSut(http, new FakeTimeProvider());
+
+            Func<Task> failing = () => sut.GetTokenAsync(CancellationToken.None);
+            await failing.Should().ThrowAsync<HttpRequestException>();
+
+            (await sut.GetTokenAsync(CancellationToken.None)).Should().Be("tok");
             calls.Should().Be(2, "a failed token request must not leave anything cached");
+        }
+
+        [TestCase(400)]
+        [TestCase(401)]
+        [TestCase(403)]
+        [TestCase(429)]
+        public async Task GetTokenAsync_does_not_call_token_endpoint_again_for_fifteen_minutes_after_a_4xx(int status)
+        {
+            int calls = 0;
+            var clock = new FakeTimeProvider();
+            using var http = CountingClient(() =>
+            {
+                calls++;
+                return calls == 1
+                    ? JsonResponse((HttpStatusCode)status, "{}")
+                    : TokenResponse("tok-after-backoff", 3600);
+            });
+            using var sut = CreateSut(http, clock);
+            DateTimeOffset start = clock.UtcNow;
+
+            Func<Task> act = () => sut.GetTokenAsync(CancellationToken.None);
+
+            var first = await act.Should().ThrowAsync<HttpRequestException>();
+            first.Which.StatusCode.Should().Be((HttpStatusCode)status);
+
+            clock.UtcNow = start.AddMinutes(14).AddSeconds(59);
+            var blocked = await act.Should().ThrowAsync<HttpRequestException>();
+            blocked.Which.StatusCode.Should().Be((HttpStatusCode)status);
+            blocked.Which.Message.Should().NotContain(ClientSecret);
+            calls.Should().Be(1);
+
+            clock.UtcNow = start.AddMinutes(15).AddSeconds(1);
+            string token = await sut.GetTokenAsync(CancellationToken.None);
+
+            calls.Should().Be(2);
+            token.Should().Be("tok-after-backoff");
+        }
+
+        [Test]
+        public async Task GetTokenAsync_concurrent_callers_during_backoff_send_no_request()
+        {
+            int calls = 0;
+            using var http = CountingClient(() =>
+            {
+                Interlocked.Increment(ref calls);
+                return JsonResponse(HttpStatusCode.Unauthorized, "{}");
+            });
+            using var sut = CreateSut(http, new FakeTimeProvider());
+
+            Func<Task> act = () => sut.GetTokenAsync(CancellationToken.None);
+            await act.Should().ThrowAsync<HttpRequestException>();
+
+            Task[] callers = Enumerable.Range(0, 10)
+                .Select(_ => Task.Run(async () =>
+                {
+                    Func<Task> call = () => sut.GetTokenAsync(CancellationToken.None);
+                    await call.Should().ThrowAsync<HttpRequestException>();
+                }))
+                .ToArray();
+            await Task.WhenAll(callers);
+
+            calls.Should().Be(1);
+        }
+
+        [Test]
+        public async Task GetTokenAsync_5xx_does_not_start_backoff()
+        {
+            int calls = 0;
+            using var http = CountingClient(() =>
+            {
+                calls++;
+                return JsonResponse(HttpStatusCode.ServiceUnavailable, "{}");
+            });
+            using var sut = CreateSut(http, new FakeTimeProvider());
+
+            Func<Task> act = () => sut.GetTokenAsync(CancellationToken.None);
+
+            await act.Should().ThrowAsync<HttpRequestException>();
+            await act.Should().ThrowAsync<HttpRequestException>();
+
+            calls.Should().Be(2);
+        }
+
+        [Test]
+        public async Task GetTokenAsync_network_failure_does_not_start_backoff()
+        {
+            int calls = 0;
+            using var http = new HttpClient(new StubHttpMessageHandler((request, ct) =>
+            {
+                calls++;
+                throw new HttpRequestException("connection refused");
+            }));
+            using var sut = CreateSut(http, new FakeTimeProvider());
+
+            Func<Task> act = () => sut.GetTokenAsync(CancellationToken.None);
+
+            await act.Should().ThrowAsync<HttpRequestException>();
+            await act.Should().ThrowAsync<HttpRequestException>();
+
+            calls.Should().Be(2);
+        }
+
+        [Test]
+        public async Task Invalidate_does_not_clear_backoff()
+        {
+            int calls = 0;
+            var clock = new FakeTimeProvider();
+            using var http = CountingClient(() =>
+            {
+                calls++;
+                return JsonResponse(HttpStatusCode.Unauthorized, "{}");
+            });
+            using var sut = CreateSut(http, clock);
+
+            Func<Task> act = () => sut.GetTokenAsync(CancellationToken.None);
+            await act.Should().ThrowAsync<HttpRequestException>();
+
+            sut.Invalidate();
+            clock.UtcNow = clock.UtcNow.AddMinutes(1);
+            await act.Should().ThrowAsync<HttpRequestException>();
+
+            calls.Should().Be(1);
         }
 
         [Test]

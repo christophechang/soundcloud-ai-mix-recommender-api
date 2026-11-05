@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
@@ -11,12 +12,17 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Engagement
     /// Ported from Setfolio's <c>AppTokenCache</c>, with two differences: a token whose
     /// <c>expires_in</c> is missing or 60s or less is used once and not cached, and
     /// <see cref="Invalidate"/> lets the API client drop a token SoundCloud has rejected.
+    /// After the token endpoint answers with a 4xx, no token request is sent for 15 minutes, so
+    /// wrong or rate-limited credentials cannot spend the app's shared token-issuance budget;
+    /// 5xx, network failures and timeouts stay retryable.
     /// Neither the client secret nor the token is ever logged or put in an exception message.
     /// </summary>
     internal sealed class SoundCloudAppTokenCache : IDisposable
     {
         private const string TokenEndpoint = "https://secure.soundcloud.com/oauth/token";
         private const long ExpirySkewSeconds = 60;
+
+        private static readonly TimeSpan RejectionBackoff = TimeSpan.FromMinutes(15);
 
         private readonly HttpClient _httpClient;
         private readonly SoundCloudEngagementSettings _settings;
@@ -25,6 +31,10 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Engagement
         private readonly SemaphoreSlim _lock = new(1, 1);
 
         private volatile CachedToken? _cached;
+
+        // Only read and written while holding _lock.
+        private DateTimeOffset _blockedUntil = DateTimeOffset.MinValue;
+        private HttpStatusCode _blockedStatus;
 
         public SoundCloudAppTokenCache(
             HttpClient httpClient,
@@ -55,6 +65,11 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Engagement
                     return cached;
                 }
 
+                if (_timeProvider.GetUtcNow() < _blockedUntil)
+                {
+                    throw RequestFailed(_blockedStatus);
+                }
+
                 return await RequestTokenAsync(cancellationToken).ConfigureAwait(false);
             }
             finally
@@ -66,6 +81,12 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Engagement
         public void Invalidate() => _cached = null;
 
         public void Dispose() => _lock.Dispose();
+
+        private static HttpRequestException RequestFailed(HttpStatusCode statusCode) =>
+            new HttpRequestException(
+                $"SoundCloud token request failed with status {(int)statusCode}.",
+                inner: null,
+                statusCode: statusCode);
 
         private string? TryGetCached()
         {
@@ -94,11 +115,21 @@ namespace Changsta.Ai.Infrastructure.Services.SoundCloud.Engagement
             if (!response.IsSuccessStatusCode)
             {
                 int status = (int)response.StatusCode;
-                _logger.LogWarning("SoundCloud token request failed with status {StatusCode}.", status);
-                throw new HttpRequestException(
-                    $"SoundCloud token request failed with status {status}.",
-                    inner: null,
-                    statusCode: response.StatusCode);
+                if (status is >= 400 and < 500)
+                {
+                    _blockedUntil = _timeProvider.GetUtcNow().Add(RejectionBackoff);
+                    _blockedStatus = response.StatusCode;
+                    _logger.LogWarning(
+                        "SoundCloud token request rejected with status {StatusCode}; no token request for {BackoffMinutes} minutes.",
+                        status,
+                        RejectionBackoff.TotalMinutes);
+                }
+                else
+                {
+                    _logger.LogWarning("SoundCloud token request failed with status {StatusCode}.", status);
+                }
+
+                throw RequestFailed(response.StatusCode);
             }
 
             using Stream body = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
