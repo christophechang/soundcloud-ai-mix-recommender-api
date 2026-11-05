@@ -2,6 +2,17 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.69
+
+### Features
+
+- **Live SoundCloud play and like counts: `GET /api/catalog/stats`.** Returns `200 { "items": [ { "id", "plays", "likes" } ] }` for every public track on the account, where `id` is the catalogue mix id (`tag:soundcloud,2010:tracks/<id>`) and each count is an integer or `null`; or `204` when the feature is switched off, credentials are not configured, the user id cannot be derived from `SoundCloud:RssUrl`, SoundCloud or its token endpoint failed, or the fetch ran out of time. Both carry `Cache-Control: no-store`. Counts are read through one paged `/users/{id}/tracks` call under an app `client_credentials` token and are never persisted: a single in-process entry holds a success for `SoundCloud:StatsCacheSeconds` (default ten minutes) and a failure for sixty seconds.
+- **The fetch is all-or-nothing and owned by the provider.** A failed page, a page without `collection`, a track without a positive id, a `next_href` off `https://api.soundcloud.com`, or more than twenty pages fails the whole fetch rather than returning a truncated catalogue. Concurrent callers on an expired entry share one fetch that runs under its own six-second budget, so a visitor who disconnects cancels only their own wait and never writes a failure into the entry.
+- **The app token is cached and guarded.** It is reused until sixty seconds before expiry, dropped when the API answers `401`, and only ever sent to the API host. After the token endpoint answers with a 4xx no token request is sent for fifteen minutes, so wrong or rate-limited credentials cannot spend the app's token-issuance budget; 5xx, network failures and timeouts stay retryable.
+- **Configuration.** New keys under `SoundCloud`: `ClientId`, `ClientSecret`, `StatsEnabled` (default `true`, the kill switch) and `StatsCacheSeconds`. The deploy workflows pass the credentials from the `SOUNDCLOUD_CLIENT_ID` and `SOUNDCLOUD_CLIENT_SECRET` environment secrets. Missing credentials do not fail startup; the endpoint answers `204` until they exist.
+
+991 tests, 0 warnings.
+
 ## v1.68
 
 ### Features
