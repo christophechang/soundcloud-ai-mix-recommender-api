@@ -235,6 +235,48 @@ Returns a paginated `CatalogPage<Mix>` of all mixes containing a track by the na
 
 ---
 
+### `GET /api/catalog/stats`
+
+Live SoundCloud play and like counts for every public mix in the catalogue, in one response.
+
+**Response (200):** `{ "items": [ { "id": "tag:soundcloud,2010:tracks/2432119239", "plays": 1204, "likes": 87 } ] }`
+
+- `id` is the catalogue mix id, exactly as `/api/catalog/mixes` returns it.
+- `plays` and `likes` are integers, or `null` when SoundCloud omitted the field.
+
+**Response (204, no body):** the feature is switched off, the credentials are not configured, the
+user id cannot be derived from `SoundCloud:RssUrl`, SoundCloud or its token endpoint failed, or the
+fetch ran out of time. Clients render nothing.
+
+Both responses carry `Cache-Control: no-store`.
+
+**How it works:** one app-level `client_credentials` token (cached until 60s before expiry, dropped
+on a `401`) and one paged call to `https://api.soundcloud.com/users/{id}/tracks` (`playback_count`,
+`favoritings_count`), at most 20 pages under a six-second budget. The user id comes from the
+`soundcloud:users:<digits>` segment of `SoundCloud:RssUrl`. A partial or malformed page set is a
+failure, never a partial answer. No retry. The result is held in process memory for
+`SoundCloud:StatsCacheSeconds` (default 600); a failure is held for 60 seconds. Concurrent requests
+on an expired entry share one SoundCloud fetch.
+
+**Configuration:**
+
+| Key | Default | Notes |
+|---|---|---|
+| `SoundCloud:ClientId` | `""` | SoundCloud app client id. Set from the `SOUNDCLOUD_CLIENT_ID` GitHub secret by the deploy workflows. |
+| `SoundCloud:ClientSecret` | `""` | SoundCloud app client secret. Set from the `SOUNDCLOUD_CLIENT_SECRET` GitHub secret. Never logged. |
+| `SoundCloud:StatsEnabled` | `true` | Kill switch. Set `SoundCloud__StatsEnabled=false` on the App Service to turn the endpoint into a permanent `204` without a deploy. |
+| `SoundCloud:StatsCacheSeconds` | `600` | How long a successful fetch is held in memory. |
+
+Missing credentials do not fail startup; the endpoint answers `204` until they exist.
+
+**Never stored.** SoundCloud's API Terms forbid persistently storing API content and allow
+session-based caching. The counts therefore live only in one in-process memory entry: no blob, no
+file, no log line containing the payload, and `no-store` on every response. Treating a ten-minute
+process-wide memory entry as session-based caching is a project decision, the same reading
+Setfolio made (its ADR-003). It is an interpretation of the terms, not legal advice.
+
+---
+
 ### `GET /health`
 
 Returns `Healthy` when the process is running. Used by Azure App Service for health probes.

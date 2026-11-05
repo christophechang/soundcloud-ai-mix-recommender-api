@@ -22,6 +22,7 @@ using Changsta.Ai.Interface.Api.Middleware;
 using Changsta.Ai.Interface.Api.MixLab;
 using Changsta.Ai.Interface.Api.RateLimiting;
 using Changsta.Ai.Interface.Api.Services;
+using Changsta.Ai.Interface.Api.SoundCloud;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Caching.Memory;
@@ -113,6 +114,7 @@ builder.Services.AddOptions<OpenAiOptions>()
 builder.Services.AddAzureBlobMixCatalog(builder.Configuration);
 builder.Services.AddAzureDiagnostics(builder.Configuration);
 builder.Services.AddMixLabServices(builder.Configuration);
+builder.Services.AddSoundCloudEngagement(builder.Configuration);
 
 var rawMoodWeights = builder.Configuration
     .GetSection("MoodWeights")
