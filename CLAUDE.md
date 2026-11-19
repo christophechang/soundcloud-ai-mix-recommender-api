@@ -1,3 +1,5 @@
+This repo stays public and personal. No new MixLab or TuneFinder code here.
+
 Project layout:
 - `Changsta.Ai.Interface.Api/` — controllers, middleware, DI, app config
 - `Changsta.Ai.Core/` — domain models and DTOs
@@ -11,7 +13,7 @@ Project layout:
 
 `Soltech.ruleset` is source of truth for StyleCop and CA analyzers. Fix build errors instead of suppressing. Match style in the file being touched: `string`/`int` aliases, `_camelCase` private fields, existing namespace style, existing `ConfigureAwait(false)` patterns.
 
-Controllers stay thin — push orchestration into use cases. Keep `Core.Contracts` free of infrastructure details. Keep infrastructure code inside infrastructure projects. Preserve the separation between AI-generated `reason` text and server-validated `why` evidence. Treat API routes, DTO names, config keys, and infra naming as stable contracts unless the task requires changing them.
+Controllers stay thin — push orchestration into use cases. Keep `Core.Contracts` free of infrastructure details. Keep infrastructure code inside infrastructure projects. Preserve the separation between AI-generated `reason` text and server-validated `why` evidence. Treat API routes, DTO names, config keys, and infra naming as stable contracts unless the task requires changing them. Treat `OpenAiMixRecommender` validation, prompt rules and retries, and the SoundCloud RSS and tracklist parsing as behaviour-sensitive: small, well-tested changes only. Rate limiting, CORS, health checks and telemetry wiring in `Program.cs` are operational behaviour, and `infra/` changes are production-impacting.
 
 `InternalsVisibleTo("Changsta.Ai.Tests.Unit")` is set in the AI project — prefer `internal` for test-only helpers. No XML doc comments on untouched code unless an analyzer requires it. No changes to secrets, connection strings, or env-specific values in tracked files.
 
@@ -22,8 +24,10 @@ dotnet test soundcloud-ai-mix-recommender-api.sln --no-build
 
 ## Dependency Updates
 
-Dependabot (`.github/dependabot.yml`) opens weekly PRs for NuGet and GitHub Actions, grouped
-(Microsoft.Extensions.*, Azure.*, OpenTelemetry.*, test deps). To react to a Dependabot PR: let CI
+Dependabot (`.github/dependabot.yml`) runs monthly for NuGet and GitHub Actions, with one catch-all
+minor/patch group per ecosystem (so at most one such PR per ecosystem a month); major bumps come as their own
+PRs, and security updates arrive whenever an advisory is published. Security-update PRs open against
+the default branch (`main`), not `develop`: change their base to `develop` before merging. To react to a Dependabot PR: let CI
 run (it builds, tests, and runs `dotnet list package --vulnerable` which fails on known
 advisories), review the changelog for breaking changes, then merge into `develop` like any other
 PR. Security-advisory bumps take priority. The CI vulnerability audit also fails any PR that
@@ -42,3 +46,12 @@ deploy → GitHub release → back to `develop`). Repo specifics:
 
 For direct requests to deploy only QA, Prod, or both without a release, use the latest successful CI Build
 SHA and trigger only the requested deployment workflow(s).
+
+## Ownership
+
+This codebase is yours. What it's for and how it's built are your call, and you keep building on it.
+
+- Fix bugs, dead code and analyser noise you find in files you're already touching, in the same PR, as a separate commit.
+- Anything bigger or unrelated: add it as a draft item on the private AI API backlog board, never as a public issue (this is a public repo: no costs, account details or security weaknesses in public issues), don't build it.
+- Still gated on Christophe: API routes, DTOs and config keys (contracts), `infra/` changes, releases and deploys.
+- This overrides the global "stay in scope" default for this repo.

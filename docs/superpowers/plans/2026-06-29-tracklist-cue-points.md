@@ -1,5 +1,7 @@
 # Tracklist Cue Points & Multi-Format Parsing Implementation Plan
 
+> **Status: shipped.** The checkboxes below were not ticked as work landed; the code and CHANGELOG are the record.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Teach the tracklist parser to read line numbers and cue points (bracketed `[m:ss]` and bare `mm:ss`) in addition to the existing `Artist - Title` format, store each cue point as `cuePointSeconds` in the JSON catalogue, and surface it additively on every per-mix tracklist API response.

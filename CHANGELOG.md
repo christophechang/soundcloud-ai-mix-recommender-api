@@ -2,6 +2,23 @@
 
 Notable changes to the SoundCloud Mix Recommender API.
 
+## v1.70
+
+### Breaking
+
+- **MixLab Anywhere API removed.** Every `api/mixlab` route (runs, maps, feedback, history, uploads) is gone, along with its use cases, contracts, blob storage, DI wiring, the `MixLab` and `Azure:MixLab` config sections, the `mixlab.changsta.com` CORS origin and the MixLab settings in the three deploy workflows. The single-tenant MixLab site is retired, so no live client depends on it. The catalogue, radio and recommend endpoints are unchanged.
+
+### Fixes
+
+- **Catalogue flush no longer times out the prod deploy.** `POST /api/catalog/flush` now returns `200 {flushed:true}` as soon as the cache is invalidated and rewarms in the background (rewarm failures are logged, not thrown). The prod deploy's flush step fails only on a rejected secret; a Cloudflare 524 or timeout is a warning, after which it polls the catalogue until it answers, and warns when that answer may still be the previous response.
+
+### Chores
+
+- **Dependabot runs monthly** with one catch-all minor/patch group per ecosystem, so at most one routine dependency PR per ecosystem a month; major bumps and security updates still arrive as their own PRs. Security-update PRs open against `main`, so their base is changed to `develop` before merging.
+- **Stale docs retired.** The superseded automation lifecycle doc is deleted and every implementation plan is marked as shipped.
+
+686 tests, 0 warnings.
+
 ## v1.69
 
 ### Features
