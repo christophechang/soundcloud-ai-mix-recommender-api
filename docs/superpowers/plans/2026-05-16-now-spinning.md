@@ -1,5 +1,7 @@
 # Now Spinning Implementation Plan
 
+> **Status: shipped, later replaced by the radio stations API (see `2026-05-21-radio-stations-api.md`).** The checkboxes below were not ticked as work landed; the code and CHANGELOG are the record.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Implement `GET /api/catalog/now-spinning` — a time-slotted, seeded random mix picker with 24 pre-scored pools (6 slots × 4 day buckets), mood lean filtering, and a schedule strip.

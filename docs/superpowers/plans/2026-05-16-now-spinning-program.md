@@ -1,5 +1,7 @@
 # Now Spinning Program Endpoint Implementation Plan
 
+> **Status: shipped, later replaced by the radio stations API (see `2026-05-21-radio-stations-api.md`).** The checkboxes below were not ticked as work landed; the code and CHANGELOG are the record.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Add `GET /api/catalog/now-spinning/program` that computes picks for all 5 mood lanes (default, darker, warmer, slower, faster) in a single call, guaranteeing the "now playing" mix is unique across all lanes.
