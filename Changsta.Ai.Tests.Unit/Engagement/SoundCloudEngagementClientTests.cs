@@ -11,7 +11,6 @@ using System.Threading.Tasks;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Engagement;
 using Changsta.Ai.Tests.Unit.Helpers;
-using Changsta.Ai.Tests.Unit.MixLab;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;

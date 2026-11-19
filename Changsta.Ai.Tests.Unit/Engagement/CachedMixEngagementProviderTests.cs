@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Changsta.Ai.Core.Domain;
 using Changsta.Ai.Infrastructure.Services.SoundCloud.Engagement;
-using Changsta.Ai.Tests.Unit.MixLab;
+using Changsta.Ai.Tests.Unit.Helpers;
 using FluentAssertions;
 using NUnit.Framework;
 

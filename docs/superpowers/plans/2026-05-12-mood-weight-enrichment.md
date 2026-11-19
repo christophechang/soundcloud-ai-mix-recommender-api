@@ -1,5 +1,7 @@
 # Mood Weight Enrichment Implementation Plan
 
+> **Status: shipped.** The checkboxes below were not ticked as work landed; the code and CHANGELOG are the record.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** After RSS parsing and catalog merge, detect moods not in `mood_weights.json`, score them via a single AI call with all existing weights as context, persist additions to a blob sidecar, and merge into warmth scoring — skipping the AI call entirely when no new moods are found.

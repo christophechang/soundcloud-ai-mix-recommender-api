@@ -1,5 +1,7 @@
 # Radio Stations API Implementation Plan
 
+> **Status: shipped.** The checkboxes below were not ticked as work landed; the code and CHANGELOG are the record.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the existing NowSpinning personalised radio feature with three editorial radio stations (Touchdown FM, Deep Signal FM, Jungle Pressure) each with a shared deterministic daily 24-slot schedule, served via `GET /api/radio/stations`. Remove old NowSpinning routes, contracts, use cases, and tests.

@@ -1,5 +1,7 @@
 # Related Mixes Implementation Plan
 
+> **Status: shipped.** The checkboxes below were not ticked as work landed; the code and CHANGELOG are the record.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Embed a ranked `relatedMixes` array (up to 6 refs) on every `Mix` in the catalog, computed at cache-flush time using a deterministic scoring algorithm.
