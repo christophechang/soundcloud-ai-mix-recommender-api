@@ -4,7 +4,7 @@
 # Version updates run monthly with one catch-all group per ecosystem, so each month brings at most one
 # minor/patch PR per ecosystem (every merge into develop runs CI and a dev deploy). Major bumps stay
 # ungrouped so each breaking change gets its own PR. Security updates ignore the schedule and still
-# arrive as soon as an advisory is published.
+# arrive as soon as an advisory is published, but open against the default branch (main), not develop.
 version: 2
 updates:
   # NuGet packages across the .NET solution. Dependabot resolves projects from .csproj files

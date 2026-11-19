@@ -115,7 +115,7 @@ jobs:
         # The deploy is already live here, so nothing in this step fails the job except a
         # rejected secret (the flush would never work). The endpoint invalidates the cache and
         # rewarms in the background; a 524 (Cloudflare's 100 s limit) or timeout is reported
-        # as a warning and the catalogue is then polled until it answers warm.
+        # as a warning and the catalogue is then polled until it answers.
         run: |
           code=$(curl -sS -o /tmp/flush.out -w '%{http_code}' --max-time 60 -X POST \
             -H "Authorization: Bearer $FLUSH_SECRET" \
@@ -138,7 +138,11 @@ jobs:
           for attempt in 1 2 3 4 5 6; do
             warm=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 95 "$API_BASE/api/catalog/genres" || true)
             if [ "$warm" = "200" ]; then
-              echo "catalogue answered 200 on attempt $attempt: warm"
+              if [ "$code" = "200" ]; then
+                echo "catalogue answering (200) on attempt $attempt"
+              else
+                echo "::warning::catalogue answering (200) on attempt $attempt, but the flush was not confirmed, so this may still be the previous response. Check /api/catalog and flush by hand if it is."
+              fi
               exit 0
             fi
             echo "catalogue answered ${warm:-no response} on attempt $attempt; retrying in 15 s"
