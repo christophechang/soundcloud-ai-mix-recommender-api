@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Net;
 using System.Text.Json;
 using System.Threading.Tasks;
-using Changsta.Ai.Core.Exceptions;
 using Changsta.Ai.Interface.Api.Errors;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -88,7 +87,7 @@ namespace Changsta.Ai.Interface.Api.Middleware
                 return StatusCodes.Status400BadRequest;
             }
 
-            if (ex is HttpRequestException or TimeoutException or MixLabConcurrencyException)
+            if (ex is HttpRequestException or TimeoutException)
             {
                 return StatusCodes.Status503ServiceUnavailable;
             }
