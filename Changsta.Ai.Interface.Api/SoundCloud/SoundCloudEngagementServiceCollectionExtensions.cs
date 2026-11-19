@@ -9,8 +9,8 @@ namespace Changsta.Ai.Interface.Api.SoundCloud
 {
     /// <summary>
     /// Composition root for the live SoundCloud play/like counts behind <c>GET /api/catalog/stats</c>.
-    /// Lives in the API project, beside <c>MixLabServiceCollectionExtensions</c>, because the
-    /// SoundCloud infrastructure project has no configuration, options or HTTP-factory packages.
+    /// Lives in the API project because the SoundCloud infrastructure project has no configuration,
+    /// options or HTTP-factory packages.
     /// Missing credentials do not fail startup: the provider answers null and the endpoint 204.
     /// </summary>
     public static class SoundCloudEngagementServiceCollectionExtensions
