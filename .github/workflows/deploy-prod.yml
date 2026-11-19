@@ -112,15 +112,40 @@ jobs:
       # code changes until here.
       - name: Flush the catalogue cache
         shell: bash
+        env:
+          FLUSH_SECRET: ${{ secrets.CATALOG_FLUSH_SECRET }}
+          API_BASE: https://api.changsta.com
+        # The deploy is already live here, so nothing in this step fails the job except a
+        # rejected secret (the flush would never work). The endpoint invalidates the cache and
+        # rewarms in the background; a 524 (Cloudflare's 100 s limit) or timeout is reported
+        # as a warning and the catalogue is then polled until it answers warm.
         run: |
-          code=$(curl -sS -o /tmp/flush.out -w '%{http_code}' -X POST \
-            -H "Authorization: Bearer ${{ secrets.CATALOG_FLUSH_SECRET }}" \
-            "https://api.changsta.com/api/catalog/flush")
+          code=$(curl -sS -o /tmp/flush.out -w '%{http_code}' --max-time 60 -X POST \
+            -H "Authorization: Bearer $FLUSH_SECRET" \
+            "$API_BASE/api/catalog/flush" || true)
 
-          echo "flush responded $code"
-          cat /tmp/flush.out || true
+          echo "flush responded ${code:-no response}"
+          cat /tmp/flush.out 2>/dev/null || true
+          echo
 
-          if [ "$code" != "200" ]; then
-            echo "::error::cache flush failed — the deploy is live but clients will keep seeing the previous response until it is flushed"
-            exit 1
-          fi
+          case "$code" in
+            200)
+              echo "cache invalidated; the catalogue rewarms in the background" ;;
+            401|403)
+              echo "::error::cache flush rejected ($code): the flush secret does not match the app setting. The deploy is live but clients keep the previous response until a flush succeeds."
+              exit 1 ;;
+            *)
+              echo "::warning::cache flush did not confirm ($code). The deploy is live; if the request reached the app the cache is already invalidated. Checking the catalogue next." ;;
+          esac
+
+          for attempt in 1 2 3 4 5 6; do
+            warm=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 95 "$API_BASE/api/catalog/genres" || true)
+            if [ "$warm" = "200" ]; then
+              echo "catalogue answered 200 on attempt $attempt: warm"
+              exit 0
+            fi
+            echo "catalogue answered ${warm:-no response} on attempt $attempt; retrying in 15 s"
+            sleep 15
+          done
+
+          echo "::warning::catalogue did not answer 200 after 6 attempts. The deploy is live; check /api/catalog and flush by hand if it still serves the previous response."
